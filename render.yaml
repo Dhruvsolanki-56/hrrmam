@@ -1,0 +1,27 @@
+# Render Blueprint for the FastAPI backend (Dashboard > New > Blueprint > pick this repo).
+services:
+  - type: web
+    name: neohealth-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/stages
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      # Your Netlify site origin, e.g. https://neohealth-tracker.netlify.app (comma-separate several).
+      - key: CORS_ORIGINS
+        sync: false
+      # Demo projects on first start. Set to "false" for an empty database.
+      - key: SEED_DEMO_DATA
+        value: "true"
+    # The free plan has no persistent disk, so the SQLite file resets on every deploy/restart.
+    # For data that survives, either upgrade the plan and uncomment the disk below, or point
+    # DATABASE_URL at a Render Postgres instance (add psycopg[binary] to requirements.txt).
+    # disk:
+    #   name: neohealth-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # then add:  - key: DATABASE_URL  value: sqlite:////var/data/neohealth.db
