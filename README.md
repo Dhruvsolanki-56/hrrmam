@@ -23,9 +23,15 @@ Delete the file to reset, or set `SEED_DEMO_DATA=false` for an empty start.
 
 ## Core workflow
 
-Create a project → it moves through the stages → at decision stages the responsible Director
-**approves**, **rejects** (or returns for modification) → any project can be **put on hold** and resumed.
+Create a project → every stage runs the same **approval cycle**: the owner does the work and **submits**, the named
+approver **approves**, or **sends it back for rework** (a note is required; repeat as often as needed, the count is shown).
+Where the flow chart allows it the approver can instead **reject** the whole project. Decision-only stages (Director,
+India Review, Commercial Approval) are approved or sent back to an earlier stage. Any project can be **put on hold** and resumed.
 Every action is logged with a note and who did it.
+
+**Parallel phases:** after Commercial Approval, *Agreements*, *Concept & Artwork* and *Regulatory* run at the same time,
+each with its own approval cycle. *Manufacturing & Samples* starts once all three are approved. The graph is defined by
+`requires` on each stage in `backend/app/workflow.py`, so it is easy to change.
 
 Also included:
 - **Time in stage:** each live project shows how long it has been in its stage and turns "Overdue" once it passes the

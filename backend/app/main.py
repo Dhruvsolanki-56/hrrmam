@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config, models  # noqa: F401  (importing models registers the tables)
 from .database import Base, SessionLocal, engine
+from . import services
 from .migrate import ensure_columns
 from .routers import projects
 from .seed import seed_if_empty
@@ -18,6 +19,8 @@ app.include_router(projects.router)
 def startup():
     Base.metadata.create_all(engine)
     ensure_columns(engine)
+    with SessionLocal() as db:
+        services.backfill_stages(db)
     if config.SEED_DEMO_DATA:
         with SessionLocal() as db:
             seed_if_empty(db)

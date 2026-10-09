@@ -18,14 +18,24 @@ export default function Dashboard() {
     const live = ps.filter((p) => p.status !== 'rejected' && p.status !== 'completed')
     const count = (s) => ps.filter((p) => p.status === s).length
     const stage = (p) => stages.find((s) => s.key === p.stage_key)
-    const perStage = Object.fromEntries(stages.map((s) => [s.key, live.filter((p) => p.stage_key === s.key).length]))
+    const activeOf = (p) => p.active_stages || [p.stage_key]
+    const perStage = Object.fromEntries(stages.map((s) => [s.key, live.filter((p) => activeOf(p).includes(s.key)).length]))
     const perEntity = {}
-    live.forEach((p) => { const e = stage(p).entity; perEntity[e] = (perEntity[e] || 0) + 1 })
+    live.forEach((p) => {
+      new Set(activeOf(p).map((k) => stages.find((s) => s.key === k)?.entity).filter(Boolean))
+        .forEach((e) => { perEntity[e] = (perEntity[e] || 0) + 1 })
+    })
+    const decisions = []
+    ps.filter((p) => p.status === 'active' || p.status === 'clarification').forEach((p) => {
+      activeOf(p).forEach((k) => {
+        if (p.stage_states?.[k] === 'awaiting_approval') decisions.push({ p, s: stages.find((s) => s.key === k) })
+      })
+    })
     return {
       total: ps.length, live: live.length, active: count('active'), on_hold: count('on_hold'),
       clarification: count('clarification'), completed: count('completed'), rejected: count('rejected'),
       perStage, perEntity, max: Math.max(1, ...Object.values(perStage)), stage,
-      decisions: ps.filter((p) => p.status === 'active' && stage(p).gate),
+      decisions,
       overdue: ps.filter((p) => p.overdue).sort((a, b) => b.days_in_stage - b.sla_days - (a.days_in_stage - a.sla_days)),
       recent: ps.slice(0, 5),
     }
@@ -126,13 +136,13 @@ export default function Dashboard() {
           </ul>
         </div>
         <div className="panel">
-          <header><h3>Awaiting a decision</h3><span className="muted">Approval gates</span></header>
+          <header><h3>Awaiting approval</h3><span className="muted">{d.decisions.length} pending</span></header>
           {!d.decisions.length && <p className="muted">No projects are waiting on an approval.</p>}
           <ul className="rows">
-            {d.decisions.map((p) => (
-              <li key={p.id}>
+            {d.decisions.map(({ p, s }) => (
+              <li key={`${p.id}-${s.key}`}>
                 <Link to={`/projects/${p.id}`}>
-                  <div><strong>{p.name}</strong><small>{d.stage(p).name} · {d.stage(p).owner}</small></div>
+                  <div><strong>{p.name}</strong><small>{s.name} · {s.approver}</small></div>
                   <span className="go">Review<Icon name="arrow" size={14} /></span>
                 </Link>
               </li>

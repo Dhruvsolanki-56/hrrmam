@@ -18,6 +18,19 @@ export function StatusPill({ status }) {
   )
 }
 
+/** Where one stage is in its approval cycle. */
+export const STATE = {
+  pending: 'Waiting',
+  in_progress: 'Work in progress',
+  awaiting_approval: 'Awaiting approval',
+  clarification: 'Needs information',
+  approved: 'Approved',
+}
+
+export function StateChip({ state }) {
+  return <span className={`state state-${state}`}>{STATE[state]}</span>
+}
+
 export function entityTone(entity) {
   if (entity.includes('+')) return 'both'
   if (entity.includes('India')) return 'india'
@@ -37,18 +50,20 @@ export function EntityChip({ entity, full }) {
   return <span className={`chip entity-${entityTone(entity)}`} title={entity}>{full ? entity : entityShort(entity)}</span>
 }
 
-/** Row of small capsules, one per stage: done / current / upcoming. */
+/** Row of small capsules, one per stage: approved / active / not started. Parallel stages show side by side. */
 export function StageBar({ project, big }) {
   const stages = useStages()
-  const idx = stages.findIndex((s) => s.key === project.stage_key)
-  const done = project.status === 'completed' ? stages.length : idx
+  const states = project.stage_states || {}
+  const approved = stages.filter((s) => states[s.key] === 'approved').length
+  const mod = (st) => (project.status === 'on_hold' ? 'on_hold' : project.status === 'rejected' ? 'rejected' : st === 'clarification' ? 'clarification' : '')
   return (
-    <div className={`stagebar ${big ? 'big' : ''}`} role="img" aria-label={`Stage ${idx + 1} of ${stages.length}`}>
-      {stages.map((s, i) => {
+    <div className={`stagebar ${big ? 'big' : ''}`} role="img" aria-label={`${approved} of ${stages.length} stages approved`}>
+      {stages.map((s) => {
+        const st = states[s.key]
         let cls = 'todo'
-        if (i < done) cls = 'done'
-        else if (i === idx) cls = `current ${project.status}`
-        return <span key={s.key} className={cls} title={s.name} />
+        if (project.status === 'completed' || st === 'approved') cls = 'done'
+        else if (st && st !== 'pending') cls = `current ${mod(st)}`
+        return <span key={s.key} className={cls} title={`${s.name}: ${STATE[st] || 'Waiting'}`} />
       })}
     </div>
   )

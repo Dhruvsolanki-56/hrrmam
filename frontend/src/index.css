@@ -450,3 +450,40 @@ p { margin: 0; }
   .pill, .chip, .age, .stagebar span { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .board { display: block; }
 }
+
+/* ---- approval cycle & parallel stages ---- */
+.state { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--canvas); color: var(--ink-2); white-space: nowrap; }
+.state-in_progress { background: var(--accent-soft); color: var(--neo-dark); }
+.state-awaiting_approval { background: var(--neo-dark); color: #fff; }
+.state-clarification { background: #fff; color: var(--neo-dark); box-shadow: 0 0 0 1.5px var(--neo-green) inset; }
+.state-approved { background: var(--neo-green); color: #fff; }
+.state-parallel { background: var(--accent-soft); color: var(--neo-dark); margin: 4px 6px 0 0; }
+.sub + .state, td .state { margin-top: 4px; }
+.stagecard > header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.stagecards { display: grid; gap: 16px; }
+.stagecards.multi { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.parallel-banner { background: var(--accent-soft); color: var(--neo-dark); border-radius: 12px; padding: 12px 16px; font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.cycle { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.cycle ol { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+.cycle li { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); padding: 4px 10px 4px 4px; border-radius: 999px; background: var(--canvas); }
+.cycle li i { font-style: normal; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; background: var(--neo-grey); color: var(--neo-black); }
+.cycle li.done { color: var(--neo-dark); }
+.cycle li.done i { background: var(--neo-green); color: #fff; }
+.cycle li.now { background: var(--neo-dark); color: #fff; }
+.cycle li.now i { background: var(--neo-bright); color: var(--neo-dark); }
+.rework { font-size: 12.5px; font-weight: 600; color: var(--neo-dark); background: var(--neo-bright); padding: 3px 10px; border-radius: 999px; }
+.controls textarea, .controls input { width: 100%; margin-top: 6px; border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 12px; font: inherit; background: #fff; }
+.controls textarea:focus, .controls input:focus { border-color: var(--neo-green); outline: none; box-shadow: 0 0 0 3px rgba(0,129,126,.12); }
+.controls > header { margin-bottom: 12px; }
+.stagelist li.parallel { display: block; opacity: 1; padding: 8px 0 8px 12px; border-left: 3px solid var(--neo-bright); border-radius: 0; margin: 4px 0; }
+.stagelist li.parallel > ol { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
+.parallel-label { display: block; font-size: 12px; font-weight: 700; color: var(--neo-green); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.stagelist .st-approved, .stagelist .st-in_progress, .stagelist .st-awaiting_approval, .stagelist .st-clarification { opacity: 1; }
+.stagelist .st-approved .node { background: var(--neo-green); color: #fff; }
+.stagelist .st-in_progress, .stagelist .st-awaiting_approval, .stagelist .st-clarification { background: var(--accent-soft); box-shadow: 0 0 0 1.5px var(--neo-green) inset; }
+.stagelist .st-in_progress .node, .stagelist .st-awaiting_approval .node, .stagelist .st-clarification .node { background: var(--neo-dark); color: #fff; }
+@media (max-width: 800px) {
+  .stagecards.multi { grid-template-columns: 1fr; }
+  .stagelist li.parallel { padding-left: 8px; }
+}

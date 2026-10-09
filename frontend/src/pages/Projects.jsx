@@ -42,7 +42,7 @@ export default function Projects() {
 
   const visible = (projects || []).filter((p) =>
     (filter === 'all' || p.status === filter) &&
-    (!stageKey || p.stage_key === stageKey) &&
+    (!stageKey || (p.active_stages || [p.stage_key]).includes(stageKey)) &&
     `${p.name} ${p.code || ''} ${p.category}`.toLowerCase().includes(query.toLowerCase()))
 
   const stageOf = (p) => stages.find((s) => s.key === p.stage_key)
@@ -96,7 +96,13 @@ export default function Projects() {
                           </span>
                         </Link>
                       </td>
-                      <td data-label="Stage"><strong className="stage-name">{s.name}</strong><small className="sub">{s.owner}</small><AgeChip project={p} /></td>
+                      <td data-label="Stage">
+                        <strong className="stage-name">{s.name}</strong>
+                        <small className="sub">{s.owner}</small>
+                        {(p.active_stages || []).length > 1 && <span className="state state-parallel">+{p.active_stages.length - 1} in parallel</span>}
+                        {p.stage_states?.[s.key] === 'awaiting_approval' && <span className="state state-awaiting_approval">Awaiting approval</span>}
+                        <AgeChip project={p} />
+                      </td>
                       <td data-label="Entity"><EntityChip entity={s.entity} /></td>
                       <td className="progress-cell" data-label="Progress"><StageBar project={p} /></td>
                       <td data-label="Status"><StatusPill status={p.status} /></td>
@@ -113,7 +119,7 @@ export default function Projects() {
         <div className="board">
           {[...PHASES, { name: 'Closed', closed: true }].map((col) => {
             const items = visible.filter((p) => col.closed ? (p.status === 'rejected' || p.status === 'completed')
-              : col.keys.includes(p.stage_key) && p.status !== 'rejected' && p.status !== 'completed')
+              : (p.active_stages || [p.stage_key]).some((k) => col.keys.includes(k)) && p.status !== 'rejected' && p.status !== 'completed')
             return (
               <section key={col.name} className="column">
                 <header><h3>{col.name}</h3><span className="count">{items.length}</span></header>
@@ -122,7 +128,7 @@ export default function Projects() {
                     <Link key={p.id} to={`/projects/${p.id}`} className="card">
                       <span className="code">{p.code || 'Code pending'}</span>
                       <strong>{p.name}</strong>
-                      <span className="card-stage">{stageOf(p).name}</span>
+                      <span className="card-stage">{stageOf(p).name}{(p.active_stages || []).length > 1 && ` +${p.active_stages.length - 1} parallel`}</span>
                       <StageBar project={p} />
                       <div className="card-foot">
                         <AgeChip project={p} />

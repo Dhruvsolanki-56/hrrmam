@@ -23,8 +23,8 @@ def list_projects(db: Session = Depends(get_db)):
 @router.get("/export.xlsx")
 def export_xlsx(status: str = "", stage: str = "", q: str = "", db: Session = Depends(get_db)):
     rows = [p for p in services.list_projects(db)
-            if (not status or status == "all" or p.status == status)
-            and (not stage or p.stage_key == stage)
+            if (not status or status == "all" or p.display_status == status)
+            and (not stage or stage in p.active_keys)
             and q.lower() in f"{p.name} {p.code or ''} {p.category}".lower()]
     return Response(
         build_xlsx(rows),

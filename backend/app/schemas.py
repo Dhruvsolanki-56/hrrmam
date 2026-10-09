@@ -32,10 +32,11 @@ class ProjectUpdate(BaseModel):
 
 
 class ActionIn(BaseModel):
-    action: Literal["advance", "approve", "reject", "hold", "clarify", "resume", "reopen", "return"]
+    action: Literal["submit", "approve", "send_back", "reject", "clarify", "info", "hold", "resume", "reopen", "return"]
     note: str = ""
     actor: str = ""
-    to_stage: str | None = None  # only for "return"
+    stage_key: str | None = None  # which stage the action is for (needed when stages run in parallel)
+    to_stage: str | None = None   # only for "return"
 
 
 class LinkIn(BaseModel):
@@ -71,8 +72,19 @@ class EventOut(BaseModel):
     created_at: UTC
 
 
+class StageStateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    key: str = Field(validation_alias="stage_key")
+    state: str
+    rework_count: int
+    started_at: UTC | None
+    days_in_stage: int
+    sla_days: int
+    overdue: bool
+
+
 class ProjectOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
     id: int
     code: str | None
     name: str
@@ -81,9 +93,11 @@ class ProjectOut(BaseModel):
     initiator: str
     summary: str
     stage_key: str
-    status: str
+    status: str = Field(validation_alias="display_status")
     created_at: UTC
     updated_at: UTC
+    active_stages: list[str] = Field(validation_alias="active_keys")
+    stage_states: dict[str, str]
     stage_entered_at: UTC
     days_in_stage: int
     sla_days: int
@@ -93,3 +107,4 @@ class ProjectOut(BaseModel):
 class ProjectDetail(ProjectOut):
     events: list[EventOut]
     links: list[LinkOut]
+    stages: list[StageStateOut]
