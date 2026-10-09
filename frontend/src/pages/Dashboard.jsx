@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useStages } from '../App'
+import Icon from '../components/Icon'
 import Layout from '../components/Layout'
 import { EntityChip, STATUS, StatusPill, entityTone, fmtDate } from '../components/bits'
 
@@ -16,19 +17,20 @@ export default function Dashboard() {
     const ps = projects || []
     const live = ps.filter((p) => p.status !== 'rejected' && p.status !== 'completed')
     const count = (s) => ps.filter((p) => p.status === s).length
-    const perStage = Object.fromEntries(stages.map((s) => [s.key, live.filter((p) => p.stage_key === s.key).length]))
     const stage = (p) => stages.find((s) => s.key === p.stage_key)
+    const perStage = Object.fromEntries(stages.map((s) => [s.key, live.filter((p) => p.stage_key === s.key).length]))
     const perEntity = {}
     live.forEach((p) => { const e = stage(p).entity; perEntity[e] = (perEntity[e] || 0) + 1 })
     return {
-      total: ps.length, active: count('active'), on_hold: count('on_hold'), clarification: count('clarification'), completed: count('completed'), rejected: count('rejected'),
+      total: ps.length, live: live.length, active: count('active'), on_hold: count('on_hold'),
+      clarification: count('clarification'), completed: count('completed'), rejected: count('rejected'),
       perStage, perEntity, max: Math.max(1, ...Object.values(perStage)), stage,
       decisions: ps.filter((p) => p.status === 'active' && stage(p).gate),
       recent: ps.slice(0, 5),
     }
   }, [projects, stages])
 
-  if (!projects) return <Layout title="Overview" />
+  if (!projects) return <Layout title="Overview" subtitle="Loading projects…" />
 
   const segs = ['active', 'on_hold', 'clarification', 'completed', 'rejected']
   let acc = 0
@@ -37,22 +39,25 @@ export default function Dashboard() {
     : 'var(--neo-grey) 0 100%'
 
   const kpis = [
-    { label: 'Total projects', value: d.total, note: 'across all stages' },
-    { label: 'In progress', value: d.active, note: 'moving through the pipeline' },
-    { label: 'On hold', value: d.on_hold, note: 'paused for now' },
-    { label: 'Clarification', value: d.clarification, note: 'awaiting updated brief' },
-    { label: 'Completed', value: d.completed, note: `${d.rejected} rejected` },
+    { label: 'Total projects', value: d.total, note: `${d.live} still live`, icon: 'folder', tone: 'dark' },
+    { label: 'In progress', value: d.active, note: 'in the pipeline', icon: 'activity', tone: 'green' },
+    { label: 'On hold', value: d.on_hold, note: 'paused for now', icon: 'pause', tone: 'grey' },
+    { label: 'Clarification', value: d.clarification, note: 'awaiting brief', icon: 'help', tone: 'bright' },
+    { label: 'Completed', value: d.completed, note: `${d.rejected} rejected`, icon: 'check', tone: 'bright' },
   ]
 
   return (
     <Layout title="Overview" subtitle="Where every project stands, at a glance">
       <section className="kpis">
         {kpis.map((k) => (
-          <div key={k.label} className={`kpi ${k.hero ? 'hero' : ''}`}>
-            <span className="eyebrow">{k.label}</span>
-            <b>{k.value}</b>
-            <small>{k.note}</small>
-          </div>
+          <article key={k.label} className="kpi">
+            <span className={`kpi-icon tone-bg-${k.tone}`}><Icon name={k.icon} size={20} /></span>
+            <div>
+              <span className="kpi-label">{k.label}</span>
+              <b>{k.value}</b>
+              <small>{k.note}</small>
+            </div>
+          </article>
         ))}
       </section>
 
@@ -93,7 +98,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="panel">
-            <header><h3>Waiting on an entity</h3></header>
+            <header><h3>Waiting on</h3><span className="muted">By entity</span></header>
             {Object.keys(d.perEntity).length === 0 && <p className="muted">Nothing in progress.</p>}
             <ul className="entity-list">
               {Object.entries(d.perEntity).sort((a, b) => b[1] - a[1]).map(([e, n]) => (
@@ -113,7 +118,7 @@ export default function Dashboard() {
               <li key={p.id}>
                 <Link to={`/projects/${p.id}`}>
                   <div><strong>{p.name}</strong><small>{d.stage(p).name} · {d.stage(p).owner}</small></div>
-                  <span className="go">Review →</span>
+                  <span className="go">Review<Icon name="arrow" size={14} /></span>
                 </Link>
               </li>
             ))}

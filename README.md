@@ -48,6 +48,4 @@ no SQLite-specific features, so no code changes are needed beyond adding migrati
 
 Colours, capsule shapes and type follow the Neo Health Brand Style Guide (Aug 2026): Neo Green `#00817e`,
 Neo Dark Green `#004248`, Neo Bright Green `#C1E1C0`, Neo Black `#231F20`, Neo Grey `#DCDDDD`.
-Body is Montserrat. Headings use **Eurostile Extended** if installed on the machine; otherwise they fall
-back to Michroma (a close, freely licensed look-alike). To use the real font, add licensed files and an
-`@font-face` for `'Eurostile Extended'` in `frontend/src/index.css`. The logo is the vector brandmark from the guide.
+The interface uses Inter. The logo is the vector brandmark from the guide.
