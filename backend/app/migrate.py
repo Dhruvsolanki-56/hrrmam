@@ -1,12 +1,22 @@
-"""Tiny additive migration so an existing database keeps working after a column is added.
-(Use Alembic once the schema starts changing more often.)"""
-from sqlalchemy import inspect, text
+"""Schema housekeeping. This is a rebuild of the tracker's data model (users, tasks, workstreams, ...), so a database
+created by the earlier single-flow version is kept as a .bak file and a fresh one is created. For later changes use Alembic."""
+import time
+from pathlib import Path
+
+from sqlalchemy import inspect
+
+from .config import DATABASE_URL
 
 
-def ensure_columns(engine):
+def archive_legacy_db(engine):
     insp = inspect(engine)
-    if "project_events" in insp.get_table_names():
-        cols = {c["name"] for c in insp.get_columns("project_events")}
-        if "to_stage" not in cols:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE project_events ADD COLUMN to_stage VARCHAR(40)"))
+    tables = set(insp.get_table_names())
+    if "projects" not in tables or "users" in tables:
+        return None
+    if not DATABASE_URL.startswith("sqlite:///"):
+        raise RuntimeError("This database uses the old schema. Migrate or drop it before starting the new version.")
+    path = Path(DATABASE_URL.removeprefix("sqlite:///"))
+    engine.dispose()
+    backup = path.with_name(f"{path.stem}.legacy-{time.strftime('%Y%m%d-%H%M%S')}.bak")
+    path.rename(backup)
+    return backup

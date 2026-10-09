@@ -1,29 +1,46 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config, models  # noqa: F401  (importing models registers the tables)
 from .database import Base, SessionLocal, engine
-from . import services
-from .migrate import ensure_columns
-from .routers import projects
-from .seed import seed_if_empty
+from .migrate import archive_legacy_db
+from .routers import core, projects
+from .seed import seed_reference, seed_demo
+from .services import common, notify
 
-app = FastAPI(title="Neo Health Project Tracker")
+app = FastAPI(title="Neo Product Lifecycle & Regulatory Operations Platform")
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
+app.include_router(core.public)
+app.include_router(core.router)
 app.include_router(projects.router)
+
+
+@app.exception_handler(common.WorkflowError)
+async def _workflow(_: Request, e: common.WorkflowError):
+    return JSONResponse({"detail": str(e)}, status_code=422)
+
+
+@app.exception_handler(common.Forbidden)
+async def _forbidden(_: Request, e: common.Forbidden):
+    return JSONResponse({"detail": str(e)}, status_code=403)
+
+
+@app.exception_handler(common.NotFound)
+async def _not_found(_: Request, e: common.NotFound):
+    return JSONResponse({"detail": str(e)}, status_code=404)
 
 
 @app.on_event("startup")
 def startup():
+    archive_legacy_db(engine)
     Base.metadata.create_all(engine)
-    ensure_columns(engine)
     with SessionLocal() as db:
-        services.backfill_stages(db)
-    if config.SEED_DEMO_DATA:
-        with SessionLocal() as db:
-            seed_if_empty(db)
+        seed_reference(db)
+        if config.SEED_DEMO_DATA:
+            seed_demo(db)
+        notify.refresh_reminders(db)
 
 
 # Serve the built React app when present (single-command demo)

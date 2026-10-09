@@ -1,9 +1,10 @@
-# Neo Health Project Tracker
+# Neo Product Lifecycle & Regulatory Operations Platform
 
-A simple, high-level project tracker that replaces calls and Excel sheets. Based on the Project
-Management Flow Chart (AD001-F01-00), condensed into 12 stages, each with its responsible entity/team.
+One shared system for Neo Health Australia, Neo India and manufacturing partners: **one Project 360 record, parallel
+workstreams, task-driven accountability, versioned documents, controlled approvals and a complete audit trail.**
+Built to the "NEO Simple System Flow & Build Requirements" (V1). Phase 2 AI is intentionally not included.
 
-**Stack:** React (Vite) · FastAPI · SQLite (file-based, via SQLAlchemy)
+**Stack:** React (Vite) · FastAPI · SQLite (file-based, via SQLAlchemy; swap with `DATABASE_URL`)
 
 ## Run it
 
@@ -11,52 +12,79 @@ Management Flow Chart (AD001-F01-00), condensed into 12 stages, each with its re
 ./run.ps1            # builds the frontend, starts the API + UI at http://localhost:8000
 ```
 
-Development mode (hot reload):
+Development (hot reload):
 
 ```powershell
 cd backend;  python -m uvicorn app.main:app --reload --port 8000
 cd frontend; npm run dev        # http://localhost:5173, proxies /api to :8000
 ```
 
-The database is `backend/neohealth.db`, created on first start and filled with demo projects.
-Delete the file to reset, or set `SEED_DEMO_DATA=false` for an empty start.
+The database is `backend/neohealth.db`, created on first start with demo people and eight demo projects.
+Delete the file to reset, or set `SEED_DEMO_DATA=false` for an empty start (a single Super Admin is created).
+A database from the earlier single-flow version is kept as `*.legacy-*.bak` and a fresh one is created.
 
-## Core workflow
+> **Sign-in is a demo.** You pick who you are; there are no passwords yet. What each person can do is decided by their
+> role and **enforced on the server**. Replace `backend/app/auth.py` with real sign-in (SSO / email + password) before production.
 
-Create a project → every stage runs the same **approval cycle**: the owner does the work and **submits**, the named
-approver **approves**, or **sends it back for rework** (a note is required; repeat as often as needed, the count is shown).
-Where the flow chart allows it the approver can instead **reject** the whole project. Decision-only stages (Director,
-India Review, Commercial Approval) are approved or sent back to an earlier stage. Any project can be **put on hold** and resumed.
-Every action is logged with a note and who did it.
+## What is built (mapped to the requirements)
 
-**Parallel phases:** after Commercial Approval, *Agreements*, *Concept & Artwork* and *Regulatory* run at the same time,
-each with its own approval cycle. *Manufacturing & Samples* starts once all three are approved. The graph is defined by
-`requires` on each stage in `backend/app/workflow.py`, so it is easy to change.
+**1. End-to-end flow (12 phases, not a rigid gate tracker).** Opportunity → Brief → Governance → Parallel work → Dossier
+Ready → Regulatory Submission → RFI / Changes → Approval → Commercial Readiness → Manufacturing → Samples / Dispatch →
+Completion (`backend/app/workflow.py`). Every stage uses the same cycle: *work → submit → approve | send back (repeatable) | reject*.
+A project can move backward before the final lock; every return, reassignment, approval and version stays in history.
 
-Also included:
-- **Time in stage:** each live project shows how long it has been in its stage and turns "Overdue" once it passes the
-  stage's target (set per stage as `sla_days` in `backend/app/workflow.py`). The Overview lists what needs attention.
-- **Edit / reopen / move back:** edit a project's details, reopen a rejected or completed project, or move one back to an
-  earlier stage (all need a note and are logged).
-- **Documents:** attach links to briefs, agreements, artwork etc. that live elsewhere (no files are stored).
-- **Export:** Excel (`/api/export.xlsx`, honours the current filters) and a print-ready PDF view (Projects page > PDF).
+**2. Project 360 + parallel workstreams.** Project code, product, market, project manager, target submission / launch,
+overall health (derived: on track / at risk / critical) and a critical blocker. Five workstreams run in parallel with
+independent status: Commercial, Legal, Regulatory, Artwork, Manufacturer data. **Milestone / lock rule:** *Dossier Ready*
+completes only when all of them are approved (optional ones can be bypassed with a reason), and a workstream cannot be
+submitted until its own conditions hold (required tasks and documents approved, core agreements signed, dossier checklist
+ready, required manufacturer data accepted, a submission recorded, no open RFI).
+
+**3. Task, deadline and rework engine.** Assigned → Accepted → In Progress → Submitted → Changes Requested → Resubmitted →
+Approved → Locked. **Due-date negotiation:** the assigner sets a date and time; the assignee accepts or proposes a new date
+with a reason; the assigner approves or rejects it. **My Work:** due today / this week / overdue / waiting for someone /
+returned for changes / submitted for approval / upcoming / completed, plus "needs my decision". **Reminders & escalation**
+are configurable (default 7, 3, 1, 0 days and overdue); notifications state project, task, owner, due date and action required.
+No silent overwrite: every change, date update, reassignment, return, approval, lock and reopen is in the audit trail.
+
+**4. Modules.** Legal register (Supplier, Quality and PV agreements in parallel, plus NDA / CDA / POA / notices; ageing; Excel
+export) · Regulatory / dossier (submission type, checklist with M1–M5 only where the type needs them, RA review, submission
+history) · Artwork (carton, label, leaflet, print proof, shade card with versions: regulatory review → director approval) ·
+Manufacturer data (COA, MSDS, specification, testing, stability, manufacturing) · RFI management (case, questions assigned as
+tasks, evidence, response package, closure) · Documents with V1/V2/V3, review, return, approval, lock / reopen · Dashboards & audit.
+
+**5. Portals.** Director overview (portfolio health, at-risk / delayed, pending approvals, unsigned agreements, deadline-change
+requests with inline decisions, RFI deadlines, India / Australia filter) · Regulatory portal · Artwork portal · Legal register ·
+Audit trail. The Regulatory portal shows where AI review (Phase 2) will sit; it is not built.
+
+**Users, roles, permissions.** Super Admin controls, per role: assign (and to whom), reassign, approve, request changes,
+bypass optional work, change dates, lock / unlock, edit approved records, manage users (Admin page; changes are logged).
+No self-approval: the assignee can never approve their own task.
+
+## Decisions still open (kept configurable, per the V1 rules)
+
+- **External submission platform** (TGA): free-text setting (Admin → Settings) until confirmed.
+- **Manufacturer access model** (account / secure upload / internal entry): V1 uses internal entry by the Neo technical team; the setting records the decision.
+- **Legal AI drafting / search** is not assumed. **Phase 2 AI regulatory intelligence** is not built.
+- Files are **links** (SharePoint, Drive…), not uploads; versioning and approval are tracked on the link.
+- Notifications are in-app; email / push delivery is not wired up.
 
 ## Structure
 
 ```
 backend/app
-  workflow.py   the stages, entities and owners (edit here to change the flow)
-  models.py     two tables: projects, project_events
-  services.py   workflow rules (approve / reject / hold / resume)
-  routers/      thin HTTP layer
-  database.py   engine + session; config.py reads DATABASE_URL
+  workflow.py        stages, roles & permissions, task states, flows (edit here to change the process)
+  models.py          tables: users, roles, projects, project_stages, tasks, agreements, dossier, submissions,
+                     manufacturer requests, RFI, documents + versions, notifications, audit events
+  services/          engine (approval cycle, guards, health) · tasks · modules · notify · dash
+  routers/           thin HTTP layer;  auth.py = who is calling;  serialize.py = JSON shapes
 frontend/src
-  pages/        Dashboard, ProjectDetail
-  components/   stage tracker, action panel, timeline, new-project form
+  pages/             Dashboard (Director), Projects, ProjectDetail (360), MyWork, Regulatory, Artwork, Legal, Audit, Admin
+  components/        task cards, document / artwork review, workstream tabs, forms, layout
 ```
 
-**Moving off SQLite:** set `DATABASE_URL` (e.g. `postgresql+psycopg://...`). Only SQLAlchemy is used and
-no SQLite-specific features, so no code changes are needed beyond adding migrations (Alembic) for production.
+**Moving off SQLite:** set `DATABASE_URL` (e.g. `postgresql+psycopg://...`). Only SQLAlchemy is used with no SQLite-specific
+features; add Alembic migrations for production.
 
 ## Branding
 
