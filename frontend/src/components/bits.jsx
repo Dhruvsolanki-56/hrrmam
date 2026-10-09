@@ -56,7 +56,7 @@ export function StageBar({ project, big }) {
 
 /** "12d in stage", flagged when it passes the stage's target time. */
 export function AgeChip({ project }) {
-  if (project.status === 'rejected' || project.status === 'completed') return null
+  if (project.status === 'rejected' || project.status === 'completed' || project.days_in_stage == null) return null
   const d = project.days_in_stage
   const state = project.overdue ? 'over' : d >= project.sla_days * 0.75 ? 'warn' : 'ok'
   return (

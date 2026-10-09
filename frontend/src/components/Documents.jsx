@@ -10,6 +10,7 @@ const host = (url) => {
 
 /** Links to documents that live elsewhere (SharePoint, Drive, ...). Nothing is uploaded or stored here. */
 export default function Documents({ project, onChange }) {
+  const links = project.links || []
   const [title, setTitle] = useState('')
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
@@ -37,9 +38,9 @@ export default function Documents({ project, onChange }) {
   return (
     <section className="panel docs">
       <header><h3>Documents</h3><span className="muted">Links to where files live</span></header>
-      {project.links.length === 0 && <p className="muted docs-empty">No documents linked yet.</p>}
+      {links.length === 0 && <p className="muted docs-empty">No documents linked yet.</p>}
       <ul className="doclist">
-        {project.links.map((l) => (
+        {links.map((l) => (
           <li key={l.id}>
             <span className="doc-icon"><Icon name="link" size={16} /></span>
             <a href={l.url} target="_blank" rel="noopener noreferrer">
