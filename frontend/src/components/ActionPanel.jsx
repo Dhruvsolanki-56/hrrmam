@@ -38,7 +38,7 @@ export default function ActionPanel({ project, onChange }) {
         <StatusPill status={project.status} />
       </header>
       <h2>{stage.name}</h2>
-      <EntityChip entity={stage.entity} />
+      <EntityChip entity={stage.entity} full />
       <dl className="who">
         <dt>Responsible</dt>
         <dd>{stage.owner}</dd>

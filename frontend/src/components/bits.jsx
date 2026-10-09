@@ -25,8 +25,16 @@ export function entityTone(entity) {
   return 'other'
 }
 
-export function EntityChip({ entity }) {
-  return <span className={`chip entity-${entityTone(entity)}`}>{entity}</span>
+export function entityShort(entity) {
+  const tone = entityTone(entity)
+  if (tone === 'both') return entity.includes('CMO') ? entity : 'OTC + India'
+  if (tone === 'india') return 'Neo India Lifeline'
+  if (tone === 'otc') return 'Neo Health (OTC)'
+  return entity
+}
+
+export function EntityChip({ entity, full }) {
+  return <span className={`chip entity-${entityTone(entity)}`} title={entity}>{full ? entity : entityShort(entity)}</span>
 }
 
 /** Row of small capsules, one per stage: done / current / upcoming. */
