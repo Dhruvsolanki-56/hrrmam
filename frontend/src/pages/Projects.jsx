@@ -84,7 +84,7 @@ export default function Projects() {
                   const s = stageOf(p)
                   return (
                     <tr key={p.id}>
-                      <td>
+                      <td className="proj-cell">
                         <Link to={`/projects/${p.id}`} className="cell-main">
                           <span className={`avatar ${p.project_type === 'In-Licence' ? 'alt' : ''}`}>{initials(p.name)}</span>
                           <span>
@@ -93,11 +93,11 @@ export default function Projects() {
                           </span>
                         </Link>
                       </td>
-                      <td><strong className="stage-name">{s.name}</strong><small className="sub">{s.owner}</small></td>
-                      <td><EntityChip entity={s.entity} /></td>
-                      <td className="progress-cell"><StageBar project={p} /></td>
-                      <td><StatusPill status={p.status} /></td>
-                      <td className="muted nowrap">{fmtDate(p.updated_at)}</td>
+                      <td data-label="Stage"><strong className="stage-name">{s.name}</strong><small className="sub">{s.owner}</small></td>
+                      <td data-label="Entity"><EntityChip entity={s.entity} /></td>
+                      <td className="progress-cell" data-label="Progress"><StageBar project={p} /></td>
+                      <td data-label="Status"><StatusPill status={p.status} /></td>
+                      <td className="muted nowrap" data-label="Updated">{fmtDate(p.updated_at)}</td>
                     </tr>
                   )
                 })}

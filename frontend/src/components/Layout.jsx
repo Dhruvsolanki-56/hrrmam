@@ -37,11 +37,12 @@ export default function Layout({ title, subtitle, back, actions, children }) {
 
       <div className="main">
         <header className="topbar">
+          <Link to="/" className="mlogo" aria-label="Neo Health home" dangerouslySetInnerHTML={{ __html: logo }} />
           <form className="gsearch" onSubmit={search} role="search">
             <Icon name="search" size={16} />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search projects, codes, categories…" aria-label="Search projects" />
           </form>
-          <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" size={16} />New project</button>
+          <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" size={16} /><span>New project</span></button>
         </header>
 
         <main className="content">
@@ -56,6 +57,13 @@ export default function Layout({ title, subtitle, back, actions, children }) {
           {children}
         </main>
       </div>
+
+      <nav className="tabbar" aria-label="Main">
+        <Link to="/" className={pathname === '/' ? 'on' : ''}><Icon name="grid" size={22} /><span>Overview</span></Link>
+        <Link to="/projects" className={onList ? 'on' : ''}><Icon name="list" size={22} /><span>Projects</span></Link>
+        <Link to="/projects?view=board" className={onBoard ? 'on' : ''}><Icon name="board" size={22} /><span>Board</span></Link>
+        <button onClick={() => setCreating(true)}><Icon name="plus" size={22} /><span>New</span></button>
+      </nav>
 
       {creating && <NewProjectModal onClose={() => setCreating(false)} onCreated={(p) => { setCreating(false); navigate(`/projects/${p.id}`) }} />}
     </div>
