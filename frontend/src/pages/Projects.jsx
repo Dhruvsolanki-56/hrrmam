@@ -4,7 +4,7 @@ import { api } from '../api'
 import { useStages } from '../App'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
-import { EntityChip, StageBar, StatusPill, fmtDate } from '../components/bits'
+import { AgeChip, EntityChip, StageBar, StatusPill, fmtDate } from '../components/bits'
 
 const FILTERS = [['all', 'All'], ['active', 'In progress'], ['on_hold', 'On hold'], ['clarification', 'Clarification'], ['rejected', 'Rejected'], ['completed', 'Completed']]
 
@@ -49,12 +49,15 @@ export default function Projects() {
 
   return (
     <Layout title="Projects" subtitle="Track every project and its current stage"
-      actions={
+      actions={<>
+        <a className="btn line" href={api.exportUrl({ status: filter, stage: stageKey, q: query })} download><Icon name="download" size={16} />Excel</a>
+        <button className="btn line" onClick={() => window.print()}><Icon name="print" size={16} />PDF</button>
         <div className="seg" role="tablist" aria-label="View">
           <button role="tab" aria-selected={view === 'table'} className={view === 'table' ? 'on' : ''} onClick={() => setParam('view', '')}><Icon name="list" size={15} />Table</button>
           <button role="tab" aria-selected={view === 'board'} className={view === 'board' ? 'on' : ''} onClick={() => setParam('view', 'board')}><Icon name="board" size={15} />Board</button>
         </div>
-      }>
+      </>}>
+      <p className="print-only">Neo Health project report · {new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
       <div className="toolbar panel">
         <div className="filters">
           {FILTERS.map(([k, label]) => (
@@ -93,7 +96,7 @@ export default function Projects() {
                           </span>
                         </Link>
                       </td>
-                      <td data-label="Stage"><strong className="stage-name">{s.name}</strong><small className="sub">{s.owner}</small></td>
+                      <td data-label="Stage"><strong className="stage-name">{s.name}</strong><small className="sub">{s.owner}</small><AgeChip project={p} /></td>
                       <td data-label="Entity"><EntityChip entity={s.entity} /></td>
                       <td className="progress-cell" data-label="Progress"><StageBar project={p} /></td>
                       <td data-label="Status"><StatusPill status={p.status} /></td>
@@ -122,6 +125,7 @@ export default function Projects() {
                       <span className="card-stage">{stageOf(p).name}</span>
                       <StageBar project={p} />
                       <div className="card-foot">
+                        <AgeChip project={p} />
                         <EntityChip entity={stageOf(p).entity} />
                         {p.status !== 'active' && <StatusPill status={p.status} />}
                       </div>

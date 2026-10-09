@@ -4,7 +4,7 @@ import { api } from '../api'
 import { useStages } from '../App'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
-import { EntityChip, STATUS, StatusPill, entityTone, fmtDate } from '../components/bits'
+import { AgeChip, EntityChip, STATUS, StatusPill, entityTone, fmtDate } from '../components/bits'
 
 const DONUT = { active: 'var(--neo-green)', on_hold: '#9fa1a1', clarification: 'var(--neo-dark)', completed: 'var(--neo-bright)', rejected: 'var(--neo-black)' }
 
@@ -26,6 +26,7 @@ export default function Dashboard() {
       clarification: count('clarification'), completed: count('completed'), rejected: count('rejected'),
       perStage, perEntity, max: Math.max(1, ...Object.values(perStage)), stage,
       decisions: ps.filter((p) => p.status === 'active' && stage(p).gate),
+      overdue: ps.filter((p) => p.overdue).sort((a, b) => b.days_in_stage - b.sla_days - (a.days_in_stage - a.sla_days)),
       recent: ps.slice(0, 5),
     }
   }, [projects, stages])
@@ -109,7 +110,21 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="grid-2 even">
+      <section className="grid-3">
+        <div className="panel">
+          <header><h3>Needs attention</h3><span className="muted">Over the target time</span></header>
+          {!d.overdue.length && <p className="muted">Nothing is overdue. Every live project is within its target time.</p>}
+          <ul className="rows">
+            {d.overdue.map((p) => (
+              <li key={p.id}>
+                <Link to={`/projects/${p.id}`}>
+                  <div><strong>{p.name}</strong><small>{d.stage(p).name} · target {p.sla_days} days</small></div>
+                  <AgeChip project={p} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
         <div className="panel">
           <header><h3>Awaiting a decision</h3><span className="muted">Approval gates</span></header>
           {!d.decisions.length && <p className="muted">No projects are waiting on an approval.</p>}

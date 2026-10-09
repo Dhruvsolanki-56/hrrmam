@@ -21,38 +21,39 @@ class Stage:
     reject_to: str | None = None
     reject_label: str = "Reject"
     clarify: bool = False  # reviewer can ask the team for more information
+    sla_days: int = 14  # target time in this stage; beyond it the project is flagged overdue
 
 
 STAGES: list[Stage] = [
     Stage("screening", "Opportunity Screening", OTC, "Project Initiator",
-          "Identify the opportunity and screen it against Neo Health (OTC) criteria."),
+          "Identify the opportunity and screen it against Neo Health (OTC) criteria.", sla_days=7),
     Stage("validation", "Commercial Validation", OTC, "Project Team",
-          "Validate the commercial case with the Neo Health (OTC) project team."),
+          "Validate the commercial case with the Neo Health (OTC) project team.", sla_days=14),
     Stage("director_approval", "Director Approval", OTC, "Director, Neo Health (OTC)",
-          "Director decides whether the project goes ahead. A project code is generated on approval.", gate=True),
+          "Director decides whether the project goes ahead. A project code is generated on approval.", gate=True, sla_days=5),
     Stage("brief", "Project Brief", OTC, "Project Initiator + Cross-Functional Team",
-          "Draft the project brief and complete internal review before submission to India."),
+          "Draft the project brief and complete internal review before submission to India.", sla_days=14),
     Stage("india_review", "India Review", NIL, "Director, Neo India Lifeline",
           "Neo India Lifeline reviews the brief. Rejections return to the brief for modification; missing information can be queried.",
-          gate=True, reject_to="brief", reject_label="Return for modification", clarify=True),
+          gate=True, reject_to="brief", reject_label="Return for modification", clarify=True, sla_days=7),
     Stage("feasibility", "Feasibility & Risk", NIL, "Cross-Functional Team + Director, Neo India Lifeline",
           "Cost finalisation, FMEA risk analysis and feasibility report, then Director review (approve, hold or reject).",
-          gate=True),
+          gate=True, sla_days=21),
     Stage("commercial_approval", "Commercial Approval", f"{NIL} + {OTC}", "Both Directors",
-          "Financial review and final commercial approval by both Directors.", gate=True),
+          "Financial review and final commercial approval by both Directors.", gate=True, sla_days=7),
     Stage("agreements", "Agreements", f"{OTC} + {NIL}", "Legal / Quality / PV Teams + Director, Neo India Lifeline",
           "Supplier agreement prepared and reviewed by Legal, Quality and PV, then approved by the India Director.",
-          gate=True),
+          gate=True, sla_days=21),
     Stage("artwork", "Concept & Artwork", OTC, "Artwork Team",
           "Concept and artwork developed, then approved by the Director. Rejections go back for redevelopment.",
-          gate=True, reject_to="artwork", reject_label="Return for redevelopment"),
+          gate=True, reject_to="artwork", reject_label="Return for redevelopment", sla_days=21),
     Stage("regulatory", "Regulatory", OTC, "Regulatory Head",
           "Dossier preparation, regulatory submission and review; the Regulatory Head approves, holds or rejects.",
-          gate=True),
+          gate=True, sla_days=45),
     Stage("manufacturing", "Manufacturing & Samples", "CMO / CDMO", "CMO + Artwork Team",
-          "Manufacturer approval, print proofs, shade card and pre-shipment samples."),
+          "Manufacturer approval, print proofs, shade card and pre-shipment samples.", sla_days=60),
     Stage("launch", "Completion & Dispatch", OTC, "Commercial Team",
-          "Commercial manufacturing and dispatch; Director closes the project."),
+          "Commercial manufacturing and dispatch; Director closes the project.", sla_days=30),
 ]
 
 STAGE_INDEX = {s.key: i for i, s in enumerate(STAGES)}

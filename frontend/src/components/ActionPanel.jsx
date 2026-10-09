@@ -14,12 +14,12 @@ export default function ActionPanel({ project, onChange }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  async function act(action) {
+  async function act(action, extra = {}) {
     setBusy(true)
     setError('')
     try {
       if (actor) localStorage.setItem('nh-actor', actor)
-      onChange(await api.act(project.id, { action, note, actor }))
+      onChange(await api.act(project.id, { action, note, actor, ...extra }))
       setNote('')
     } catch (e) {
       setError(e.message)
@@ -28,6 +28,9 @@ export default function ActionPanel({ project, onChange }) {
     }
   }
 
+  const earlier = stages.slice(0, idx)
+  const [back, setBack] = useState('')
+  const backTo = earlier.some((s) => s.key === back) ? back : earlier[earlier.length - 1]?.key
   const closed = project.status === 'rejected' || project.status === 'completed'
   const waiting = project.status === 'on_hold' || project.status === 'clarification'
 
@@ -48,16 +51,30 @@ export default function ActionPanel({ project, onChange }) {
       <p className="callout-desc">{stage.description}</p>
 
       {closed ? (
-        <p className="closed-note">
-          {project.status === 'rejected' ? 'This project was rejected and is closed.' : 'This project is complete.'}
-        </p>
+        <>
+          <p className="closed-note">
+            {project.status === 'rejected' ? 'This project was rejected and is closed.' : 'This project is complete.'}
+          </p>
+          <label className="field">
+            Note <small>(required to reopen)</small>
+            <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why is it being reopened?" />
+          </label>
+          <label className="field">
+            Acting as
+            <input value={actor} onChange={(e) => setActor(e.target.value)} placeholder="Your name" />
+          </label>
+          {error && <p className="error">{error}</p>}
+          <div className="actions">
+            <button className="btn line" disabled={busy} onClick={() => act('reopen')}>Reopen project</button>
+          </div>
+        </>
       ) : (
         <>
           {project.status === 'clarification' && (
             <p className="notice">India Review is waiting for the project team to send an updated brief.</p>
           )}
           <label className="field">
-            Note {!waiting && <small>(required to reject, hold or request clarification)</small>}
+            Note <small>(needed to reject, hold, clarify or move back)</small>
             <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short comment for the record…" />
           </label>
           <label className="field">
@@ -85,6 +102,18 @@ export default function ActionPanel({ project, onChange }) {
               </>
             )}
           </div>
+          {earlier.length > 0 && (
+            <details className="more">
+              <summary>Move back to an earlier stage</summary>
+              <div className="more-row">
+                <select value={backTo} onChange={(e) => setBack(e.target.value)} aria-label="Stage to move back to">
+                  {earlier.map((s) => <option key={s.key} value={s.key}>{s.name}</option>)}
+                </select>
+                <button className="btn line" disabled={busy} onClick={() => act('return', { to_stage: backTo })}>Move back</button>
+              </div>
+              <small className="muted">Add a note above first. The time-in-stage clock restarts.</small>
+            </details>
+          )}
         </>
       )}
     </section>

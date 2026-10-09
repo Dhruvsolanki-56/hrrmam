@@ -54,6 +54,18 @@ export function StageBar({ project, big }) {
   )
 }
 
+/** "12d in stage", flagged when it passes the stage's target time. */
+export function AgeChip({ project }) {
+  if (project.status === 'rejected' || project.status === 'completed') return null
+  const d = project.days_in_stage
+  const state = project.overdue ? 'over' : d >= project.sla_days * 0.75 ? 'warn' : 'ok'
+  return (
+    <span className={`age age-${state}`} title={`Target: ${project.sla_days} days in this stage`}>
+      {project.overdue ? `Overdue · ${d}d` : `${d}d in stage`}
+    </span>
+  )
+}
+
 export const fmtDate = (iso) =>
   new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
 

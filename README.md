@@ -27,6 +27,14 @@ Create a project → it moves through the stages → at decision stages the resp
 **approves**, **rejects** (or returns for modification) → any project can be **put on hold** and resumed.
 Every action is logged with a note and who did it.
 
+Also included:
+- **Time in stage:** each live project shows how long it has been in its stage and turns "Overdue" once it passes the
+  stage's target (set per stage as `sla_days` in `backend/app/workflow.py`). The Overview lists what needs attention.
+- **Edit / reopen / move back:** edit a project's details, reopen a rejected or completed project, or move one back to an
+  earlier stage (all need a note and are logged).
+- **Documents:** attach links to briefs, agreements, artwork etc. that live elsewhere (no files are stored).
+- **Export:** Excel (`/api/export.xlsx`, honours the current filters) and a print-ready PDF view (Projects page > PDF).
+
 ## Structure
 
 ```

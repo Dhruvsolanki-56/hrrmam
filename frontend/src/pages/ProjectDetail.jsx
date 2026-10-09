@@ -2,15 +2,19 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
 import ActionPanel from '../components/ActionPanel'
+import Documents from '../components/Documents'
+import Icon from '../components/Icon'
+import NewProjectModal from '../components/NewProjectModal'
 import Layout from '../components/Layout'
 import StageList from '../components/StageList'
 import Timeline from '../components/Timeline'
-import { StageBar, StatusPill, fmtDate } from '../components/bits'
+import { AgeChip, StageBar, StatusPill, fmtDate } from '../components/bits'
 
 export default function ProjectDetail() {
   const { id } = useParams()
   const [project, setProject] = useState(null)
   const [error, setError] = useState('')
+  const [editing, setEditing] = useState(false)
 
   useEffect(() => {
     api.project(id).then(setProject).catch((e) => setError(e.message))
@@ -20,10 +24,12 @@ export default function ProjectDetail() {
   if (!project) return <Layout title="Project" back="/projects" />
 
   return (
-    <Layout title={project.name} subtitle={project.code || 'Project code is issued on Director approval'} back="/projects">
+    <Layout title={project.name} subtitle={project.code || 'Project code is issued on Director approval'} back="/projects"
+      actions={<button className="btn line" onClick={() => setEditing(true)}><Icon name="edit" size={16} />Edit details</button>}>
       <section className="panel summary-panel">
         <div className="meta">
           <StatusPill status={project.status} />
+          <AgeChip project={project} />
           <span className="chip plain">{project.project_type}</span>
           {project.category && <span className="chip plain">{project.category}</span>}
           {project.initiator && <span className="muted">Initiated by <b>{project.initiator}</b></span>}
@@ -36,6 +42,7 @@ export default function ProjectDetail() {
       <div className="detail-grid">
         <div className="stack">
           <ActionPanel project={project} onChange={setProject} />
+          <Documents project={project} onChange={setProject} />
           <section className="panel">
             <header><h3>Activity</h3></header>
             <Timeline events={project.events} />
@@ -46,6 +53,7 @@ export default function ProjectDetail() {
           <StageList project={project} />
         </section>
       </div>
+      {editing && <NewProjectModal project={project} onClose={() => setEditing(false)} onCreated={(p) => { setProject(p); setEditing(false) }} />}
     </Layout>
   )
 }

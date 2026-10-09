@@ -11,6 +11,13 @@ const PATHS = {
   plus: 'M12 5v14M5 12h14',
   arrow: 'M5 12h14M13 6l6 6-6 6',
   back: 'M19 12H5M11 6l-6 6 6 6',
+  download: 'M12 4v11M7 11l5 5 5-5M5 20h14',
+  print: 'M7 8V4h10v4M7 17H5a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M7 14h10v6H7z',
+  edit: 'M4 20h4L19 9l-4-4L4 16zM13 7l4 4',
+  link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
+  trash: 'M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6',
+  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
+  alert: 'M12 4l9 16H3zM12 10v4M12 17h.01',
 }
 
 export default function Icon({ name, size = 18 }) {
