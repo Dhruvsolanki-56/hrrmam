@@ -115,6 +115,15 @@ export default function Layout({ title, subtitle, back, backLabel = 'All project
     return () => document.removeEventListener('keydown', k)
   }, [])
 
+  useEffect(() => { setMore(false) }, [pathname, qs])
+  useEffect(() => {
+    if (!more) return
+    const k = (e) => { if (e.key === 'Escape') setMore(false) }
+    document.addEventListener('keydown', k)
+    document.body.style.overflow = 'hidden'
+    return () => { document.removeEventListener('keydown', k); document.body.style.overflow = '' }
+  }, [more])
+
   const onBoard = pathname === '/projects' && qs.includes('view=board')
   const NAV = [
     { to: '/', icon: 'grid', label: 'Overview', on: pathname === '/' },
@@ -140,11 +149,16 @@ export default function Layout({ title, subtitle, back, backLabel = 'All project
 
   return (
     <div className="app">
-      <aside className="side">
-        <Link to="/" className="side-brand" aria-label="Neo Health home">
-          <span className="brand-logo" dangerouslySetInnerHTML={{ __html: logo }} />
-          <span className="brand-name">Lifecycle &amp; regulatory</span>
-        </Link>
+      {more && <div className="side-scrim" onClick={() => setMore(false)} aria-hidden="true" />}
+      <aside className={`side ${more ? 'open' : ''}`} aria-label="Navigation">
+        <div className="side-top">
+          <Link to="/" className="side-brand" aria-label="Neo Health home">
+            <span className="brand-logo" dangerouslySetInnerHTML={{ __html: logo }} />
+            <span className="brand-name">Lifecycle &amp; regulatory</span>
+          </Link>
+          <button className="icon-btn side-close" onClick={() => setMore(false)} aria-label="Close menu"><Icon name="x" size={18} /></button>
+        </div>
+        {can('manage_project') && <button className="btn primary side-new" onClick={() => { setMore(false); setCreating(true) }}><Icon name="plus" size={15} />New project</button>}
         <nav className="side-nav" aria-label="Main">
           {NAV.map((n, i) => n.h
             ? <span key={i} className="side-h">{n.h}</span>
@@ -156,6 +170,7 @@ export default function Layout({ title, subtitle, back, backLabel = 'All project
       <div className="main">
       <header className="hdr">
         <div className="hdr-in hdr-top">
+          <button className="icon-btn m-only menu-btn" onClick={() => setMore(true)} aria-label="Open menu" aria-expanded={more}><Icon name="menu" size={20} /></button>
           <Link to="/" className="brand m-only" aria-label="Neo Health home">
             <span className="brand-logo" dangerouslySetInnerHTML={{ __html: logo }} />
           </Link>
@@ -168,7 +183,6 @@ export default function Layout({ title, subtitle, back, backLabel = 'All project
             <Bell />
             {can('manage_project') && <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" size={15} /><span>New project</span></button>}
             <span className="m-only"><UserMenu /></span>
-            <button className="icon-btn m-only" onClick={() => setMore(true)} aria-label="Menu"><Icon name="more" size={18} /></button>
           </div>
         </div>
       </header>
@@ -191,16 +205,6 @@ export default function Layout({ title, subtitle, back, backLabel = 'All project
         {children}
       </main>
       </div>
-
-      {more && (
-        <div className="overlay sheet-wrap" onClick={() => setMore(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <h3>Menu</h3>
-            {links.map((l) => <Link key={l.to} to={l.to} onClick={() => setMore(false)} className={l.on ? 'on' : ''}><Icon name={l.icon} />{l.label}</Link>)}
-            {can('manage_project') && <button onClick={() => { setMore(false); setCreating(true) }}><Icon name="plus" />New project</button>}
-          </div>
-        </div>
-      )}
 
       {creating && <NewProjectModal onClose={() => setCreating(false)} onCreated={(p) => { setCreating(false); navigate(`/projects/${p.id}`) }} />}
     </div>
