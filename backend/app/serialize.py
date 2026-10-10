@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 from . import workflow
 from .models import Agreement, DateRequest, Document, ManufacturerRequest, Project, RFICase, Task, User, aware
-from .services import engine
+from .services import engine, modules
 
 
 def iso(v):
@@ -32,7 +32,12 @@ def project_row(p: Project) -> dict:
     h, reasons = engine.health(p)
     w = _worst(p)
     tasks = p.tasks
+    flow = p.flow
+    cur = flow.stage(p.stage_key)
     return {
+        "stage": {"key": cur.key, "name": cur.name, "phase": cur.phase, "entity": cur.entity, "group": cur.group or "Stages"},
+        "stage_order": [x.key for x in flow.stages], "stage_names": {x.key: x.name for x in flow.stages},
+        "workflow_id": p.workflow_id,
         "id": p.id, "code": p.code, "name": p.name, "product": p.product, "project_type": p.project_type,
         "category": p.category, "market": p.market, "initiator": p.initiator, "summary": p.summary,
         "project_manager": user_brief(p.project_manager), "submission_type": p.submission_type,
@@ -41,7 +46,7 @@ def project_row(p: Project) -> dict:
         "active_stages": p.active_keys, "stage_states": p.stage_states,
         "awaiting_approval": [r.stage_key for r in p.active_rows if r.state == "awaiting_approval"],
         "health": h, "health_reasons": reasons,
-        "days_in_stage": w.days_in_stage if w else 0, "sla_days": w.sla_days if w else workflow.stage(p.stage_key).sla_days,
+        "days_in_stage": w.days_in_stage if w else 0, "sla_days": w.sla_days if w else cur.sla_days,
         "overdue": p.status == "active" and any(r.overdue for r in p.active_rows),
         "open_tasks": sum(1 for t in tasks if t.open), "overdue_tasks": sum(1 for t in tasks if t.overdue),
         "created_at": iso(p.created_at), "updated_at": iso(p.updated_at),
@@ -105,8 +110,12 @@ def rfi_out(r: RFICase, with_project: bool = False) -> dict:
 
 def document_out(d: Document, with_project: bool = False) -> dict:
     cur = d.versions[-1] if d.versions else None
+    labels = {"draft": "Draft", "in_review": "In review", "approved": "Approved", "returned": "Returned for changes", "locked": "Locked"}
+    if d.is_artwork:
+        labels.update({s["status"]: s["label"] for s in d.steps})
     out = {"id": d.id, "project_id": d.project_id, "stage_key": d.stage_key, "kind": d.kind, "title": d.title, "status": d.status,
-           "required": d.required, "owner": user_brief(d.owner), "flow": d.flow, "is_artwork": d.is_artwork,
+           "required": d.required, "owner": user_brief(d.owner), "flow": d.flow, "flow_labels": labels, "is_artwork": d.is_artwork,
+           "review_roles": modules.review_roles(d) if d.status in d.flow[1:-1] else [],
            "current_version": cur.version_no if cur else 0, "link": cur.link if cur else "", "updated_at": iso(d.updated_at),
            "versions": [{"id": v.id, "version_no": v.version_no, "link": v.link, "note": v.note, "created_by": v.created_by,
                          "created_at": iso(v.created_at)} for v in d.versions]}
@@ -120,6 +129,8 @@ def event_out(e, with_project: bool = False) -> dict:
          "stage_key": e.stage_key, "task_id": e.task_id, "to_stage": e.to_stage, "created_at": iso(e.created_at)}
     if with_project:
         d["project_name"], d["project_code"] = e.project.name, e.project.code
+    flow = e.project.flow
+    d["stage_name"] = flow.stage(e.stage_key).name if e.stage_key and flow.has(e.stage_key) else ""
     return d
 
 
@@ -139,6 +150,7 @@ def stage_rows(p: Project) -> list[dict]:
 def project_detail(p: Project) -> dict:
     return {
         **project_row(p),
+        "flow": p.flow.payload(),
         "stages": stage_rows(p),
         "tasks": [task_out(t) for t in p.tasks],
         "agreements": [agreement_out(a) for a in p.agreements],

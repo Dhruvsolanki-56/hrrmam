@@ -15,3 +15,9 @@ export function useCan() {
 }
 
 export const stageOf = (stages, key) => stages.find((s) => s.key === key)
+
+/** Project pages use the workflow version the project started on, not the one currently published. */
+export function FlowScope({ stages, children }) {
+  const app = useApp()
+  return <AppContext.Provider value={{ ...app, stages }}>{children}</AppContext.Provider>
+}

@@ -80,6 +80,7 @@ class Project(Base):
     target_submission: Mapped[date | None] = mapped_column(Date, nullable=True)
     target_launch: Mapped[date | None] = mapped_column(Date, nullable=True)
     critical_blocker: Mapped[str] = mapped_column(Text, default="")
+    workflow_id: Mapped[int] = mapped_column(ForeignKey("workflow_defs.id"))  # the workflow version this project runs on
     stage_key: Mapped[str] = mapped_column(String(40))  # primary active stage (earliest in the flow); kept in sync
     status: Mapped[str] = mapped_column(String(20), default="active")  # active | on_hold | rejected | completed
     created_at: Mapped[datetime] = _ts()
@@ -96,8 +97,16 @@ class Project(Base):
     rfis: Mapped[list["RFICase"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="RFICase.id")
     documents: Mapped[list["Document"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="Document.id")
 
+    @property
+    def flow(self) -> "workflow.Flow":
+        return workflow.get(self.workflow_id)
+
     def row(self, key: str) -> "ProjectStage | None":
         return next((r for r in self.stages if r.stage_key == key), None)
+
+    def feature_row(self, feature: str) -> "ProjectStage | None":
+        s = self.flow.with_feature(feature)
+        return self.row(s.key) if s else None
 
     @property
     def stage_states(self) -> dict[str, str]:
@@ -106,7 +115,7 @@ class Project(Base):
     @property
     def active_rows(self) -> list["ProjectStage"]:
         rows = [r for r in self.stages if r.state in ACTIVE_STATES]
-        return sorted(rows, key=lambda r: workflow.STAGE_INDEX[r.stage_key])
+        return sorted(rows, key=lambda r: self.flow.index[r.stage_key])
 
     @property
     def active_keys(self) -> list[str]:
@@ -135,7 +144,7 @@ class ProjectStage(Base):
 
     @property
     def sla_days(self) -> int:
-        return workflow.stage(self.stage_key).sla_days
+        return self.project.flow.stage(self.stage_key).sla_days
 
     @property
     def days_in_stage(self) -> int:
@@ -361,8 +370,9 @@ class Document(Base):
     stage_key: Mapped[str] = mapped_column(String(40), default="")  # workstream the document belongs to
     kind: Mapped[str] = mapped_column(String(40), default="Other")
     title: Mapped[str] = mapped_column(String(200))
-    status: Mapped[str] = mapped_column(String(24), default="draft")  # draft | in_review | regulatory_review | director_approval | returned | approved | locked
+    status: Mapped[str] = mapped_column(String(32), default="draft")  # draft | in_review | <artwork step> | returned | approved | locked
     required: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_artwork: Mapped[bool] = mapped_column(Boolean, default=False)
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
@@ -372,12 +382,15 @@ class Document(Base):
     versions: Mapped[list["DocumentVersion"]] = relationship(back_populates="document", cascade="all, delete-orphan", order_by="DocumentVersion.version_no")
 
     @property
-    def is_artwork(self) -> bool:
-        return self.stage_key == "artwork"
+    def steps(self) -> list[dict]:
+        """Artwork review steps from the workflow's rules (status key, label, roles)."""
+        return self.project.flow.rules["artwork"]["steps"]
 
     @property
     def flow(self) -> list[str]:
-        return workflow.ARTWORK_FLOW if self.is_artwork else workflow.DOC_FLOW
+        if self.is_artwork:
+            return ["draft"] + [x["status"] for x in self.steps] + ["approved"]
+        return ["draft", "in_review", "approved"] if self.project.flow.rules["document"].get("approval", True) else ["draft", "approved"]
 
 
 class DocumentVersion(Base):
@@ -403,3 +416,40 @@ class AdminEvent(Base):
     action: Mapped[str] = mapped_column(String(30))
     note: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = _ts()
+
+
+# ------------------------------------------------------------------ the configurable workflow
+class WorkflowDef(Base):
+    """A versioned workflow definition. Published versions are immutable: projects keep running on the version they started on."""
+    __tablename__ = "workflow_defs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(12), default="draft")  # draft | published | archived
+    version: Mapped[int] = mapped_column(Integer, default=0)  # assigned when published
+    definition: Mapped[dict] = mapped_column(JSON, default=dict)  # {"stages": [...], "rules": {...}}
+    based_on: Mapped[str] = mapped_column(String(160), default="")
+    created_by: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    feedback: Mapped[list["WorkflowFeedback"]] = relationship(back_populates="workflow", cascade="all, delete-orphan", order_by="WorkflowFeedback.id")
+
+
+class WorkflowFeedback(Base):
+    """Comments on a workflow draft (for example from the client), optionally about one stage."""
+    __tablename__ = "workflow_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workflow_id: Mapped[int] = mapped_column(ForeignKey("workflow_defs.id"), index=True)
+    stage_key: Mapped[str] = mapped_column(String(40), default="")
+    author: Mapped[str] = mapped_column(String(120), default="")
+    role: Mapped[str] = mapped_column(String(80), default="")
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(10), default="open")  # open | resolved
+    resolution: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = _ts()
+
+    workflow: Mapped[WorkflowDef] = relationship(back_populates="feedback")

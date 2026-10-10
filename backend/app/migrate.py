@@ -11,8 +11,8 @@ from .config import DATABASE_URL
 def archive_legacy_db(engine):
     insp = inspect(engine)
     tables = set(insp.get_table_names())
-    if "projects" not in tables or "users" in tables:
-        return None
+    if "projects" not in tables or "workflow_defs" in tables:
+        return None  # empty database, or already on the configurable-workflow schema
     if not DATABASE_URL.startswith("sqlite:///"):
         raise RuntimeError("This database uses the old schema. Migrate or drop it before starting the new version.")
     path = Path(DATABASE_URL.removeprefix("sqlite:///"))

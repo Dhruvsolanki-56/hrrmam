@@ -1,5 +1,6 @@
 """Project lifecycle: creation, edits (with a field-by-field audit), the stage approval cycle,
-parallel workstreams, milestone / lock rules and the Project 360 health rating."""
+parallel workstreams, milestone / lock rules and the Project 360 health rating.
+Nothing here names a stage: the process comes from the project's workflow version (`p.flow`)."""
 from datetime import date
 
 from sqlalchemy import func, select
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from .. import workflow
 from ..models import Project, ProjectStage, User, aware
-from . import common, modules, notify
+from . import common, modules, notify, workflows
 from .common import Forbidden, WorkflowError
 
 SAT = workflow.SATISFIED
@@ -33,9 +34,10 @@ def _activate(row: ProjectStage):
     row.submitted_at = row.decided_at = None
     row.locked = False
     p = row.project
-    if row.stage_key == "legal":
+    feats = p.flow.stage(row.stage_key).features
+    if "agreements" in feats:
         modules.ensure_core_agreements(p)
-    if row.stage_key == "regulatory":
+    if "dossier" in feats:
         modules.ensure_dossier(p)
 
 
@@ -44,7 +46,7 @@ def _unlock(p: Project):
     for row in p.stages:
         if row.state != "pending":
             continue
-        reqs = workflow.stage(row.stage_key).requires
+        reqs = p.flow.stage(row.stage_key).requires
         if reqs and all(p.row(r) and p.row(r).state in SAT for r in reqs):
             _activate(row)
 
@@ -54,7 +56,7 @@ def _sync(p: Project):
     if rows:
         p.stage_key = rows[0].stage_key
     elif p.stages and all(r.state in SAT for r in p.stages):
-        p.stage_key = workflow.LAST_STAGE
+        p.stage_key = p.flow.terminals[-1].key
 
 
 def _next_code(db: Session, year: int) -> str:
@@ -78,7 +80,7 @@ def health(p: Project) -> tuple[str, list[str]]:
     soon = [t for t in p.tasks if t.open and t.due_at and not t.overdue and (aware(t.due_at).date() - today).days <= 3]
     if soon:
         amber.append(f"{len(soon)} task(s) due within 3 days")
-    sub = p.row("submission")
+    sub = p.feature_row("submission")
     if p.target_submission and p.target_submission < today and not (sub and sub.state in SAT):
         red.append("Target submission date has passed")
     if p.target_launch and p.target_launch < today:
@@ -98,15 +100,20 @@ def create_project(db: Session, user: User, data) -> Project:
     common.require(user, "manage_project", "create projects")
     if data.submission_type and data.submission_type not in workflow.SUBMISSION_TYPES:
         raise WorkflowError("Unknown submission type.")
+    wf = workflows.current(db)
+    if not wf:
+        raise WorkflowError("There is no published workflow yet. Publish one first (Workflow page).")
+    flow = workflow.get(wf.id)
     fields = data.model_dump()
     if not fields.get("project_manager_id") and user.role_key == "project_manager":
         fields["project_manager_id"] = user.id
-    p = Project(**fields, stage_key=workflow.FIRST_STAGE, status="active")
-    for s in workflow.STAGES:
+    p = Project(**fields, workflow_id=wf.id, stage_key=flow.starts[0].key, status="active")
+    for s in flow.stages:
         p.stages.append(ProjectStage(stage_key=s.key, state="pending"))
     db.add(p)
-    _activate(p.stages[0])
-    common.log(p, user, "project", "created", "Project created")
+    for s in flow.starts:
+        _activate(p.row(s.key))
+    common.log(p, user, "project", "created", f"Project created on workflow '{wf.name}' v{wf.version}")
     db.commit()
     return p
 
@@ -120,7 +127,8 @@ EDITABLE = {"name": "Name", "product": "Product", "project_type": "Type", "categ
 def update_project(db: Session, user: User, p: Project, data) -> Project:
     changes = data.model_dump(exclude_unset=True)
     # the Regulatory team may set the submission type; everything else needs project management rights
-    if not (set(changes) <= {"submission_type"} and modules.can_edit_stage(user, "regulatory")):
+    dossier = p.flow.with_feature("dossier")
+    if not (set(changes) <= {"submission_type"} and dossier and modules.can_edit_stage(user, p, dossier.key)):
         common.require(user, "manage_project", "edit projects")
     if p.closed:
         raise WorkflowError(f"This project is {p.status}. Reopen it to edit.")
@@ -153,6 +161,8 @@ def update_project(db: Session, user: User, p: Project, data) -> Project:
 
 # ---------------------------------------------------------------- guards: what must be true before a stage is submitted / approved
 def blockers(p: Project, key: str) -> list[str]:
+    st = p.flow.stage(key)
+    feats = st.features
     out = []
     open_tasks = [t for t in p.tasks if t.stage_key == key and t.required and not t.bypassed and t.state not in workflow.TASK_DONE]
     if open_tasks:
@@ -160,24 +170,23 @@ def blockers(p: Project, key: str) -> list[str]:
     docs = [d for d in p.documents if d.stage_key == key and d.required and d.status not in ("approved", "locked")]
     if docs:
         out.append(f"{len(docs)} required document(s) are not approved yet")
-    if key == "legal":
+    if "agreements" in feats:
         for a in p.agreements:
             if a.core and a.status != "signed":
                 out.append(f"{workflow.AGREEMENT_KINDS[a.kind]} is not signed yet")
-    elif key == "regulatory":
+    if "dossier" in feats:
         if not p.submission_type:
             out.append("Choose the submission type first")
         todo = [i for i in p.dossier_items if i.required and i.status not in workflow.DOSSIER_DONE]
         if todo:
             out.append(f"{len(todo)} required dossier item(s) are not ready")
-    elif key == "manufacturer":
+    if "mfr" in feats:
         todo = [m for m in p.mfr_requests if m.required and m.status not in workflow.MFR_DONE]
         if todo:
             out.append(f"{len(todo)} required manufacturer data item(s) are not accepted yet")
-    elif key == "submission":
-        if not p.submissions:
-            out.append("Record the external submission first")
-    elif key == "rfi":
+    if "submission" in feats and not p.submissions:
+        out.append("Record the external submission first")
+    if "rfi" in feats:
         n = [r for r in p.rfis if r.status != "closed"]
         if n:
             out.append(f"{len(n)} RFI case(s) are still open")
@@ -187,7 +196,7 @@ def blockers(p: Project, key: str) -> list[str]:
 # ---------------------------------------------------------------- actions
 def _target_row(p: Project, key: str | None) -> ProjectStage:
     if key:
-        row = p.row(key) if key in workflow.STAGE_INDEX else None
+        row = p.row(key) if p.flow.has(key) else None
         if not row or row.state not in ("in_progress", "awaiting_approval"):
             raise WorkflowError("That stage is not active right now.")
         return row
@@ -200,6 +209,7 @@ def _target_row(p: Project, key: str | None) -> ProjectStage:
 def apply_action(db: Session, user: User, p: Project, a) -> Project:
     note = a.note.strip()
     act = a.action
+    flow = p.flow
     ev_stage, to_stage = p.stage_key, None
 
     # ---- project level ----
@@ -211,9 +221,10 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
         if p.status == "completed":
             for r in p.stages:
                 r.locked = False
-            last = p.row(workflow.LAST_STAGE)
-            _activate(last)
-            last.rework_count += 1
+            for t in flow.terminals:
+                last = p.row(t.key)
+                _activate(last)
+                last.rework_count += 1
         p.status = "active"
     elif act in ("hold", "resume", "return"):
         common.require(user, "manage_project", "hold, resume or move back a project")
@@ -231,13 +242,13 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
         else:  # return
             common.ensure_open(p)
             common.need_note(note, "Please add a note explaining why it is moving back.")
-            target = p.row(a.to_stage) if a.to_stage in workflow.STAGE_INDEX else None
+            target = p.row(a.to_stage) if a.to_stage and flow.has(a.to_stage) else None
             if not target or target.state not in SAT:
                 raise WorkflowError("Choose an approved stage to move back to.")
-            for key in workflow.descendants(target.stage_key) | {target.stage_key}:
+            for key in flow.descendants(target.stage_key) | {target.stage_key}:
                 if p.row(key).locked:
-                    raise WorkflowError(f"{workflow.stage(key).name} is locked. Unlock it first.")
-            for key in workflow.descendants(target.stage_key):
+                    raise WorkflowError(f"{flow.stage(key).name} is locked. Unlock it first.")
+            for key in flow.descendants(target.stage_key):
                 r = p.row(key)
                 r.state, r.started_at, r.submitted_at, r.decided_at = "pending", None, None, None
             _activate(target)
@@ -248,7 +259,7 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
         common.ensure_open(p)
         if act in ("lock", "unlock"):
             common.require(user, "lock_unlock", "lock or unlock records")
-            row = p.row(a.stage_key) if a.stage_key in workflow.STAGE_INDEX else None
+            row = p.row(a.stage_key) if a.stage_key and flow.has(a.stage_key) else None
             if not row:
                 raise WorkflowError("Choose a stage.")
             if act == "lock":
@@ -261,7 +272,7 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
             ev_stage = row.stage_key
         else:
             row = _target_row(p, a.stage_key)
-            st = workflow.stage(row.stage_key)
+            st = flow.stage(row.stage_key)
             ev_stage = row.stage_key
             if act == "submit":
                 if not (common.role_ok(user, st.owner_roles) or user.can("manage_project")):
@@ -287,10 +298,10 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
                     if b:
                         raise WorkflowError("Cannot approve yet: " + "; ".join(b) + ".")
                     row.state, row.decided_at = "approved", common.now()
-                    if st.key == workflow.CODE_STAGE and not p.code:
+                    if "issue_code" in st.features and not p.code:
                         p.code = _next_code(db, p.created_at.year)
                     _unlock(p)
-                    if st.key == workflow.LAST_STAGE:
+                    if all(r.state in SAT for r in p.stages):
                         p.status = "completed"
                         for r in p.stages:
                             r.locked = True
@@ -315,6 +326,8 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
                 common.need_note(note, "Please add a note explaining why this work is not needed.")
                 row.state, row.decided_at = "bypassed", common.now()
                 _unlock(p)
+                if all(r.state in SAT for r in p.stages):
+                    p.status = "completed"
             else:
                 raise WorkflowError("Unknown action.")
 

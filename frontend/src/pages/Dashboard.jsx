@@ -134,7 +134,7 @@ export default function Dashboard() {
         <div className="panel">
           <header><h3>Pipeline by phase</h3><span className="muted">Live projects per phase</span></header>
           <ul className="bars">
-            {stages.map((s) => (
+            {(d.stages || stages).map((s) => (
               <li key={s.key}>
                 <span className="bar-name"><small>{String(s.phase).padStart(2, '0')}</small>{s.name}</span>
                 <span className="bar-track"><span className={`bar-fill tone-${entityTone(s.entity)}`} style={{ width: `${(d.per_stage[s.key] / max) * 100}%` }} /></span>

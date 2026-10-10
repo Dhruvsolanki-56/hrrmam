@@ -91,6 +91,30 @@ def create_agreement(project_id: int, data: sc.AgreementCreate, user: User = Dep
     return _out(p)
 
 
+@router.post("/agreements/{agreement_id}/actions")
+def agreement_action(agreement_id: int, data: sc.EntryActionIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    a = db.get(Agreement, agreement_id)
+    if not a:
+        raise modules.common.NotFound("Agreement not found")
+    return _out(modules.entry_action(db, user, "agreement", a, data.action, data.note).project)
+
+
+@router.post("/dossier-items/{item_id}/actions")
+def dossier_action(item_id: int, data: sc.EntryActionIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    it = db.get(DossierItem, item_id)
+    if not it:
+        raise modules.common.NotFound("Item not found")
+    return _out(modules.entry_action(db, user, "dossier_item", it, data.action, data.note).project)
+
+
+@router.post("/mfr/{mfr_id}/actions")
+def mfr_action(mfr_id: int, data: sc.EntryActionIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    m = db.get(ManufacturerRequest, mfr_id)
+    if not m:
+        raise modules.common.NotFound("Request not found")
+    return _out(modules.entry_action(db, user, "mfr", m, data.action, data.note).project)
+
+
 @router.patch("/agreements/{agreement_id}")
 def update_agreement(agreement_id: int, data: sc.AgreementUpdate, user: User = Depends(current_user), db: Session = Depends(get_db)):
     a = db.get(Agreement, agreement_id)

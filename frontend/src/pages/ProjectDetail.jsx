@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
-import ActionPanel, { TAB_OF } from '../components/ActionPanel'
+import ActionPanel from '../components/ActionPanel'
 import DocList from '../components/DocCard'
 import FormModal from '../components/FormModal'
 import Icon from '../components/Icon'
@@ -12,24 +12,26 @@ import TasksTab from '../components/TasksTab'
 import Timeline from '../components/Timeline'
 import { LegalTab, ManufacturerTab, RegulatoryTab, RfiTab } from '../components/Workstreams'
 import { AgeChip, HealthPill, Person, StageBar, StateChip, StatusPill, Tabs, fmtDate, fmtDay, label } from '../components/bits'
-import { useCan, useStages } from '../context'
+import { FlowScope, useCan, useStages } from '../context'
 
 const AREAS = ['all', 'stage', 'task', 'legal', 'dossier', 'artwork', 'manufacturer', 'rfi', 'document', 'project']
 
 function Workstreams({ project, goTab }) {
   const stages = useStages()
   const ws = stages.filter((s) => s.workstream)
-  const milestone = project.stages.find((r) => r.key === 'dossier_ready')
+  const ms = stages.find((s) => s.milestone)
+  const milestone = ms && project.stages.find((r) => r.key === ms.key)
+  if (!ws.length) return null
   return (
     <section className="panel">
       <header>
-        <div><h3>Workstreams</h3><p className="muted">Five workstreams run in parallel, each with its own status. <b>Dossier Ready</b> is the milestone lock: it needs all of them approved (or bypassed when optional).</p></div>
-        <StateChip state={milestone.state} />
+        <div><h3>Workstreams</h3><p className="muted">{ws.length} workstreams run in parallel, each with its own status and approval cycle.{ms && <> <b>{ms.name}</b> is the milestone lock: it needs all of them approved (or bypassed when optional).</>}</p></div>
+        {milestone && <StateChip state={milestone.state} />}
       </header>
       <div className="ws-grid">
         {ws.map((s) => {
           const r = project.stages.find((x) => x.key === s.key)
-          const tab = TAB_OF[s.key] || 'tasks'
+          const tab = s.tab || 'tasks'
           return (
             <button key={s.key} className={`ws ws-${r.state}`} onClick={() => goTab(tab)}>
               <b>{s.name}</b>
@@ -69,6 +71,7 @@ export default function ProjectDetail() {
   const manage = can('manage_project')
 
   return (
+    <FlowScope stages={project.flow.stages}>
     <Layout title={project.name} subtitle={project.code || 'The project code is issued when the brief is approved'} back="/projects"
       actions={manage && project.status !== 'rejected' && project.status !== 'completed' && <button className="btn line" onClick={() => setEditing(true)}><Icon name="edit" size={16} />Edit Project 360</button>}>
       <section className="panel summary-panel">
@@ -112,7 +115,7 @@ export default function ProjectDetail() {
           <div className="detail-grid">
             <div className="stack"><ActionPanel project={project} onChange={setProject} goTab={goTab} /></div>
             <section className="panel">
-              <header><h3>Project journey</h3><span className="muted">12 phases</span></header>
+              <header><h3>Project journey</h3><span className="muted">{project.flow.stages.length} phases</span></header>
               <StageList project={project} />
             </section>
           </div>
@@ -140,5 +143,6 @@ export default function ProjectDetail() {
           onSave={async (d) => setProject(await api.updateProject(project.id, d))} onClose={() => setBlocker(false)} />
       )}
     </Layout>
+    </FlowScope>
   )
 }

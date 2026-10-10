@@ -85,7 +85,7 @@ class AgreementCreate(BaseModel):
 
 
 class AgreementUpdate(BaseModel):
-    status: Literal["not_started", "drafting", "in_review", "sent_for_signature", "signed"] | None = None
+    status: Literal["not_started", "drafting", "in_review", "changes_requested", "sent_for_signature", "signed"] | None = None
     counterparty: str | None = None
     owner_id: int | None = None
     due_date: date | None = None
@@ -101,7 +101,7 @@ class DossierItemCreate(BaseModel):
 
 
 class DossierItemUpdate(BaseModel):
-    status: Literal["missing", "draft", "ready", "reviewed"] | None = None
+    status: Literal["missing", "draft", "awaiting_approval", "changes_requested", "ready", "reviewed"] | None = None
     link: str | None = None
     notes: str | None = None
     required: bool | None = None
@@ -125,7 +125,7 @@ class MfrCreate(BaseModel):
 
 
 class MfrUpdate(BaseModel):
-    status: Literal["requested", "received", "under_review", "accepted", "rejected"] | None = None
+    status: Literal["requested", "received", "under_review", "changes_requested", "accepted"] | None = None
     manufacturer: str | None = None
     due_date: date | None = None
     received_on: date | None = None
@@ -166,6 +166,7 @@ class RFIActionIn(BaseModel):
 
 
 class DocumentCreate(BaseModel):
+    artwork: bool = False
     stage_key: str = ""
     kind: str = "Other"
     title: str = Field(min_length=2, max_length=200)
@@ -213,3 +214,32 @@ class SettingsUpdate(BaseModel):
 class ReadIn(BaseModel):
     ids: list[int] = []
     all: bool = False
+
+
+class EntryActionIn(BaseModel):
+    action: Literal["submit", "approve", "reject"]
+    note: str = ""
+
+
+# ---- workflow designer
+class WorkflowCreate(BaseModel):
+    name: str = ""
+    description: str = ""
+    preset: str | None = None
+    from_id: int | None = None
+
+
+class WorkflowUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    definition: dict | None = None
+
+
+class FeedbackIn(BaseModel):
+    stage_key: str = ""
+    body: str = Field(min_length=2)
+
+
+class FeedbackResolve(BaseModel):
+    status: Literal["open", "resolved"]
+    resolution: str = ""

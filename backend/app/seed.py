@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from . import schemas as sc
 from . import workflow
 from .models import Project, Role, Setting, User
-from .services import common, engine, modules, tasks
+from .services import common, engine, modules, tasks, workflows
 
 
 def seed_reference(db: Session):
@@ -29,6 +29,7 @@ PEOPLE = [  # name, role, country
     ("Priya Nair", "project_manager", "IN"), ("Liam Carter", "project_manager", "AU"), ("Emma Wilson", "commercial", "AU"),
     ("Rohan Mehta", "regulatory", "IN"), ("Jessica Lee", "regulatory", "AU"), ("Kavita Shah", "legal", "IN"),
     ("Arjun Patel", "artwork", "IN"), ("Neha Kulkarni", "technical", "IN"),
+    ("Client Reviewer", "reviewer", "Partner"),
 ]
 
 
@@ -40,6 +41,18 @@ def seed_demo(db: Session):
     for name, role, country in PEOPLE:
         db.add(User(name=name, email=f"{name.split()[-1].lower()}@neo.example", role_key=role, country=country))
     db.commit()
+    admin = db.scalar(select(User).where(User.name == "Sarah Mitchell"))
+    if not workflows.current(db):
+        live = workflows.create_draft(db, admin, "Neo standard process",
+                                      "Legal, Regulatory, Artwork and Manufacturer data start together once Commercial is approved.",
+                                      preset="after_commercial")
+        workflows.publish(db, admin, live)
+    alt = workflows.create_draft(db, admin, "Option B: parallel from the Project Brief",
+                                 "Everything except Commercial starts as soon as the Brief is approved. Shared for client feedback.",
+                                 preset="from_brief")
+    reviewer = db.scalar(select(User).where(User.name == "Client Reviewer"))
+    workflows.add_feedback(db, reviewer, alt, "commercial", "We would prefer Commercial approval to stay a gate before any legal spend.")
+    workflows.add_feedback(db, reviewer, alt, "", "Please confirm artwork starting before the dossier is ready suits the team.")
     Demo(db).build()
 
 
@@ -59,17 +72,17 @@ class Demo:
     def done(self, p, key, submit_by="Priya", approve_by="Tom", note=""):
         """Run a stage through submit + approve, skipping the module guards (used to fast-forward the demo)."""
         row = p.row(key)
-        st = workflow.stage(key)
+        flow = p.flow
         if row.state == "pending":
             return
         common.log(p, self.u[submit_by], "stage", "submit", note, key)
         common.log(p, self.u[approve_by], "stage", "approve", "", key)
         row.state, row.decided_at = "approved", common.now()
-        if key == workflow.CODE_STAGE and not p.code:
+        if "issue_code" in flow.stage(key).features and not p.code:
             p.code = engine._next_code(self.db, p.created_at.year)
         engine._unlock(p)
         engine._sync(p)
-        if key == workflow.LAST_STAGE:
+        if all(r.state in workflow.SATISFIED for r in p.stages):
             p.status = "completed"
             for r in p.stages:
                 r.locked = True
@@ -115,6 +128,11 @@ class Demo:
                          summary="Generic OTC ibuprofen gel for the Australian market, manufactured in India.",
                          target_submission=today + timedelta(days=75), target_launch=today + timedelta(days=300))
         self.through(a, "opportunity", "brief")
+        self.task("Tom", a, "commercial", "Complete FMEA risk analysis", "Emma", 3, [("Emma", "accept"), ("Emma", "start")])
+        self.task("Tom", a, "commercial", "Finalise cost model", "Emma", -2, [("Emma", "accept"), ("Emma", "start"),
+                  ("Emma", "request_date", "Waiting on the supplier's final quote", 4)])
+        modules.create_document(d, U["Emma"], a, sc.DocumentCreate(stage_key="commercial", kind="Feasibility / FMEA", title="Feasibility report", link="https://example.com/docs/feasibility"))
+        self.through(a, "commercial")
         ag = {x.kind: x for x in a.agreements}
         ag["supplier"].status, ag["supplier"].signed_date, ag["supplier"].counterparty = "signed", today - timedelta(days=9), "Zenith Pharma Pvt Ltd"
         ag["quality"].status, ag["quality"].counterparty, ag["quality"].owner_id = "in_review", "Zenith Pharma Pvt Ltd", U["Kavita"].id
@@ -126,28 +144,25 @@ class Demo:
         items = {i.title: i for i in a.dossier_items}
         for t, s in (("Administrative information", "ready"), ("Summaries / overviews", "draft"), ("Quality", "draft"), ("Clinical / bioequivalence", "missing")):
             items[t].status = s
-        self.task("Tom", a, "commercial", "Complete FMEA risk analysis", "Emma", 3, [("Emma", "accept"), ("Emma", "start")])
-        self.task("Tom", a, "commercial", "Finalise cost model", "Emma", -2, [("Emma", "accept"), ("Emma", "start"),
-                  ("Emma", "request_date", "Waiting on the supplier's final quote", 4)])
         self.task("Kavita", a, "legal", "Draft PV agreement", "Kavita", 5, [("Kavita", "accept"), ("Kavita", "start")])
         self.task("Rohan", a, "regulatory", "Compile Module 3 (Quality)", "Rohan", 6, [("Rohan", "accept"), ("Rohan", "start")])
         t = self.task("Priya", a, "regulatory", "Bioequivalence study report", "Jessica", 8, [("Jessica", "accept"), ("Jessica", "start"), ("Jessica", "submit")])
         tasks.apply_action(d, U["Priya"], t, sc.TaskActionIn(action="request_changes", note="Add the dissolution profile tables"))
         # artwork: three documents at different points of the review
-        carton = modules.create_document(d, U["Arjun"], a, sc.DocumentCreate(stage_key="artwork", kind="Carton", title="Ibuprofen Gel 50 g carton", link="https://example.com/artwork/carton-v1"))
+        carton = modules.create_document(d, U["Arjun"], a, sc.DocumentCreate(artwork=True, kind="Carton", title="Ibuprofen Gel 50 g carton", link="https://example.com/artwork/carton-v1"))
         modules.document_action(d, U["Arjun"], carton, "submit", "")
         modules.document_action(d, U["Rohan"], carton, "return", "Warning statement size is below the minimum")
         modules.add_version(d, U["Arjun"], carton, sc.VersionIn(link="https://example.com/artwork/carton-v2", note="Enlarged warning statement"))
         modules.document_action(d, U["Arjun"], carton, "submit", "")
-        label = modules.create_document(d, U["Arjun"], a, sc.DocumentCreate(stage_key="artwork", kind="Label", title="Tube label", link="https://example.com/artwork/label-v1"))
-        leaflet = modules.create_document(d, U["Arjun"], a, sc.DocumentCreate(stage_key="artwork", kind="Leaflet / insert", title="Consumer leaflet", link="https://example.com/artwork/leaflet-v1"))
+        label = modules.create_document(d, U["Arjun"], a, sc.DocumentCreate(artwork=True, kind="Label", title="Tube label", link="https://example.com/artwork/label-v1"))
+        leaflet = modules.create_document(d, U["Arjun"], a, sc.DocumentCreate(artwork=True, kind="Leaflet / insert", title="Consumer leaflet", link="https://example.com/artwork/leaflet-v1"))
         modules.document_action(d, U["Arjun"], leaflet, "submit", "")
         modules.document_action(d, U["Rohan"], leaflet, "approve", "")
         modules.document_action(d, U["Tom"], leaflet, "approve", "")
-        proof = modules.create_document(d, U["Arjun"], a, sc.DocumentCreate(stage_key="artwork", kind="Print proof", title="Carton print proof", link="https://example.com/artwork/proof-v1"))
+        proof = modules.create_document(d, U["Arjun"], a, sc.DocumentCreate(artwork=True, kind="Print proof", title="Carton print proof", link="https://example.com/artwork/proof-v1"))
         modules.document_action(d, U["Arjun"], proof, "submit", "")
         modules.document_action(d, U["Rohan"], proof, "approve", "")
-        shade = modules.create_document(d, U["Arjun"], a, sc.DocumentCreate(stage_key="artwork", kind="Shade card", title="Pantone shade card", link="https://example.com/artwork/shade-v1"))
+        shade = modules.create_document(d, U["Arjun"], a, sc.DocumentCreate(artwork=True, kind="Shade card", title="Pantone shade card", link="https://example.com/artwork/shade-v1"))
         modules.document_action(d, U["Arjun"], shade, "submit", "")
         modules.document_action(d, U["Rohan"], shade, "return", "Green is too light against the approved reference")
         # manufacturer data
@@ -155,7 +170,6 @@ class Demo:
             m = modules.create_mfr(d, U["Neha"], a, sc.MfrCreate(kind=kind, manufacturer="Zenith Pharma Pvt Ltd", due_date=today + timedelta(days=-3 if kind == "msds" else 14)))
             m.status = status
             m.link = "https://example.com/mfr/" + kind if status in ("received", "accepted") else ""
-        modules.create_document(d, U["Emma"], a, sc.DocumentCreate(stage_key="commercial", kind="Feasibility / FMEA", title="Feasibility report", link="https://example.com/docs/feasibility"))
         a.critical_blocker = "Excipient supplier has not confirmed the lot COA"
         d.commit()
         self.age(a, 41, {"commercial": 12, "legal": 12, "regulatory": 12, "artwork": 12, "manufacturer": 12})
@@ -201,7 +215,7 @@ class Demo:
         # 5. Eye drops: on hold during parallel work
         f = self.project(U["Priya"], name="Eye Drops – Lubricant", product="Lubricant eye drops 10 mL", category="Eye care", initiator="Tom Gallagher",
                          submission_type="Registered medicine – full dossier (AUST R)", summary="Preservative-free lubricant eye drops.")
-        self.through(f, "opportunity", "brief")
+        self.through(f, "opportunity", "brief", "commercial")
         self.act(f, U["Priya"], "hold", note="Waiting for the manufacturer to confirm the sterile fill line.")
         self.age(f, 58, {"commercial": 20, "legal": 20, "regulatory": 20, "artwork": 20, "manufacturer": 20})
 
@@ -221,6 +235,6 @@ class Demo:
         # 8. Completed
         i = self.project(U["Priya"], name="Magnesium Sleep Spray", product="Magnesium spray 100 mL", category="Sleep", initiator="Tom Gallagher",
                          submission_type="Listed medicine (AUST L)", summary="Listed topical magnesium spray.")
-        self.through(i, *[s.key for s in workflow.STAGES])
+        self.through(i, *[s.key for s in i.flow.stages])
         self.age(i, 260)
         d.commit()

@@ -8,16 +8,10 @@ import { stageOf, useStages } from '../context'
 
 const FILTERS = [['all', 'All'], ['active', 'In progress'], ['on_hold', 'On hold'], ['rejected', 'Rejected'], ['completed', 'Completed']]
 
-// Board columns group the 14 stages into the phases of the flow.
-const PHASES = [
-  { name: 'Initiation', keys: ['opportunity', 'brief'] },
-  { name: 'Governance & parallel work', keys: ['commercial', 'legal', 'regulatory', 'artwork', 'manufacturer'] },
-  { name: 'Dossier & regulatory', keys: ['dossier_ready', 'submission', 'rfi', 'approval'] },
-  { name: 'Delivery', keys: ['readiness', 'manufacturing', 'dispatch', 'completion'] },
-]
-
 export default function Projects() {
   const stages = useStages()
+  // Board columns follow the stage groups of the live workflow.
+  const phases = [...new Set(stages.map((s) => s.group || 'Stages'))].map((name) => ({ name, keys: stages.filter((s) => (s.group || 'Stages') === name).map((s) => s.key) }))
   const [params, setParams] = useSearchParams()
   const view = params.get('view') === 'board' ? 'board' : 'table'
   const query = params.get('q') || ''
@@ -45,7 +39,7 @@ export default function Projects() {
     (!stageKey || p.active_stages.includes(stageKey)) &&
     `${p.name} ${p.code || ''} ${p.category} ${p.product}`.toLowerCase().includes(query.toLowerCase()))
 
-  const primary = (p) => stageOf(stages, p.stage_key)
+  const primary = (p) => p.stage
   const extra = (p) => p.active_stages.length - 1
 
   return (
@@ -115,7 +109,7 @@ export default function Projects() {
         </div>
       ) : (
         <div className="board">
-          {[...PHASES, { name: 'Closed', closed: true }].map((col) => {
+          {[...phases, { name: 'Closed', closed: true }].map((col) => {
             const items = visible.filter((p) => col.closed ? (p.status === 'rejected' || p.status === 'completed')
               : p.active_stages.some((k) => col.keys.includes(k)) && p.status !== 'rejected' && p.status !== 'completed')
             return (

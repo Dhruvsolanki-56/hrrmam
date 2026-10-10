@@ -63,8 +63,9 @@ export const EntityChip = ({ entity }) => <span className={`chip entity-${entity
 
 /** One small capsule per stage: approved / active / waiting. Parallel stages sit side by side. */
 export function StageBar({ project, big }) {
-  const stages = useStages()
   const states = project.stage_states || {}
+  const names = project.stage_names || {}
+  const stages = (project.stage_order || Object.keys(states)).map((key) => ({ key, name: names[key] || key }))
   const done = stages.filter((s) => ['approved', 'bypassed'].includes(states[s.key])).length
   return (
     <div className={`stagebar ${big ? 'big' : ''}`} role="img" aria-label={`${done} of ${stages.length} stages complete`}>

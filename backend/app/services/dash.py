@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from .. import serialize as S
 from .. import workflow
 from ..models import (Agreement, DateRequest, Document, ManufacturerRequest, Project, ProjectEvent, RFICase, Task, User, aware)
-from . import engine
+from . import engine, modules, workflows
 from .tasks import _can_decide
 
 ENTITY_FILTER = {"AU": {workflow.AU, workflow.JOINT}, "IN": {workflow.IN, workflow.JOINT, workflow.MP}}
@@ -18,7 +18,7 @@ def _live(db: Session) -> list[Project]:
 
 
 def _stage_item(p: Project, key: str) -> dict:
-    st = workflow.stage(key)
+    st = p.flow.stage(key)
     row = p.row(key)
     return {"project_id": p.id, "project_name": p.name, "project_code": p.code, "stage_key": key, "stage_name": st.name,
             "approver": st.approver, "days_waiting": (row.days_in_stage if row else 0)}
@@ -57,7 +57,7 @@ def my_work(db: Session, user: User) -> dict:
             decide.append({"type": "date_request", "task": S.task_out(t, True), "request": S.date_request_out(r)})
     for p in _live(db):
         for row in p.active_rows:
-            st = workflow.stage(row.stage_key)
+            st = p.flow.stage(row.stage_key)
             if row.state == "awaiting_approval" and user.can("approve") and (user.role_key == "super_admin" or user.role_key in st.approver_roles):
                 decide.append({"type": "stage", **_stage_item(p, row.stage_key)})
     return {"buckets": {k: [S.task_out(t, True) for t in v] for k, v in buckets.items()},
@@ -69,7 +69,7 @@ def director(db: Session, entity: str = "") -> dict:
     projects = engine.list_projects(db)
     allowed = ENTITY_FILTER.get(entity)
     if allowed:
-        projects = [p for p in projects if p.closed or any(workflow.stage(k).entity in allowed for k in p.active_keys)]
+        projects = [p for p in projects if p.closed or any(p.flow.stage(k).entity in allowed for k in p.active_keys)]
     live = [p for p in projects if not p.closed]
     rows = [S.project_row(p) for p in projects]
     ids = {p.id for p in live}
@@ -80,20 +80,22 @@ def director(db: Session, entity: str = "") -> dict:
                or any("date has passed" in x for x in r["health_reasons"]))]
     approvals = [_stage_item(p, k) for p in live if p.status == "active" for k in p.active_keys if p.stage_states[k] == "awaiting_approval"]
     task_approvals = [S.task_out(t, True) for t in db.scalars(select(Task).where(Task.state.in_(workflow.TASK_AWAITING))) if t.project_id in ids]
-    doc_approvals = [S.document_out(d, True) for d in db.scalars(select(Document).where(Document.status == "director_approval")) if d.project_id in ids]
-    unsigned = [S.agreement_out(a, True) for a in db.scalars(select(Agreement).where(Agreement.status != "signed"))
-                if a.project_id in ids]
+    doc_approvals = [S.document_out(d, True) for d in db.scalars(select(Document)) if d.project_id in ids
+                     and d.status in d.flow[1:-1] and "director" in modules.review_roles(d)]
+    unsigned = [S.agreement_out(a, True) for a in db.scalars(select(Agreement).where(Agreement.status != "signed")) if a.project_id in ids]
     unsigned.sort(key=lambda a: -(a["age_days"] or 0))
     date_reqs = [{**S.date_request_out(r), "task": S.task_out(r.task, True)} for r in db.scalars(select(DateRequest).where(DateRequest.status == "pending"))
                  if r.task.project_id in ids]
     rfis = sorted([S.rfi_out(r, True) for r in db.scalars(select(RFICase).where(RFICase.status != "closed")) if r.project_id in ids],
                   key=lambda r: r["due_date"] or "9999")
-    per_stage = {s.key: sum(1 for p in live if s.key in p.active_keys) for s in workflow.STAGES}
+    wf = workflows.current(db)
+    stages = workflow.get(wf.id).payload()["stages"] if wf else []
+    per_stage = {s["key"]: sum(1 for p in live if s["key"] in p.active_keys) for s in stages}
     events = db.scalars(select(ProjectEvent).order_by(ProjectEvent.id.desc()).limit(12))
     return {"counts": {"total": len(projects), "live": len(live), **by_health}, "projects": rows, "at_risk": at_risk,
             "delayed": delayed, "pending_approvals": approvals, "task_approvals": task_approvals, "doc_approvals": doc_approvals,
             "unsigned_agreements": unsigned, "date_requests": date_reqs, "rfi_deadlines": rfis, "per_stage": per_stage,
-            "recent": [S.event_out(e, True) for e in events]}
+            "stages": stages, "recent": [S.event_out(e, True) for e in events]}
 
 
 # ---------------------------------------------------------------- regulatory portal
@@ -103,12 +105,12 @@ def regulatory(db: Session, user: User) -> dict:
     my_tasks = [S.task_out(t, True) for t in db.scalars(select(Task).where(Task.assignee_id == user.id)) if t.open and t.project_id in ids]
     dossiers = []
     for p in live:
-        if p.row("regulatory").state == "pending" and not p.dossier_items:
+        row = p.feature_row("dossier")
+        if not row or (row.state == "pending" and not p.dossier_items):
             continue
         items = p.dossier_items
-        done = sum(1 for i in items if i.status in workflow.DOSSIER_DONE)
         dossiers.append({"project_id": p.id, "project_name": p.name, "project_code": p.code, "submission_type": p.submission_type,
-                         "total": len(items), "done": done, "stage_state": p.row("regulatory").state,
+                         "total": len(items), "done": sum(1 for i in items if i.status in workflow.DOSSIER_DONE), "stage_state": row.state,
                          "modules": [{"module": i.module, "title": i.title, "status": i.status} for i in items if i.module],
                          "target_submission": S.iso(p.target_submission)})
     missing = [S.mfr_out(m, True) for m in db.scalars(select(ManufacturerRequest))
@@ -116,37 +118,50 @@ def regulatory(db: Session, user: User) -> dict:
     queue = []
     for p in live:
         for row in p.active_rows:
-            st = workflow.stage(row.stage_key)
+            st = p.flow.stage(row.stage_key)
             if row.state == "awaiting_approval" and "regulatory" in st.approver_roles:
                 queue.append({"type": "stage", **_stage_item(p, row.stage_key)})
-    for d in db.scalars(select(Document).where(Document.status == "regulatory_review")):
-        if d.project_id in ids:
+    for d in db.scalars(select(Document)):
+        if d.project_id in ids and d.status in d.flow[1:-1] and "regulatory" in modules.review_roles(d):
             queue.append({"type": "artwork", "document": S.document_out(d, True)})
     for m in missing:
         if m["status"] in ("received", "under_review"):
             queue.append({"type": "manufacturer", "request": m})
     rfis = sorted([S.rfi_out(r, True) for r in db.scalars(select(RFICase).where(RFICase.status != "closed")) if r.project_id in ids],
                   key=lambda r: r["due_date"] or "9999")
-    deadlines = sorted([{"project_id": p.id, "project_name": p.name, "project_code": p.code, "target_submission": S.iso(p.target_submission),
-                         "stage_key": p.stage_key} for p in live if p.target_submission and p.row("submission").state not in workflow.SATISFIED],
-                       key=lambda x: x["target_submission"])
+    deadlines = []
+    for p in live:
+        sub = p.feature_row("submission")
+        if p.target_submission and not (sub and sub.state in workflow.SATISFIED):
+            deadlines.append({"project_id": p.id, "project_name": p.name, "project_code": p.code,
+                              "target_submission": S.iso(p.target_submission), "stage_key": p.stage_key})
+    deadlines.sort(key=lambda x: x["target_submission"])
     return {"my_tasks": my_tasks, "dossiers": dossiers, "missing_manufacturer_data": missing, "ra_review_queue": queue,
             "rfi_cases": rfis, "submission_deadlines": deadlines}
 
 
 # ---------------------------------------------------------------- artwork portal
 def artwork(db: Session, user: User) -> dict:
-    live_ids = {p.id for p in _live(db)}
-    docs = [d for d in db.scalars(select(Document).where(Document.stage_key == "artwork")) if d.project_id in live_ids]
+    live = _live(db)
+    live_ids = {p.id for p in live}
+    docs = [d for d in db.scalars(select(Document).where(Document.is_artwork)) if d.project_id in live_ids]
     out = lambda ds: [S.document_out(d, True) for d in ds]  # noqa: E731
-    my_tasks = [S.task_out(t, True) for t in db.scalars(select(Task).where(Task.assignee_id == user.id, Task.stage_key == "artwork"))
-                if t.open and t.project_id in live_ids]
+    my_tasks = [S.task_out(t, True) for t in db.scalars(select(Task).where(Task.assignee_id == user.id))
+                if t.open and t.project_id in live_ids and t.project.flow.with_feature("artwork")
+                and t.project.flow.with_feature("artwork").key == t.stage_key]
+    wf = workflows.current(db)
+    steps = list(workflow.get(wf.id).rules["artwork"]["steps"]) if wf else []
+    known = {s["status"] for s in steps}
+    for d in docs:  # steps used by projects on an older workflow version
+        for s in d.steps:
+            if s["status"] not in known:
+                steps.append(s)
+                known.add(s["status"])
     return {
         "my_tasks": my_tasks,
         "new_development": out([d for d in docs if d.status == "draft" and len(d.versions) == 1]),
         "returned_for_changes": out([d for d in docs if d.status == "returned"]),
-        "awaiting_regulatory_review": out([d for d in docs if d.status == "regulatory_review"]),
-        "awaiting_director_approval": out([d for d in docs if d.status == "director_approval"]),
+        "review_steps": [{"status": s["status"], "label": s["label"], "items": out([d for d in docs if d.status == s["status"]])} for s in steps],
         "print_proof_shade_card": out([d for d in docs if d.kind in ("Print proof", "Shade card") and d.status != "locked"]),
     }
 

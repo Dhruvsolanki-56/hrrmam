@@ -6,15 +6,16 @@ from fastapi.staticfiles import StaticFiles
 from . import config, models  # noqa: F401  (importing models registers the tables)
 from .database import Base, SessionLocal, engine
 from .migrate import archive_legacy_db
-from .routers import core, projects
+from .routers import core, projects, workflows as workflows_router
 from .seed import seed_reference, seed_demo
-from .services import common, notify
+from .services import common, notify, workflows
 
 app = FastAPI(title="Neo Product Lifecycle & Regulatory Operations Platform")
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 app.include_router(core.public)
 app.include_router(core.router)
 app.include_router(projects.router)
+app.include_router(workflows_router.router)
 
 
 @app.exception_handler(common.WorkflowError)
@@ -38,6 +39,7 @@ def startup():
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
         seed_reference(db)
+        workflows.load_registry(db)
         if config.SEED_DEMO_DATA:
             seed_demo(db)
         notify.refresh_reminders(db)

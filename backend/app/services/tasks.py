@@ -31,7 +31,7 @@ def create_task(db: Session, user: User, p: Project, stage_key: str, title: str,
                 due_at: datetime, required: bool = True) -> Task:
     common.require(user, "assign", "assign tasks")
     common.ensure_open(p)
-    if stage_key not in workflow.STAGE_INDEX:
+    if not p.flow.has(stage_key):
         raise WorkflowError("Unknown stage.")
     row = p.row(stage_key)
     if row.state in workflow.SATISFIED and not user.can("edit_approved"):
@@ -58,7 +58,7 @@ def _can_decide(user: User, t: Task, perm: str) -> bool:
         return False  # no self-approval
     if user.id == t.assigner_id:
         return True
-    return user.can(perm) and common.role_ok(user, workflow.stage(t.stage_key).approver_roles)
+    return user.can(perm) and common.role_ok(user, t.project.flow.stage(t.stage_key).approver_roles)
 
 
 def _only_assignee(user: User, t: Task, verb: str):
@@ -96,8 +96,12 @@ def apply_action(db: Session, user: User, t: Task, a) -> Task:
             raise WorkflowError("Accept the task first.")
         else:
             raise WorkflowError("This task cannot be submitted right now.")
-        for uid in {t.assigner_id, p.project_manager_id} - {None, user.id}:
-            notify.notify(db, uid, "approval", "Task submitted for approval", notify.task_line(t, "Approve it or request changes"), p.id, t.id)
+        if not p.flow.rules["task"].get("approval", True):
+            t.state = "approved"  # this workflow does not require approval of tasks
+            detail = "Approval is not required for tasks in this workflow"
+        else:
+            for uid in {t.assigner_id, p.project_manager_id} - {None, user.id}:
+                notify.notify(db, uid, "approval", "Task submitted for approval", notify.task_line(t, "Approve it or request changes"), p.id, t.id)
     elif act in ("approve", "request_changes"):
         if state not in workflow.TASK_AWAITING:
             raise WorkflowError("Only submitted work can be approved or sent back.")

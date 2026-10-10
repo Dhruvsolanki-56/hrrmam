@@ -20,6 +20,35 @@ function QuickSelect({ value, options, onSave, disabled, label: aria }) {
     </span>
   )
 }
+/** Submit / approve / request changes for one entry. The server enforces who may do what. */
+const ENTRY_UI = {
+  agreement: { review: 'in_review', work: ['not_started', 'drafting', 'changes_requested'], act: (id, d) => api.agreementAct(id, d) },
+  dossier_item: { review: 'awaiting_approval', work: ['missing', 'draft', 'changes_requested'], act: (id, d) => api.dossierAct(id, d) },
+  mfr: { review: 'under_review', work: ['requested', 'received', 'changes_requested'], act: (id, d) => api.mfrAct(id, d) },
+}
+function EntryApproval({ kind, obj, onChange, disabled }) {
+  const ui = ENTRY_UI[kind]
+  const { busy, error, run } = useDo()
+  const go = (action, ask) => {
+    let note = ''
+    if (ask) { note = window.prompt('What needs to change? (required)') || ''; if (!note.trim()) return }
+    run(async () => onChange(await ui.act(obj.id, { action, note })))
+  }
+  if (disabled) return null
+  return (
+    <span className="entry-actions">
+      {obj.status === 'changes_requested' && <span className="chip warn">Changes requested</span>}
+      {ui.work.includes(obj.status) && <button className="link" disabled={busy} onClick={() => go('submit')}>Submit for approval</button>}
+      {obj.status === ui.review && (
+        <>
+          <button className="link" disabled={busy} onClick={() => go('approve')}>Approve</button>
+          <button className="link danger" disabled={busy} onClick={() => go('reject', true)}>Request changes</button>
+        </>
+      )}
+      {error && <small className="error" role="alert">{error}</small>}
+    </span>
+  )
+}
 const opts = (list) => list.map((x) => [x, label(x)])
 const Link = ({ href }) => (href ? <a className="doc-link" href={href} target="_blank" rel="noreferrer"><Icon name="link" size={13} />Open</a> : <span className="muted">–</span>)
 
@@ -41,7 +70,7 @@ export function LegalTab({ project, onChange }) {
           <tr key={a.id} className={a.overdue ? 'row-late' : ''}>
             <td><strong>{a.label}</strong>{a.age_days != null && a.status !== 'not_started' && <small className="sub">open {a.age_days} days</small>}</td>
             <td data-label="Counterparty">{a.counterparty || <span className="muted">–</span>}</td>
-            <td data-label="Status"><QuickSelect value={a.status} options={opts(config.agreement_status)} disabled={off} label={`${a.label} status`} onSave={async (v) => onChange(await api.updateAgreement(a.id, { status: v }))} /></td>
+            <td data-label="Status"><QuickSelect value={a.status} options={opts(config.agreement_status)} disabled={off} label={`${a.label} status`} onSave={async (v) => onChange(await api.updateAgreement(a.id, { status: v }))} /><EntryApproval kind="agreement" obj={a} onChange={onChange} disabled={off} /></td>
             <td data-label="Owner">{a.owner ? a.owner.name : <span className="muted">–</span>}</td>
             <td data-label="Due" className={a.overdue ? 'late' : ''}>{fmtDay(a.due_date)}</td>
             <td data-label="Signed">{fmtDay(a.signed_date)}</td>
@@ -65,10 +94,10 @@ export function LegalTab({ project, onChange }) {
     <>
       <section className="panel">
         <header>
-          <div><h3>Core agreements</h3><p className="muted">Supplier, Quality and PV run in parallel. The Legal workstream can only be submitted when all three are signed.</p></div>
+          <div><h3>Core agreements</h3><p className="muted">Supplier, Quality and PV run in parallel. Each is reviewed and approved before signature; the Legal workstream can only be submitted when all three are signed.</p></div>
           <span className="chip plain">{signed}/{core.length || 3} signed</span>
         </header>
-        {core.length ? table(core) : <Empty>The three core agreements are created when the Legal workstream starts (after the project brief is approved).</Empty>}
+        {core.length ? table(core) : <Empty>The three core agreements are created when the Legal workstream starts (when the Legal workstream starts in this project's workflow).</Empty>}
       </section>
       <section className="panel">
         <header><h3>NDA / CDA / POA / Notices</h3>{!off && core.length > 0 && <button className="btn line" onClick={() => setAdding(true)}><Icon name="plus" size={16} />Add</button>}</header>
@@ -99,7 +128,7 @@ export function RegulatoryTab({ project, onChange }) {
   const modulesAllowed = [...new Set(tmpl.map((t) => t.module).filter(Boolean))]
   const done = project.dossier_items.filter((i) => ['ready', 'reviewed'].includes(i.status)).length
   const total = project.dossier_items.length
-  const subRow = project.stages.find((r) => r.key === 'submission')
+  const subRow = project.stages.find((r) => r.key === project.flow.features.submission) || { state: 'pending' }
   const canRecord = subRow.state !== 'pending' && !off && (['regulatory', 'super_admin'].includes(me.role_key) || can('manage_project'))
   const [typeError, setTypeError] = useState('')
 
@@ -139,7 +168,7 @@ export function RegulatoryTab({ project, onChange }) {
                 <tr key={i.id}>
                   <td data-label="Module">{i.module ? <span className="chip plain">{i.module}</span> : <span className="muted">–</span>}</td>
                   <td><strong>{i.title}</strong>{!i.required && <small className="sub">optional</small>}{i.notes && <small className="sub">{i.notes}</small>}</td>
-                  <td data-label="Status"><QuickSelect value={i.status} options={opts(config.dossier_status)} disabled={off} label={`${i.title} status`} onSave={async (v) => onChange(await api.updateDossierItem(i.id, { status: v }))} /></td>
+                  <td data-label="Status"><QuickSelect value={i.status} options={opts(config.dossier_status)} disabled={off} label={`${i.title} status`} onSave={async (v) => onChange(await api.updateDossierItem(i.id, { status: v }))} /><EntryApproval kind="dossier_item" obj={i} onChange={onChange} disabled={off} /></td>
                   <td data-label="File"><Link href={i.link} /></td>
                   <td><button className="link" disabled={off} onClick={() => setItem(i)}>Edit</button></td>
                 </tr>
@@ -222,7 +251,7 @@ export function ManufacturerTab({ project, onChange }) {
                 <tr key={m.id} className={m.overdue ? 'row-late' : ''}>
                   <td><strong>{m.label}</strong>{!m.required && <small className="sub">optional</small>}{m.notes && <small className="sub">{m.notes}</small>}</td>
                   <td data-label="Manufacturer">{m.manufacturer || '–'}</td>
-                  <td data-label="Status"><QuickSelect value={m.status} options={opts(config.mfr_status)} disabled={off} label={`${m.label} status`} onSave={async (v) => onChange(await api.updateMfr(m.id, { status: v }))} /></td>
+                  <td data-label="Status"><QuickSelect value={m.status} options={opts(config.mfr_status)} disabled={off} label={`${m.label} status`} onSave={async (v) => onChange(await api.updateMfr(m.id, { status: v }))} /><EntryApproval kind="mfr" obj={m} onChange={onChange} disabled={off} /></td>
                   <td data-label="Needed by" className={m.overdue ? 'late' : ''}>{fmtDay(m.due_date)}</td>
                   <td data-label="Received">{fmtDay(m.received_on)}</td>
                   <td data-label="File"><Link href={m.link} /></td>

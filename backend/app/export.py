@@ -41,10 +41,10 @@ def projects_xlsx(rows: list[dict]) -> bytes:
             "Target submission", "Target launch", "Last updated"]
     out = []
     for r in rows:
-        s = workflow.stage(r["stage_key"])
+        s = r["stage"]
         out.append([r["code"] or "Pending", r["name"], r["product"], r["market"], r["project_type"],
-                    (r["project_manager"] or {}).get("name", ""), r["submission_type"], s.phase, s.name,
-                    ", ".join(workflow.stage(k).name for k in r["active_stages"] if k != r["stage_key"]),
+                    (r["project_manager"] or {}).get("name", ""), r["submission_type"], s["phase"], s["name"],
+                    ", ".join(r["stage_names"][k] for k in r["active_stages"] if k != r["stage_key"]),
                     STATUS[r["status"]], r["health"].title(), r["critical_blocker"], r["open_tasks"], r["overdue_tasks"],
                     "Yes" if r["overdue"] else "No", r["target_submission"] or "", r["target_launch"] or "", (r["updated_at"] or "")[:10]])
     return _sheet("Projects", head, out, [14, 38, 24, 12, 13, 18, 34, 8, 26, 30, 12, 9, 30, 10, 10, 10, 14, 14, 13], 15)

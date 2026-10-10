@@ -28,14 +28,27 @@ A database from the earlier single-flow version is kept as `*.legacy-*.bak` and 
 
 ## What is built (mapped to the requirements)
 
-**1. End-to-end flow (12 phases, not a rigid gate tracker).** Opportunity → Brief → Governance → Parallel work → Dossier
-Ready → Regulatory Submission → RFI / Changes → Approval → Commercial Readiness → Manufacturing → Samples / Dispatch →
-Completion (`backend/app/workflow.py`). Every stage uses the same cycle: *work → submit → approve | send back (repeatable) | reject*.
-A project can move backward before the final lock; every return, reassignment, approval and version stays in history.
+**1. A configurable, versioned workflow (not a hard-coded process).** The stages, what each one waits for, who does the work and
+who approves are *data* (Workflows page, `backend/app/services/workflows.py`). A workflow is a draft, then published, then
+archived; a project is pinned to the version it started on, so changing the process never disturbs running work. Stages that
+wait for the same prerequisites run **in parallel**; a stage that waits for several starts when all are approved (the join /
+milestone lock). Ready-made options: *Neo standard* (Legal, Regulatory, Artwork and Manufacturer data start together once
+Commercial is approved, the default), *Parallel from the Brief* (the requirements-PDF reading) and *Sequential*.
+Every stage uses the same cycle: *work → submit → approve | send back (repeatable) | reject*.
+
+**1a. An approval cycle for every entry.** Tasks, documents, artwork steps, agreements, dossier items, manufacturer data and
+closing an RFI all follow *submit → approve | request changes (with a reason) → resubmit*. Per workflow you can switch approval
+on or off per kind of entry and choose which roles decide (and the artwork review steps and their order). A status picked from
+a list can never skip an approval.
+
+**1b. Share the process with the client.** Each workflow has a read-only review page: dependency diagram with the parallel
+steps, a plain-language reading, the approval rules, a comparison against the live process, per-stage and general feedback
+comments (a *Client Reviewer* role can view and comment only), print / PDF and a JSON download. Publish when agreed.
+Permission `manage_workflow` (Super Admin, Director) controls editing and publishing.
 
 **2. Project 360 + parallel workstreams.** Project code, product, market, project manager, target submission / launch,
-overall health (derived: on track / at risk / critical) and a critical blocker. Five workstreams run in parallel with
-independent status: Commercial, Legal, Regulatory, Artwork, Manufacturer data. **Milestone / lock rule:** *Dossier Ready*
+overall health (derived: on track / at risk / critical) and a critical blocker. Workstreams run in parallel with
+independent status (by default Legal, Regulatory, Artwork, Manufacturer data after Commercial approval). **Milestone / lock rule:** *Dossier Ready*
 completes only when all of them are approved (optional ones can be bypassed with a reason), and a workstream cannot be
 submitted until its own conditions hold (required tasks and documents approved, core agreements signed, dossier checklist
 ready, required manufacturer data accepted, a submission recorded, no open RFI).
@@ -73,10 +86,10 @@ No self-approval: the assignee can never approve their own task.
 
 ```
 backend/app
-  workflow.py        stages, roles & permissions, task states, flows (edit here to change the process)
+  workflow.py        stage model, validation, presets (default process), roles & permissions, task states
   models.py          tables: users, roles, projects, project_stages, tasks, agreements, dossier, submissions,
                      manufacturer requests, RFI, documents + versions, notifications, audit events
-  services/          engine (approval cycle, guards, health) · tasks · modules · notify · dash
+  services/          engine (approval cycle, guards, health) · workflows (designer, versions, feedback) · tasks · modules · notify · dash
   routers/           thin HTTP layer;  auth.py = who is calling;  serialize.py = JSON shapes
 frontend/src
   pages/             Dashboard (Director), Projects, ProjectDetail (360), MyWork, Regulatory, Artwork, Legal, Audit, Admin

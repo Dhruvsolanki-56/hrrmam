@@ -61,6 +61,15 @@ export const api = {
   legalRegister: (params) => request(`/legal-register${qs(params)}`),
   legalExportUrl: (params) => file('/legal-register.xlsx', params),
   exportUrl: (params) => file('/export.xlsx', params),
+  // workflows (designer + client review)
+  workflows: () => request('/workflows'),
+  workflow: (id) => request(`/workflows/${id}`),
+  createWorkflow: (d) => post('/workflows', d),
+  updateWorkflow: (id, d) => put(`/workflows/${id}`, d),
+  publishWorkflow: (id) => post(`/workflows/${id}/publish`, {}),
+  deleteWorkflow: (id) => request(`/workflows/${id}`, { method: 'DELETE' }),
+  addFeedback: (id, d) => post(`/workflows/${id}/feedback`, d),
+  resolveFeedback: (fid, d) => patch(`/workflow-feedback/${fid}`, d),
   // projects
   projects: () => request('/projects'),
   project: (id) => request(`/projects/${id}`),
@@ -73,6 +82,9 @@ export const api = {
   taskAct: (id, d) => post(`/tasks/${id}/actions`, d),
   // modules
   createAgreement: (pid, d) => post(`/projects/${pid}/agreements`, d),
+  agreementAct: (id, d) => post(`/agreements/${id}/actions`, d),
+  dossierAct: (id, d) => post(`/dossier-items/${id}/actions`, d),
+  mfrAct: (id, d) => post(`/mfr/${id}/actions`, d),
   updateAgreement: (id, d) => patch(`/agreements/${id}`, d),
   createDossierItem: (pid, d) => post(`/projects/${pid}/dossier-items`, d),
   updateDossierItem: (id, d) => patch(`/dossier-items/${id}`, d),

@@ -32,8 +32,6 @@ export default function Artwork() {
   const sections = [
     ['New development', 'new_development', 'No new artwork in development.'],
     ['Returned for changes', 'returned_for_changes', 'Nothing has been returned.'],
-    ['Awaiting regulatory review', 'awaiting_regulatory_review', 'Nothing is with Regulatory.'],
-    ['Awaiting director approval', 'awaiting_director_approval', 'Nothing is with the Director.'],
     ['Print proof / shade card', 'print_proof_shade_card', 'No print proofs or shade cards in progress.'],
   ]
   return (
@@ -44,10 +42,12 @@ export default function Artwork() {
         <div className="tasklist">{d.my_tasks.map((t) => <TaskCard key={t.id} task={t} showProject onChanged={load} />)}</div>
       </section>
       <section className="grid-2 even">
-        {sections.map(([title, key, empty]) => (
+        {[...sections.slice(0, 2).map(([title, key, empty]) => [title, d[key], empty, key]),
+          ...d.review_steps.map((s) => [`Awaiting ${s.label.toLowerCase()}`, s.items, `Nothing is waiting for ${s.label.toLowerCase()}.`, s.status]),
+          ...sections.slice(2).map(([title, key, empty]) => [title, d[key], empty, key])].map(([title, items, empty, key]) => (
           <div className="panel" key={key}>
-            <header><h3>{title}</h3><span className="count">{d[key].length}</span></header>
-            <DocRows docs={d[key]} empty={empty} />
+            <header><h3>{title}</h3><span className="count">{items.length}</span></header>
+            <DocRows docs={items} empty={empty} />
           </div>
         ))}
       </section>

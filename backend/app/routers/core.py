@@ -10,7 +10,7 @@ from .. import serialize as S
 from ..auth import current_user
 from ..database import get_db
 from ..models import AdminEvent, Notification, Role, Setting, User
-from ..services import common, dash, notify
+from ..services import common, dash, notify, workflows
 from ..services.common import Forbidden, WorkflowError
 
 public = APIRouter(prefix="/api")
@@ -19,8 +19,9 @@ router = APIRouter(prefix="/api", dependencies=[Depends(current_user)])
 
 # ---------------------------------------------------------------- public
 @public.get("/stages")
-def stages():
-    return workflow.stages_payload()
+def stages(db: Session = Depends(get_db)):
+    wf = workflows.current(db)
+    return workflow.get(wf.id).payload()["stages"] if wf else []
 
 
 @public.get("/config")
@@ -33,6 +34,8 @@ def config(db: Session = Depends(get_db)):
         "mfr_kinds": workflow.MFR_KINDS, "mfr_status": workflow.MFR_STATUS, "artwork_kinds": workflow.ARTWORK_KINDS,
         "doc_kinds": workflow.DOC_KINDS, "dossier_status": workflow.DOSSIER_STATUS, "task_states": workflow.TASK_STATES,
         "settings": {k: common.get_setting(db, k) for k in workflow.DEFAULT_SETTINGS},
+        "features": workflow.FEATURES, "entities": workflow.ENTITIES, "rule_labels": workflow.RULE_LABELS,
+        "presets": [{"key": k, "name": v[0], "description": v[1]} for k, v in workflow.PRESETS.items()],
     }
 
 

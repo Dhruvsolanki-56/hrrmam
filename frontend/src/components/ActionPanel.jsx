@@ -3,8 +3,8 @@ import { api } from '../api'
 import { stageOf, useCan, useMe, useStages } from '../context'
 import { AgeChip, EntityChip, StateChip, useDo } from './bits'
 
-export const TAB_OF = { legal: 'legal', regulatory: 'regulatory', dossier_ready: 'regulatory', submission: 'regulatory', artwork: 'artwork',
-  manufacturer: 'manufacturer', rfi: 'rfi' }
+const tabOf = (st) => (st.tab && st.tab !== 'tasks' ? st.tab : null)
+
 
 /** work -> submit -> approval -> (approved | sent back and the cycle repeats) */
 function Cycle({ row }) {
@@ -43,7 +43,7 @@ function StageCard({ project, row, onChange, goTab, locked }) {
   return (
     <section className="panel callout stagecard">
       <header>
-        <span className="eyebrow">Phase {st.phase} of 12{st.workstream && ' · workstream (runs in parallel)'}</span>
+        <span className="eyebrow">Phase {st.phase} of {stages.length}{st.parallel_with?.length > 0 && ' · runs in parallel'}</span>
         <StateChip state={row.state} />
       </header>
       <h2>{st.name}</h2>
@@ -69,7 +69,7 @@ function StageCard({ project, row, onChange, goTab, locked }) {
         <div className="blockers" role="note">
           <b>{row.state === 'in_progress' ? 'Before this can be submitted' : 'Needs attention before approval'}</b>
           <ul>{row.blockers.map((b) => <li key={b}>{b}</li>)}</ul>
-          <button className="link" onClick={() => goTab(TAB_OF[st.key] || 'tasks')}>Open {TAB_OF[st.key] ? 'the workstream' : 'tasks'} →</button>
+          <button className="link" onClick={() => goTab(tabOf(st) || 'tasks')}>Open {tabOf(st) ? 'the workstream' : 'tasks'} →</button>
         </div>
       )}
 
@@ -91,7 +91,7 @@ function StageCard({ project, row, onChange, goTab, locked }) {
         )}
         {row.state === 'awaiting_approval' && !canDecide && <span className="muted">Waiting for {st.approver} to decide.</span>}
         {st.optional && can('bypass_optional') && <button className="btn line" disabled={disabled} onClick={() => go('bypass')}>Not needed: bypass</button>}
-        {TAB_OF[st.key] && <button className="btn ghost" onClick={() => goTab(TAB_OF[st.key])}>Open workstream</button>}
+        {tabOf(st) && <button className="btn ghost" onClick={() => goTab(tabOf(st))}>Open workstream</button>}
       </div>
     </section>
   )
