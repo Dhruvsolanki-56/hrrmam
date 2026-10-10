@@ -64,18 +64,17 @@ export function LegalTab({ project, onChange }) {
 
   const table = (rows) => (
     <div className="table-scroll"><table className="table compact">
-      <thead><tr><th>Agreement</th><th>Counterparty</th><th>Status</th><th>Owner</th><th>Due</th><th>Signed</th><th>File</th><th /></tr></thead>
+      <thead><tr><th>Agreement</th><th>Counterparty</th><th>Status</th><th>Owner</th><th>Due</th><th>Signed</th><th /></tr></thead>
       <tbody>
         {rows.map((a) => (
           <tr key={a.id} className={a.overdue ? 'row-late' : ''}>
-            <td><strong>{a.label}</strong>{a.age_days != null && a.status !== 'not_started' && <small className="sub">open {a.age_days} days</small>}</td>
+            <td><strong>{a.label}</strong>{a.age_days > 0 && a.status !== 'not_started' && a.status !== 'signed' && <small className="sub">open {a.age_days} days</small>}</td>
             <td data-label="Counterparty">{a.counterparty || <span className="muted">–</span>}</td>
             <td data-label="Status"><QuickSelect value={a.status} options={opts(config.agreement_status)} disabled={off} label={`${a.label} status`} onSave={async (v) => onChange(await api.updateAgreement(a.id, { status: v }))} /><EntryApproval kind="agreement" obj={a} onChange={onChange} disabled={off} /></td>
             <td data-label="Owner">{a.owner ? a.owner.name : <span className="muted">–</span>}</td>
             <td data-label="Due" className={a.overdue ? 'late' : ''}>{fmtDay(a.due_date)}</td>
             <td data-label="Signed">{fmtDay(a.signed_date)}</td>
-            <td data-label="File"><Link href={a.link} /></td>
-            <td><button className="link" disabled={off} onClick={() => setEdit(a)}>Edit</button></td>
+            <td><span className="row-end">{a.link && <Link href={a.link} />}<button className="link" disabled={off} onClick={() => setEdit(a)}>Edit</button></span></td>
           </tr>
         ))}
       </tbody>
@@ -353,14 +352,13 @@ function RfiQuestion({ q, disabled, onChange }) {
       <div className="q-head">
         <b>Q{q.number}</b><span>{q.question}</span>
       </div>
-      {t && <div className="q-meta"><Person user={t.assignee} /><span className="muted">due {fmtDay(t.due_at)}</span><span className={`tstate tstate-${t.state}`}>{label(t.state)}</span>{t.overdue && <span className="age age-over">Overdue</span>}</div>}
+      {t && <div className="q-meta"><Person user={t.assignee} /><span className="muted">due {fmtDay(t.due_at)}</span><span className={`tstate tstate-${t.state}`}>{label(t.state)}</span>{t.overdue && <span className="age age-over">Overdue</span>}<a className="link q-task" href="?tab=tasks">{t.assignee.id === me.id ? 'Your task' : 'Open task'}</a></div>}
       <textarea rows={2} value={response} disabled={disabled} onChange={(e) => setResponse(e.target.value)} placeholder="Response / evidence summary…" />
       <div className="inline">
         <input type="url" value={evidence} disabled={disabled} onChange={(e) => setEvidence(e.target.value)} placeholder="Link to evidence (https://…)" />
         <button className="btn line" disabled={disabled || busy || !dirty} onClick={() => run(async () => onChange(await api.updateQuestion(q.id, { response, evidence_link: evidence })))}>Save</button>
       </div>
       {error && <p className="error">{error}</p>}
-      {t && <p className="muted tiny">The question's task is accepted, worked and approved in the Tasks tab{t.assignee.id === me.id ? ' (it is assigned to you)' : ''}.</p>}
     </li>
   )
 }

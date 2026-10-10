@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useStages } from '../context'
 import { fmtDateTime, label } from './bits'
 
@@ -11,18 +12,24 @@ const VERB = {
   submission: 'Submission recorded', close: 'Closed',
 }
 
+const PAGE = 25
+
 export default function Timeline({ events }) {
   const stages = useStages()
+  const [shown, setShown] = useState(PAGE)
   const name = (k) => stages.find((s) => s.key === k)?.name
   const title = (e) => {
-    if (e.action === 'return') return `Moved back to ${name(e.to_stage)}`
+    if (e.action === 'return' && name(e.to_stage)) return `Moved back to ${name(e.to_stage)}`
+    if (e.action === 'return') return `Returned for changes${name(e.stage_key) ? ` · ${name(e.stage_key)}` : ''}`
     const base = VERB[e.action] || label(e.action)
     const where = ['created', 'edit', 'hold', 'resume', 'reopen'].includes(e.action) && e.area === 'project' ? '' : name(e.stage_key)
     return where ? `${base} · ${where}` : base
   }
+  const list = [...events].reverse()
   return (
+    <>
     <ul className="timeline">
-      {[...events].reverse().map((e) => (
+      {list.slice(0, shown).map((e) => (
         <li key={e.id} className={`ev-${e.action} ar-${e.area}`}>
           <span className="dot" />
           <div>
@@ -33,5 +40,7 @@ export default function Timeline({ events }) {
         </li>
       ))}
     </ul>
+    {list.length > shown && <button className="btn line sm" onClick={() => setShown(shown + PAGE)}>Show older ({list.length - shown})</button>}
+    </>
   )
 }

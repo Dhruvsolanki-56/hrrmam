@@ -44,7 +44,6 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen }) 
         </div>
         <Person user={task.assignee} />
         <div className="t-end">
-          {req && <span className="age age-warn" title="A new due date has been proposed">New date proposed</span>}
           <DueChip task={task} />
           <TaskChip state={task.state} />
         </div>

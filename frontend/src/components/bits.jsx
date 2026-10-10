@@ -16,7 +16,7 @@ export const toInput = (iso) => {
 export const fromInput = (v) => (v ? new Date(v).toISOString() : null)
 export const inDays = (n, hour = 17) => { const d = new Date(); d.setDate(d.getDate() + n); d.setHours(hour, 0, 0, 0); return toInput(d.toISOString()) }
 export const initials = (name = '') => name.split(/\s+/).filter((w) => /^[A-Za-z]/.test(w) && !/^Dr\.?$/i.test(w)).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
-export const label = (s = '') => s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
+export const label = (s = '') => (s === 'rfi' ? 'RFI' : s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()))
 
 // ---------------------------------------------------------------- statuses
 export const STATUS = {

@@ -42,11 +42,11 @@ export default function Regulatory() {
         <div className="dossier-grid">
           {d.dossiers.map((x) => (
             <Link key={x.project_id} to={`/projects/${x.project_id}?tab=regulatory`} className="dossier">
-              <strong>{x.project_name}</strong>
-              <small>{x.submission_type || 'Submission type to be decided'}</small>
+              <strong title={x.project_name}>{x.project_name}</strong>
               <span className="meter"><i style={{ width: x.total ? `${(x.done / x.total) * 100}%` : 0 }} /></span>
               <small>{x.done}/{x.total} items ready{x.target_submission && ` · target ${fmtDay(x.target_submission)}`}</small>
               {x.modules.length > 0 && <span className="mods">{x.modules.map((m) => <i key={m.module} className={`mod mod-${m.status}`} title={`${m.module} ${m.title}: ${m.status}`}>{m.module}</i>)}</span>}
+              <small className="dossier-type">{x.submission_type || 'Submission type to be decided'}</small>
             </Link>
           ))}
         </div>
