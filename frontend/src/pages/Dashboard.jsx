@@ -7,6 +7,8 @@ import { useStages } from '../context'
 
 const parseDay = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d) }
 const shortDay = (s) => parseDay(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+// phase order, light to dark, in Neo palette shades
+const RAMP = ['#8fcab9', '#3fa39a', '#00817e', '#00626a', '#004248', '#231f20']
 const KIND = { 'due date': 'Due date request', stage: 'Stage approval', task: 'Task', artwork: 'Artwork' }
 const today = () => new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
@@ -127,11 +129,11 @@ export default function Dashboard() {
         <section className="dcard">
           <header><h2>By phase</h2><span className="count">{live.length} live</span></header>
           <ul className="dbars">
-            {groups.map((g) => (
+            {groups.map((g, i) => (
               <li key={g.name} className={g.n ? '' : 'zero'}>
-                <span>{g.name}</span>
+                <span><i className="dot-k" style={{ background: RAMP[i % RAMP.length] }} />{g.name}</span>
                 <b>{g.n}</b>
-                <i><em style={{ width: `${(g.n / gmax) * 100}%` }} /></i>
+                <i><em style={{ width: `${(g.n / gmax) * 100}%`, background: RAMP[i % RAMP.length] }} /></i>
               </li>
             ))}
           </ul>

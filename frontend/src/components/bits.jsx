@@ -104,7 +104,8 @@ export function DueChip({ task }) {
 }
 
 // ---------------------------------------------------------------- small building blocks
-export const Avatar = ({ name, size }) => <span className="avatar sm" style={size ? { width: size, height: size } : undefined}>{initials(name)}</span>
+const tone = (name = '') => [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 4
+export const Avatar = ({ name, size }) => <span className={`avatar sm av-${tone(name)}`} style={size ? { width: size, height: size } : undefined}>{initials(name)}</span>
 
 export function Person({ user, short }) {
   if (!user) return <span className="muted">Unassigned</span>
