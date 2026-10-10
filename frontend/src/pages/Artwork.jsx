@@ -4,7 +4,7 @@ import { api } from '../api'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
 import TaskCard from '../components/TaskCard'
-import { Empty, Person } from '../components/bits'
+import { Empty, Person, usePaged } from '../components/bits'
 
 function DocRows({ docs, empty }) {
   if (!docs.length) return <Empty>{empty}</Empty>
@@ -51,6 +51,24 @@ export default function Artwork() {
           </div>
         ))}
       </section>
+      <Library docs={d.library || []} />
     </Layout>
+  )
+}
+
+/** Every approved piece of artwork, from live and completed projects, so final files can always be found again. */
+function Library({ docs }) {
+  const [q, setQ] = useState('')
+  const rows = docs.filter((d) => `${d.title} ${d.project_name} ${d.kind}`.toLowerCase().includes(q.toLowerCase()))
+  const { items, pager } = usePaged(rows, 10, q)
+  return (
+    <section className="panel">
+      <header>
+        <h3>Approved artwork library <span className="count">{docs.length}</span></h3>
+        <input className="search" placeholder="Filter by product or kind" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter approved artwork" />
+      </header>
+      <DocRows docs={items} empty={q ? 'Nothing matches.' : 'No approved artwork yet.'} />
+      {pager}
+    </section>
   )
 }

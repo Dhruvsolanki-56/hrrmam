@@ -18,7 +18,7 @@ const HELP = {
   returned_for_changes: 'An approver asked for changes. Update and resubmit.',
   waiting_for_someone: 'Tasks you assigned that are still open.',
   submitted_for_approval: 'Your work, waiting for the approver.',
-  upcoming: 'More than a week away, or no due date.', completed: 'The 20 most recently approved or locked.',
+  upcoming: 'More than a week away, or no due date.', completed: 'Your 50 most recent approved or locked tasks, including finished projects.',
 }
 
 export default function MyWork() {

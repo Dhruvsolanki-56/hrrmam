@@ -28,7 +28,8 @@ def _stage_item(p: Project, key: str) -> dict:
 def my_work(db: Session, user: User) -> dict:
     today = date.today()
     week = today + timedelta(days=7)
-    mine = [t for t in db.scalars(select(Task).where(Task.assignee_id == user.id)) if not t.project.closed]
+    everything = list(db.scalars(select(Task).where(Task.assignee_id == user.id)))
+    mine = [t for t in everything if not t.project.closed]
     openish = ("assigned", "accepted", "in_progress", "changes_requested")
 
     def due(t):
@@ -44,7 +45,8 @@ def my_work(db: Session, user: User) -> dict:
         "returned_for_changes": [t for t in mine if t.state == "changes_requested"],
         "submitted_for_approval": [t for t in mine if t.state in workflow.TASK_AWAITING],
         "upcoming": [t for t in mine if t.state in openish and (due(t) is None or due(t) > week)],
-        "completed": sorted([t for t in mine if t.state in workflow.TASK_DONE], key=lambda t: t.updated_at, reverse=True)[:20],
+        # finished work stays here after its project is completed, so nobody loses their own history
+        "completed": sorted([t for t in everything if t.state in workflow.TASK_DONE], key=lambda t: t.updated_at, reverse=True)[:50],
     }
     # things waiting on *my* decision
     decide = []
@@ -102,7 +104,9 @@ def director(db: Session, entity: str = "") -> dict:
 def regulatory(db: Session, user: User) -> dict:
     live = [p for p in _live(db)]
     ids = {p.id for p in live}
-    my_tasks = [S.task_out(t, True) for t in db.scalars(select(Task).where(Task.assignee_id == user.id)) if t.open and t.project_id in ids]
+    my_tasks = [S.task_out(t, True) for t in db.scalars(select(Task).where(Task.assignee_id == user.id))
+                if t.open and t.project_id in ids and "regulatory" in t.project.flow.stage(t.stage_key).owner_roles]
+    my_tasks.sort(key=lambda t: t["due_at"] or "9999")
     dossiers = []
     for p in live:
         row = p.feature_row("dossier")
@@ -137,7 +141,22 @@ def regulatory(db: Session, user: User) -> dict:
                               "target_submission": S.iso(p.target_submission), "stage_key": p.stage_key})
     deadlines.sort(key=lambda x: x["target_submission"])
     return {"my_tasks": my_tasks, "dossiers": dossiers, "missing_manufacturer_data": missing, "ra_review_queue": queue,
-            "rfi_cases": rfis, "submission_deadlines": deadlines}
+            "rfi_cases": rfis, "submission_deadlines": deadlines, "completed": _completed(db)}
+
+
+def _completed(db: Session) -> list[dict]:
+    """Finished projects with their final regulatory record, newest first."""
+    out = []
+    for p in engine.list_projects(db):
+        if p.status != "completed":
+            continue
+        last = max((r.decided_at for r in p.stages if r.decided_at), default=None)
+        first = next((x for x in p.submissions if x.kind in ("initial", "variation")), None)
+        out.append({"project_id": p.id, "project_name": p.name, "project_code": p.code, "submission_type": p.submission_type,
+                    "dossier_items": len(p.dossier_items), "submissions": len(p.submissions), "rfis": len(p.rfis),
+                    "documents": len(p.documents), "reference": first.reference if first else "",
+                    "submitted_on": S.iso(first.submitted_on) if first else None, "completed_on": S.iso(last.date() if last else None)})
+    return sorted(out, key=lambda x: x["completed_on"] or "", reverse=True)
 
 
 # ---------------------------------------------------------------- artwork portal
@@ -163,6 +182,9 @@ def artwork(db: Session, user: User) -> dict:
         "returned_for_changes": out([d for d in docs if d.status == "returned"]),
         "review_steps": [{"status": s["status"], "label": s["label"], "items": out([d for d in docs if d.status == s["status"]])} for s in steps],
         "print_proof_shade_card": out([d for d in docs if d.kind in ("Print proof", "Shade card") and d.status != "locked"]),
+        # approved artwork from every project, completed ones included: the reference library
+        "library": out(sorted((d for d in db.scalars(select(Document).where(Document.is_artwork)) if d.status in ("approved", "locked")),
+                              key=lambda d: d.updated_at, reverse=True)),
     }
 
 

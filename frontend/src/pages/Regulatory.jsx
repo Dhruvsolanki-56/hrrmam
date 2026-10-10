@@ -4,7 +4,7 @@ import { api } from '../api'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
 import TaskCard from '../components/TaskCard'
-import { Empty, fmtDay, label } from '../components/bits'
+import { Empty, fmtDate, fmtDay, label, usePaged } from '../components/bits'
 
 export default function Regulatory() {
   const [d, setD] = useState(null)
@@ -17,9 +17,8 @@ export default function Regulatory() {
     <Layout title="Regulatory portal" subtitle="Your tasks, dossier status, review queue, RFI cases and submission deadlines">
       <section className="grid-2 even">
         <div className="panel">
-          <header><h3>My tasks</h3><span className="muted">{d.my_tasks.length} open</span></header>
-          {!d.my_tasks.length && <Empty>No open tasks assigned to you.</Empty>}
-          <div className="tasklist">{d.my_tasks.map((t) => <TaskCard key={t.id} task={t} showProject onChanged={load} />)}</div>
+          <header><h3>My regulatory tasks</h3><span className="muted">{d.my_tasks.length} open</span></header>
+          <MyTasks tasks={d.my_tasks} />
         </div>
         <div className="panel">
           <header><h3>RA review queue</h3><span className="muted">{d.ra_review_queue.length} waiting</span></header>
@@ -28,7 +27,7 @@ export default function Regulatory() {
             {d.ra_review_queue.map((x, i) => (
               <li key={i}>
                 {x.type === 'stage' && <Link to={`/projects/${x.project_id}`}><div><strong>{x.stage_name}</strong><small>{x.project_name} · stage awaiting approval</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
-                {x.type === 'artwork' && <Link to={`/projects/${x.document.project_id}?tab=artwork`}><div><strong>{x.document.title}</strong><small>{x.document.project_name} · artwork V{x.document.current_version} · regulatory review</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
+                {x.type === 'artwork' && <Link to={`/projects/${x.document.project_id}?tab=artwork`}><div><strong>{x.document.title}</strong><small>{x.document.project_name} · {x.document.is_artwork ? 'artwork' : 'document'} V{x.document.current_version} · regulatory review</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
                 {x.type === 'manufacturer' && <Link to={`/projects/${x.request.project_id}?tab=manufacturer`}><div><strong>{x.request.label}</strong><small>{x.request.project_name} · {label(x.request.status)}</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
               </li>
             ))}
@@ -91,10 +90,54 @@ export default function Regulatory() {
         </div>
       </section>
 
+      <CompletedProjects rows={d.completed} />
+
       <section className="panel soft">
         <header><h3>AI review <span className="chip plain">Phase 2</span></h3></header>
         <p className="muted">Dossier completeness check, current trend / limit review, and RFI risk assessment are planned for Phase 2 and are not part of this release. Human review will remain mandatory; AI never certifies compliance.</p>
       </section>
     </Layout>
+  )
+}
+
+/** Compact rows: the full task card (accept, submit, dates) is one click away in My work or the project. */
+function MyTasks({ tasks }) {
+  const { items, pager } = usePaged(tasks, 8)
+  if (!tasks.length) return <Empty>No open regulatory tasks assigned to you.</Empty>
+  return (
+    <>
+      <ul className="rows">
+        {items.map((t) => (
+          <li key={t.id}><Link to={`/projects/${t.project_id}?tab=tasks`}>
+            <div><strong>{t.title}</strong><small>{t.project_name} · {label(t.state)}</small></div>
+            <span className={`age ${t.overdue ? 'age-over' : 'age-ok'}`}>{t.overdue ? 'Overdue · ' : ''}{fmtDate(t.due_at)}</span>
+          </Link></li>
+        ))}
+      </ul>
+      {pager}
+    </>
+  )
+}
+
+/** Finished projects keep their full regulatory record: dossier, submissions, RFIs and documents stay one click away. */
+function CompletedProjects({ rows }) {
+  const { items, pager } = usePaged(rows || [], 8)
+  return (
+    <section className="panel">
+      <header><h3>Completed projects</h3><span className="muted">{(rows || []).length} · full record kept, read-only</span></header>
+      {!items.length && <Empty>No completed projects yet.</Empty>}
+      <ul className="rows">
+        {items.map((x) => (
+          <li key={x.project_id}><Link to={`/projects/${x.project_id}?tab=regulatory`}>
+            <div>
+              <strong>{x.project_name}</strong>
+              <small>{x.project_code} · {x.reference ? `${x.reference}, submitted ${fmtDay(x.submitted_on)}` : 'No submission recorded'} · {x.dossier_items} dossier items · {x.submissions} submissions · {x.rfis} RFIs · {x.documents} documents</small>
+            </div>
+            <span className="row-end"><span className="muted nowrap">Completed {fmtDay(x.completed_on)}</span><Icon name="arrow" size={14} /></span>
+          </Link></li>
+        ))}
+      </ul>
+      {pager}
+    </section>
   )
 }

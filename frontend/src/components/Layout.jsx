@@ -125,12 +125,14 @@ export default function Layout({ title, subtitle, back, backLabel = 'All project
   }, [more])
 
   const onBoard = pathname === '/projects' && qs.includes('view=board')
+  const onDone = pathname === '/projects' && qs.includes('status=completed')
   const NAV = [
     { to: '/', icon: 'grid', label: 'Overview', on: pathname === '/' },
     { to: '/my-work', icon: 'tasks', label: 'My work', on: pathname === '/my-work' },
     { h: 'Projects' },
-    { to: '/projects', icon: 'list', label: 'All projects', on: pathname.startsWith('/projects') && !onBoard },
+    { to: '/projects', icon: 'list', label: 'All projects', on: pathname.startsWith('/projects') && !onBoard && !onDone },
     { to: '/projects?view=board', icon: 'board', label: 'Board', on: onBoard },
+    { to: '/projects?status=completed', icon: 'check', label: 'Completed', on: onDone },
     { h: 'Workstreams' },
     { to: '/regulatory', icon: 'shield', label: 'Regulatory', on: pathname === '/regulatory' },
     { to: '/artwork', icon: 'image', label: 'Artwork', on: pathname === '/artwork' },

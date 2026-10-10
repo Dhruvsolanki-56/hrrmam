@@ -18,7 +18,8 @@ export default function Projects() {
   const view = params.get('view') === 'board' ? 'board' : 'table'
   const query = params.get('q') || ''
   const [projects, setProjects] = useState(null)
-  const [filter, setFilter] = useState('all')
+  const filter = FILTERS.some(([k]) => k === params.get('status')) ? params.get('status') : 'all'
+  const setFilter = (k) => setParam('status', k === 'all' ? '' : k)
   const [health, setHealth] = useState('')
   const [stageKey, setStageKey] = useState('')
   useEffect(() => { api.projects().then(setProjects) }, [])
@@ -45,7 +46,7 @@ export default function Projects() {
   const { items: pageRows, pager } = usePaged(visible, 20, `${filter}|${health}|${stageKey}|${query}`)
 
   return (
-    <Layout title={view === 'board' ? 'Pipeline board' : 'All projects'}
+    <Layout title={view === 'board' ? 'Pipeline board' : filter === 'completed' ? 'Completed projects' : 'All projects'}
       subtitle={projects ? `${visible.length} of ${projects.length} projects${filter !== 'all' || health || stageKey || query ? ' match the filters' : ''}` : 'Loading…'}
       actions={<>
         <div className="seg" role="tablist" aria-label="View">
