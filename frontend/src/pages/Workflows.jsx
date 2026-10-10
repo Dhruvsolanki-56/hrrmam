@@ -28,8 +28,7 @@ export default function Workflows() {
       actions={manage && <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" size={16} />New draft</button>}>
       <section className="panel callout">
         <h3>How this works</h3>
-        <p className="muted">A workflow is the agreed process. Create a draft, adjust the stages and approval rules, then share its review link with the team or the client to collect feedback.
-          Publishing makes it the process for <b>new</b> projects; projects already running keep the version they started on.</p>
+        <p className="muted">Edit a draft, share it for feedback, then publish. New projects use the live version; running projects keep theirs.</p>
       </section>
       {error && <p className="error">{error}</p>}
       {!list && !error && <Empty>Loading…</Empty>}
@@ -41,9 +40,9 @@ export default function Workflows() {
             <p className="muted">{w.description || w.based_on}</p>
             <dl className="wf-facts">
               <div><dt>Stages</dt><dd>{w.stage_count}</dd></div>
-              <div><dt>Parallel steps</dt><dd>{w.parallel_layers}</dd></div>
+              <div><dt>Parallel</dt><dd>{w.parallel_layers}</dd></div>
               <div><dt>Projects</dt><dd>{w.projects}</dd></div>
-              <div><dt>Open feedback</dt><dd>{w.feedback_open}</dd></div>
+              <div><dt>Feedback</dt><dd>{w.feedback_open}</dd></div>
             </dl>
             <small className="muted">{w.published_at ? `Published ${fmtDate(w.published_at)}` : `Updated ${fmtDate(w.updated_at || w.created_at)}`} · {w.created_by}</small>
           </Link>

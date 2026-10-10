@@ -14,6 +14,7 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen }) 
   const [note, setNote] = useState('')
   const [proposed, setProposed] = useState(inDays(3))
   const [asking, setAsking] = useState(false)
+  const [noting, setNoting] = useState(false)
   const [newOwner, setNewOwner] = useState(null)
   const { busy, error, run } = useDo()
 
@@ -52,25 +53,25 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen }) 
       {open && (
         <div className="task-body">
           {task.description && <p className="t-desc">{task.description}</p>}
-          <p className="muted">Assigned by <b>{task.assigner?.name || '–'}</b> · due {fmtDateTime(task.due_at)}</p>
+          <p className="muted">Assigned by {task.assigner?.name || '–'} · due {fmtDateTime(task.due_at)}</p>
 
           {req && (
             <div className="datereq">
-              <b>{req.requested_by.name} asks to move the due date to {fmtDateTime(req.proposed_due)}</b>
+              <b>{req.requested_by.name} asks for {fmtDateTime(req.proposed_due)}</b>
               <span>“{req.reason}”</span>
               {canDates && (
-                <div className="actions">
-                  <button className="btn primary" disabled={busy} onClick={() => go('approve_date')}>Approve new date</button>
-                  <button className="btn line" disabled={busy} onClick={() => go('reject_date')}>Keep original (note required)</button>
+                <div className="actions tight">
+                  <button className="btn primary sm" disabled={busy} onClick={() => go('approve_date')}>Approve new date</button>
+                  <button className="btn line sm" disabled={busy} onClick={() => { if (!note.trim()) { setNoting(true); return } go('reject_date') }}>Keep original</button>
                 </div>
               )}
               {!canDates && <small className="muted">Waiting for {task.assigner?.name || 'the assigner'} to decide.</small>}
             </div>
           )}
 
-          {task.state !== 'locked' && (task.state !== 'approved' || can('lock_unlock')) && (
-            <label className="field">Note <small>(needed to request changes, keep a date, bypass or unlock)</small>
-              <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short comment for the record…" />
+          {(noting || asking) && (
+            <label className="field">Note <small>(needed to request changes, keep a date, ask for a date or unlock)</small>
+              <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short comment for the record…" autoFocus />
             </label>
           )}
           {asking && (
@@ -91,17 +92,21 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen }) 
                 : <button className="btn line" onClick={() => setAsking(true)}>Request a different date</button>
             )}
             {canDecide && <button className="btn primary" disabled={busy} onClick={() => go('approve')}>Approve</button>}
-            {canDecide && <button className="btn line" disabled={busy} onClick={() => go('request_changes')}>Request changes</button>}
+            {canDecide && <button className="btn line" disabled={busy} onClick={() => { if (!note.trim()) { setNoting(true); return } go('request_changes') }}>Request changes</button>}
             {task.state === 'approved' && can('lock_unlock') && <button className="btn line" disabled={busy} onClick={() => go('lock')}>Lock</button>}
-            {task.state === 'locked' && can('lock_unlock') && <button className="btn line" disabled={busy} onClick={() => go('unlock')}>Unlock (note required)</button>}
+            {task.state === 'locked' && can('lock_unlock') && <button className="btn line" disabled={busy} onClick={() => { if (!note.trim()) { setNoting(true); return } go('unlock') }}>Unlock</button>}
             {!task.required && task.open && can('bypass_optional') && <button className="btn line" disabled={busy} onClick={() => go('bypass')}>Bypass optional work</button>}
+            {!noting && !asking && task.state !== 'locked' && <button className="link note-link" onClick={() => setNoting(true)}>+ Add a note</button>}
           </div>
 
           {can('reassign') && task.open && (
-            <div className="more-row">
-              <UserSelect value={newOwner} onChange={setNewOwner} placeholder="Reassign to…" />
-              <button className="btn line" disabled={busy || !newOwner} onClick={() => go('reassign', { assignee_id: newOwner })}>Reassign</button>
-            </div>
+            <details className="more">
+              <summary>Reassign</summary>
+              <div className="more-row">
+                <UserSelect value={newOwner} onChange={setNewOwner} placeholder="Choose a person…" />
+                <button className="btn line" disabled={busy || !newOwner} onClick={() => go('reassign', { assignee_id: newOwner })}>Reassign</button>
+              </div>
+            </details>
           )}
 
           {task.date_requests.filter((r) => r.status !== 'pending').length > 0 && (

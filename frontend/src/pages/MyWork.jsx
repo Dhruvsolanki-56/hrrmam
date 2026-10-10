@@ -4,26 +4,24 @@ import { api } from '../api'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
 import TaskCard from '../components/TaskCard'
-import { Empty, Tabs } from '../components/bits'
-import { useMe } from '../context'
+import { Empty } from '../components/bits'
 
 const BUCKETS = [
   ['needs_decision', 'Needs my decision'], ['overdue', 'Overdue'], ['due_today', 'Due today'], ['due_this_week', 'Due this week'],
-  ['returned_for_changes', 'Returned for changes'], ['waiting_for_someone', 'Waiting for someone'], ['submitted_for_approval', 'Submitted for approval'],
+  ['returned_for_changes', 'Returned to me'], ['waiting_for_someone', 'Waiting on others'], ['submitted_for_approval', 'Submitted'],
   ['upcoming', 'Upcoming'], ['completed', 'Completed'],
 ]
 const HELP = {
-  needs_decision: 'Work submitted to you, due-date requests to decide, and stages waiting for your approval.',
-  overdue: 'Past the due date. Submit it, or ask for a new date with a reason.',
+  needs_decision: 'Work submitted to you, date requests and stages waiting for your approval.',
+  overdue: 'Past the due date. Submit it, or ask for a new date.',
   due_today: 'Due before the end of today.', due_this_week: 'Due in the next 7 days.',
   returned_for_changes: 'An approver asked for changes. Update and resubmit.',
-  waiting_for_someone: 'Tasks you assigned that are still open, and your own date requests awaiting a decision.',
-  submitted_for_approval: 'Your work, submitted and waiting for the approver.',
-  upcoming: 'Later than a week away or without a due date.', completed: 'Recently approved or locked.',
+  waiting_for_someone: 'Tasks you assigned that are still open.',
+  submitted_for_approval: 'Your work, waiting for the approver.',
+  upcoming: 'More than a week away, or no due date.', completed: 'The 20 most recently approved or locked.',
 }
 
 export default function MyWork() {
-  const me = useMe()
   const [data, setData] = useState(null)
   const [tab, setTab] = useState(null)
   const [error, setError] = useState('')
@@ -36,18 +34,19 @@ export default function MyWork() {
     })
   }, [load])
 
-  if (!data) return <Layout title="My work" subtitle={error || 'Loading…'} />
+  if (!data) return <Layout title="My work"><p className="muted">{error || 'Loading…'}</p></Layout>
   const count = (k) => (k === 'needs_decision' ? data.needs_decision.length : data.counts[k])
+  const current = BUCKETS.find(([k]) => k === tab)
 
   const body = () => {
     if (tab === 'needs_decision') {
       if (!data.needs_decision.length) return <Empty>Nothing is waiting for your decision.</Empty>
       return data.needs_decision.map((x, i) => x.type === 'stage' ? (
         <Link key={`s${i}`} to={`/projects/${x.project_id}`} className="decide-row">
-          <div><strong>{x.project_name}</strong><small>{x.stage_name} is awaiting approval · {x.days_waiting}d</small></div>
+          <div><strong>{x.stage_name} approval</strong><small>{x.project_name} · waiting {x.days_waiting}d</small></div>
           <span className="go">Review<Icon name="arrow" size={14} /></span>
         </Link>
-      ) : <TaskCard key={`${x.type}${x.task.id}`} task={x.task} showProject onChanged={load} defaultOpen={x.type === 'date_request'} />)
+      ) : <TaskCard key={`${x.type}${x.task.id}`} task={x.task} showProject onChanged={load} />)
     }
     const list = data.buckets[tab] || []
     if (!list.length) return <Empty>Nothing here.</Empty>
@@ -55,21 +54,26 @@ export default function MyWork() {
   }
 
   return (
-    <Layout title="My work" subtitle={`${me.name} · everything assigned to you, and everything waiting on you`}>
-      <section className="kpis mw">
-        {[['overdue', 'Overdue', 'alert', 'red'], ['due_today', 'Due today', 'clock', 'amber'], ['due_this_week', 'Due this week', 'tasks', 'green'], ['needs_decision', 'Needs my decision', 'check', 'bright']].map(([k, lab, icon, tone]) => (
-          <button key={k} className="kpi click" onClick={() => setTab(k)}>
-            <span className={`kpi-icon tone-bg-${tone}`}><Icon name={icon} size={20} /></span>
-            <div><span className="kpi-label">{lab}</span><b>{count(k)}</b></div>
-          </button>
-        ))}
-      </section>
-      <section className="panel">
-        <Tabs value={tab} onChange={setTab} tabs={BUCKETS.map(([k, l]) => ({ key: k, label: l, count: count(k) }))} />
-        <p className="muted bucket-help">{HELP[tab]}</p>
-        <div className="tasklist">{body()}</div>
-        {tab === 'completed' && <p className="muted tiny">Showing the 20 most recent.</p>}
-      </section>
+    <Layout title="My work">
+      <div className="mw">
+        <nav className="mw-nav" aria-label="Task groups">
+          {BUCKETS.map(([k, l]) => {
+            const n = count(k)
+            return (
+              <button key={k} className={`${tab === k ? 'on' : ''} ${n ? '' : 'zero'} ${k === 'overdue' && n ? 'hot' : ''}`} onClick={() => setTab(k)} aria-current={tab === k ? 'true' : undefined}>
+                <span>{l}</span><b>{n}</b>
+              </button>
+            )
+          })}
+        </nav>
+        <section className="mw-main">
+          <header>
+            <h2>{current?.[1]}</h2>
+            <p className="muted">{HELP[tab]}</p>
+          </header>
+          <div className="tasklist">{body()}</div>
+        </section>
+      </div>
     </Layout>
   )
 }
