@@ -138,7 +138,6 @@ export default function Layout({ title, subtitle, back, backLabel = 'All project
     { to: '/artwork', icon: 'image', label: 'Artwork', on: pathname === '/artwork' },
     { to: '/legal', icon: 'scale', label: 'Legal', on: pathname === '/legal' },
     { h: 'Governance' },
-    { to: '/workflows', icon: 'activity', label: 'Workflows', on: pathname.startsWith('/workflows') },
     { to: '/audit', icon: 'history', label: 'Audit trail', on: pathname === '/audit' },
     ...(can('manage_users') ? [{ to: '/admin', icon: 'settings', label: 'Admin', on: pathname === '/admin' }] : []),
   ]

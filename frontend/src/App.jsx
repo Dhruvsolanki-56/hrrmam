@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { api, getUid, setUid } from './api'
 import { AppContext } from './context'
 import Admin from './pages/Admin'
@@ -12,9 +12,6 @@ import MyWork from './pages/MyWork'
 import ProjectDetail from './pages/ProjectDetail'
 import Projects from './pages/Projects'
 import Regulatory from './pages/Regulatory'
-import WorkflowEdit from './pages/WorkflowEdit'
-import WorkflowView from './pages/WorkflowView'
-import Workflows from './pages/Workflows'
 import logo from './assets/neohealth-logo.svg?raw'
 
 /** Free hosting puts the API to sleep; keep retrying and say so instead of showing a blank page. */
@@ -86,10 +83,8 @@ export default function App() {
         <Route path="/artwork" element={<Artwork />} />
         <Route path="/legal" element={<Legal />} />
         <Route path="/audit" element={<Audit />} />
-        <Route path="/workflows" element={<Workflows />} />
-        <Route path="/workflows/:id" element={<WorkflowView />} />
-        <Route path="/workflows/:id/edit" element={<WorkflowEdit />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppContext.Provider>
   )

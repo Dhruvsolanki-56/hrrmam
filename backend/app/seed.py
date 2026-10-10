@@ -49,12 +49,6 @@ def seed_demo(db: Session):
                                       "Legal, Regulatory, Artwork and Manufacturer data start together once Commercial is approved.",
                                       preset="after_commercial")
         workflows.publish(db, admin, live)
-    alt = workflows.create_draft(db, admin, "Option B: parallel from the Project Brief",
-                                 "Everything except Commercial starts as soon as the Brief is approved. Shared for client feedback.",
-                                 preset="from_brief")
-    reviewer = db.scalar(select(User).where(User.name == "Client Reviewer"))
-    workflows.add_feedback(db, reviewer, alt, "commercial", "We would prefer Commercial approval to stay a gate before any legal spend.")
-    workflows.add_feedback(db, reviewer, alt, "", "Please confirm artwork starting before the dossier is ready suits the team.")
     Demo(db).build()
     # an inbox that looks lived in: older notifications already read, the newest few still unread
     now = datetime.now(timezone.utc)
