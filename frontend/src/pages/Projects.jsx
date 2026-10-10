@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
-import { AgeChip, HealthPill, Person, StageBar, StatusPill, fmtDay } from '../components/bits'
+import { AgeChip, HealthPill, Person, StageBar, StatusPill, fmtDay, usePaged } from '../components/bits'
 import { useStages } from '../context'
 
 const FILTERS = [['all', 'All'], ['active', 'In progress'], ['on_hold', 'On hold'], ['rejected', 'Rejected'], ['completed', 'Completed']]
@@ -42,6 +42,7 @@ export default function Projects() {
     `${p.name} ${p.code || ''} ${p.category} ${p.product}`.toLowerCase().includes(query.toLowerCase()))
 
   const extra = (p) => p.active_stages.length - 1
+  const { items: pageRows, pager } = usePaged(visible, 20, `${filter}|${health}|${stageKey}|${query}`)
 
   return (
     <Layout title={view === 'board' ? 'Pipeline board' : 'All projects'}
@@ -79,7 +80,7 @@ export default function Projects() {
             <table className="table">
               <thead><tr><th>Project</th><th>Phase</th><th>Health</th><th>Progress</th><th>Manager</th><th>Target submission</th></tr></thead>
               <tbody>
-                {visible.map((p) => {
+                {pageRows.map((p) => {
                   const s = p.stage
                   return (
                     <tr key={p.id} className="row-link" onClick={(e) => { if (!e.target.closest('a, button, select, input')) navigate(`/projects/${p.id}`) }}>
@@ -110,6 +111,7 @@ export default function Projects() {
             </table>
             {projects && !visible.length && <p className="empty">No projects match these filters.</p>}
           </div>
+          {pager}
         </div>
       ) : (
         <div className="board">

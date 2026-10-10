@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMe, useUsers } from '../context'
 
 // ---------------------------------------------------------------- dates
@@ -169,5 +169,48 @@ export function Tabs({ tabs, value, onChange, variant }) {
         </button>
       ))}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------- paging
+/** Page through a long list. The pager renders nothing when everything fits on one page;
+ *  `resetKey` (e.g. the active filters) sends the list back to page 1 when it changes. */
+export function usePaged(items, size, resetKey) {
+  const [page, setPage] = useState(1)
+  useEffect(() => { setPage(1) }, [resetKey])
+  const all = items || []
+  const pages = Math.max(1, Math.ceil(all.length / size))
+  const cur = Math.min(page, pages)
+  return {
+    items: all.slice((cur - 1) * size, cur * size),
+    pager: <Pager page={cur} pages={pages} total={all.length} size={size} onChange={setPage} />,
+  }
+}
+
+const pageNumbers = (page, pages) => {
+  const keep = new Set([1, pages, page - 1, page, page + 1].filter((n) => n >= 1 && n <= pages))
+  const out = []
+  ;[...keep].sort((a, b) => a - b).forEach((n, i, arr) => { if (i && n - arr[i - 1] > 1) out.push(`gap${n}`); out.push(n) })
+  return out
+}
+
+export function Pager({ page, pages, total, size, onChange }) {
+  const ref = useRef(null)
+  if (pages <= 1) return null
+  const go = (n) => {
+    onChange(n)
+    ref.current?.parentElement?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }
+  return (
+    <nav className="pager" aria-label="Pages" ref={ref}>
+      <span className="pager-info">{(page - 1) * size + 1}–{Math.min(page * size, total)} of {total}</span>
+      <span className="pager-nums">
+        <button className="pg" disabled={page === 1} onClick={() => go(page - 1)} aria-label="Previous page">‹</button>
+        {pageNumbers(page, pages).map((n) => (typeof n === 'string'
+          ? <span key={n} className="pg-gap">…</span>
+          : <button key={n} className={`pg ${n === page ? 'on' : ''}`} aria-current={n === page ? 'page' : undefined} onClick={() => go(n)}>{n}</button>))}
+        <button className="pg" disabled={page === pages} onClick={() => go(page + 1)} aria-label="Next page">›</button>
+      </span>
+    </nav>
   )
 }

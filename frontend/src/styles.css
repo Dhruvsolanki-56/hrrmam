@@ -896,6 +896,9 @@ details.controls > summary .muted { margin-left: auto; }
 
   .panel.table-panel { border: 0; border-radius: 0; overflow: visible; padding: 0; }
   .table-panel > header { padding: 0 0 10px; }
+  .table-panel > .pager { padding: 14px 0 0; border-top: 0; }
+  .pager { justify-content: center; }
+  .pager-info { width: 100%; text-align: center; }
   .table { min-width: 0; display: block; }
   .table thead { display: none; }
   .table tbody { display: grid; gap: 10px; }
@@ -946,6 +949,19 @@ details.controls > summary .muted { margin-left: auto; }
   .login-in { padding: 28px 16px 56px; gap: 24px; }
   .login-users { grid-template-columns: 1fr; }
 }
+
+/* pager: page numbers under long lists */
+.pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 0 4px; }
+.table-panel > .pager { padding: 12px 20px; border-top: 1px solid var(--line); }
+.mw-main > .pager { border-top: 1px solid var(--line); padding: 12px 0; }
+.pager-info { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pager-nums { display: inline-flex; align-items: center; gap: 4px; }
+.pg { min-width: 32px; height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--r); background: #fff; font-size: 13px; color: var(--ink-2); cursor: pointer; font-variant-numeric: tabular-nums; }
+.pg:hover:not(:disabled) { border-color: var(--neo-green); color: var(--neo-green); }
+.pg.on { background: var(--neo-dark); border-color: var(--neo-dark); color: #fff; font-weight: 600; }
+.pg:disabled { opacity: .4; cursor: default; }
+.pg-gap { min-width: 20px; text-align: center; color: var(--faint); }
+.panel, .table-panel, .mw-main, .tasklist { scroll-margin-top: 80px; }
 
 /* =====================================================================
    Phone refinements (kept last so they win)

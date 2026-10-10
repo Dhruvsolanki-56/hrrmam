@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import Layout from '../components/Layout'
-import { Tabs, fmtDateTime, label } from '../components/bits'
+import { Tabs, fmtDateTime, label, usePaged } from '../components/bits'
 import { useStages } from '../context'
 
 const AREAS = ['', 'stage', 'task', 'legal', 'dossier', 'artwork', 'manufacturer', 'rfi', 'document', 'project']
@@ -14,12 +14,12 @@ export default function Audit() {
   const [area, setArea] = useState('')
   const [q, setQ] = useState('')
   const [rows, setRows] = useState(null)
-  const [shown, setShown] = useState(50)
   useEffect(() => { api.projects().then(setProjects) }, [])
   useEffect(() => {
-    const t = setTimeout(() => api.audit({ project_id: project, area, q, limit: 300 }).then((r) => { setRows(r); setShown(50) }), 200)
+    const t = setTimeout(() => api.audit({ project_id: project, area, q, limit: 300 }).then(setRows), 200)
     return () => clearTimeout(t)
   }, [project, area, q])
+  const { items, pager } = usePaged(rows, 25, `${project}|${area}|${q}`)
   const stageName = (k) => stages.find((s) => s.key === k)?.name || ''
 
   return (
@@ -39,7 +39,7 @@ export default function Audit() {
           <table className="table">
             <thead><tr><th>When</th><th>Project</th><th>Area</th><th>Action</th><th>Detail</th><th>By</th></tr></thead>
             <tbody>
-              {(rows || []).slice(0, shown).map((e) => (
+              {items.map((e) => (
                 <tr key={e.id} className="audit-row">
                   <td className="nowrap muted" data-label="When">{fmtDateTime(e.created_at)}</td>
                   <td data-label="Project"><Link to={`/projects/${e.project_id}?tab=activity`}><strong>{e.project_name}</strong></Link><small className="sub">{stageName(e.stage_key)}</small></td>
@@ -53,7 +53,7 @@ export default function Audit() {
           </table>
           {rows && !rows.length && <p className="empty">No entries match.</p>}
         </div>
-        {rows && rows.length > shown && <div className="table-more"><button className="btn line sm" onClick={() => setShown(shown + 50)}>Show more ({rows.length - shown})</button></div>}
+        {pager}
       </div>
     </Layout>
   )
