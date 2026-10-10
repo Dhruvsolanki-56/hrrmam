@@ -7,6 +7,7 @@ import { useStages } from '../context'
 
 const parseDay = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d) }
 const shortDay = (s) => parseDay(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+const KIND = { 'due date': 'Due date request', stage: 'Stage approval', task: 'Task', artwork: 'Artwork' }
 const today = () => new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
 export default function Dashboard() {
@@ -75,70 +76,62 @@ export default function Dashboard() {
         <Link to="/legal" className="metric"><span>Unsigned agreements</span><b>{d.unsigned_agreements.length}</b></Link>
       </section>
 
-      <div className="cols">
-        <section className="block" id="approvals">
+      <div className="dgrid">
+        <section className="dcard" id="approvals">
           <header><h2>Approvals <span className="count">{decisions.length}</span></h2><Link to="/my-work" className="link">My work</Link></header>
           {!decisions.length && <p className="empty-note">Nothing is waiting for you.</p>}
-          <ul className="list">
-            {decisions.slice(0, 7).map((x) => (
+          <ul className="drows">
+            {decisions.slice(0, 5).map((x) => (
               <li key={x.key}>
                 <Link to={x.to}>
-                  <span className={`k ${x.k === 'stage' ? 'k-stage' : ''}`}>{x.k}</span>
-                  <span><strong>{x.title}</strong><small>{x.sub}</small></span>
-                  <span className="r">{x.r || 'Review'}</span>
+                  <span className="dmain"><strong>{x.title}</strong><small>{KIND[x.k]} · {x.sub}</small></span>
+                  <span className="dside">{x.r || 'Review'}</span>
                 </Link>
               </li>
             ))}
           </ul>
-          {decisions.length > 7 && <Link to="/my-work" className="list-more">{decisions.length - 7} more</Link>}
+          {decisions.length > 5 && <Link to="/my-work" className="list-more">{decisions.length - 5} more</Link>}
         </section>
 
-        <section className="block">
+        <section className="dcard">
           <header><h2>Upcoming</h2></header>
           {!upcoming.length && <p className="empty-note">Nothing scheduled.</p>}
-          <ul className="list dated">
-            {upcoming.map((x) => (
+          <ul className="drows">
+            {upcoming.slice(0, 5).map((x) => (
               <li key={x.key}>
                 <Link to={x.to}>
-                  <span className="d">{shortDay(x.day)}</span>
-                  <span><strong>{x.title}</strong><small>{x.sub}</small></span>
-                  {x.late ? <span className="r over">Overdue</span> : <span className="r" />}
+                  <span className="ddate">{shortDay(x.day)}</span>
+                  <span className="dmain"><strong>{x.title}</strong><small>{x.sub}</small></span>
+                  {x.late && <span className="dside over">Overdue</span>}
                 </Link>
               </li>
             ))}
           </ul>
         </section>
-      </div>
 
-      <div className="cols">
-        <section className="block">
+        <section className="dcard">
           <header><h2>At risk <span className="count">{d.at_risk.length}</span></h2><Link to="/projects" className="link">All projects</Link></header>
-          {!d.at_risk.length
-            ? <p className="empty-note">Every project is on track.</p>
-            : (
-              <table className="table fit">
-                <thead><tr><th>Project</th><th>Health</th><th>Reason</th></tr></thead>
-                <tbody>
-                  {d.at_risk.slice(0, 6).map((p) => (
-                    <tr key={p.id}>
-                      <td className="proj-cell"><Link to={`/projects/${p.id}`} className="cell-main"><strong>{p.name}</strong><small><span className="code">{p.code || 'new'}</span></small></Link></td>
-                      <td data-label="Health"><HealthPill health={p.health} /></td>
-                      <td data-label="Reason" className="muted">{p.health_reasons[0]}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+          {!d.at_risk.length && <p className="empty-note">Every project is on track.</p>}
+          <ul className="drows">
+            {d.at_risk.slice(0, 5).map((p) => (
+              <li key={p.id}>
+                <Link to={`/projects/${p.id}`}>
+                  <span className="dmain"><strong>{p.name}</strong><small>{p.health_reasons[0]}</small></span>
+                  <span className="dside"><HealthPill health={p.health} /></span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
 
-        <section className="block">
+        <section className="dcard">
           <header><h2>By phase</h2><span className="count">{live.length} live</span></header>
-          <ul className="bars" style={{ marginTop: 16 }}>
+          <ul className="dbars">
             {groups.map((g) => (
               <li key={g.name} className={g.n ? '' : 'zero'}>
-                <span className="bar-name">{g.name}</span>
-                <span className="bar-track"><i className="bar-fill" style={{ width: `${(g.n / gmax) * 100}%`, background: 'var(--neo-green)' }} /></span>
+                <span>{g.name}</span>
                 <b>{g.n}</b>
+                <i><em style={{ width: `${(g.n / gmax) * 100}%` }} /></i>
               </li>
             ))}
           </ul>

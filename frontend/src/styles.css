@@ -418,6 +418,31 @@ a.metric:hover > span { color: var(--neo-green); }
 .list-more { display: inline-block; padding: 10px 0; font-size: 13px; color: var(--neo-green); }
 .list-more:hover { text-decoration: underline; }
 
+/* overview cards: one look for all four */
+.dgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
+.dcard { background: #fff; border: 1px solid var(--line); border-radius: var(--r-lg); padding: 18px 20px 10px; min-width: 0; display: flex; flex-direction: column; }
+.dcard > header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.dcard > header h2 { font-size: 15px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; }
+.dcard .empty-note { padding: 16px 0; }
+.drows { list-style: none; margin: 0; padding: 0; }
+.drows li + li { border-top: 1px solid var(--line); }
+.drows a { display: flex; align-items: center; gap: 14px; padding: 12px 0; color: inherit; min-height: 62px; }
+.drows a:hover strong { color: var(--neo-green); }
+.dmain { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.dmain strong { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dmain small { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dside { flex: none; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.dside.over { color: var(--danger); font-weight: 500; }
+.ddate { flex: none; width: 56px; font-size: 13px; font-weight: 600; color: var(--neo-dark); font-variant-numeric: tabular-nums; }
+.dcard .list-more { padding: 10px 0 6px; border-top: 1px solid var(--line); }
+.dbars { list-style: none; margin: 0; padding: 6px 0 8px; display: grid; }
+.dbars li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px; padding: 9px 0; font-size: 14px; }
+.dbars li span { color: var(--ink); }
+.dbars li b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.dbars li i { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--tint); overflow: hidden; display: block; }
+.dbars li em { display: block; height: 100%; border-radius: 3px; background: var(--neo-green); }
+.dbars li.zero span, .dbars li.zero b { color: var(--faint); font-weight: 400; }
+
 /* =====================================================================
    Board
    ===================================================================== */
@@ -776,7 +801,7 @@ details.controls > summary .muted { margin-left: auto; }
   .m-only { display: inline-grid !important; }
   .gsearch { width: auto; flex: 1; max-width: 320px; }
   .hdr-in, .page { padding-left: 24px; padding-right: 24px; }
-  .cols, .grid-2, .grid-2.even, .grid-3 { grid-template-columns: 1fr; }
+  .cols, .grid-2, .grid-2.even, .grid-3, .dgrid { grid-template-columns: 1fr; }
   .proj-grid { grid-template-columns: 1fr; }
   .props { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 32px; }
   .props .blocker, .props .reasons-box { grid-column: 1 / -1; }
@@ -812,7 +837,7 @@ details.controls > summary .muted { margin-left: auto; }
   .list.dated a { grid-template-columns: 56px minmax(0, 1fr); }
   .list.dated a .r { grid-column: 2; }
 
-  .panel { padding: 16px; }
+  .panel, .dcard { padding: 16px; }
   .toolbar.panel { padding: 0; }
   .filters { flex-wrap: nowrap; overflow-x: auto; width: 100%; gap: 18px; scrollbar-width: none; }
   .filters::-webkit-scrollbar { display: none; }
