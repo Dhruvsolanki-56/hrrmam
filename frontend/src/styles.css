@@ -896,9 +896,6 @@ details.controls > summary .muted { margin-left: auto; }
 
   .panel.table-panel { border: 0; border-radius: 0; overflow: visible; padding: 0; }
   .table-panel > header { padding: 0 0 10px; }
-  .table-panel > .pager { padding: 14px 0 0; border-top: 0; }
-  .pager { justify-content: center; }
-  .pager-info { width: 100%; text-align: center; }
   .table { min-width: 0; display: block; }
   .table thead { display: none; }
   .table tbody { display: grid; gap: 10px; }
@@ -1018,6 +1015,10 @@ details.controls > summary .muted { margin-left: auto; }
   .panel > header { flex-wrap: nowrap; }
   .panel > header h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .panel > header .btn { height: 34px; padding: 0 12px; font-size: 13px; flex: none; }
+
+  /* pager: centred, count above the numbers */
+  .pager, .table-panel > .pager, .mw-main > .pager { flex-direction: column; justify-content: center; align-items: center; gap: 10px; padding: 16px 0 4px; border-top: 0; }
+  .pager-info { text-align: center; }
 
   /* segmented controls never get the scroll fade */
   .tabs.seg-tabs { -webkit-mask-image: none; mask-image: none; padding-right: 0; }
