@@ -86,13 +86,13 @@ export default function ProjectDetail() {
         </div>
         <div className="proj-title">
           <h1>{project.name}</h1>
-          {editable && <button className="btn line" onClick={() => setEditing(true)}><Icon name="edit" size={15} />Edit details</button>}
+          {editable && <button className="btn line" onClick={() => setEditing(true)}><Icon name="edit" size={15} /><span className="hide-m">Edit details</span></button>}
         </div>
         {project.summary && <p className="summary">{project.summary}</p>}
         <div className="journey">
           <div className="journey-top">
             <span><b>{done} of {project.flow.stages.length}</b> stages approved</span>
-            <span>{activeNames.length ? `Now: ${activeNames.join(', ')}` : project.status === 'completed' ? 'Complete' : ''}</span>
+            <span className="journey-now">{activeNames.length ? `Now: ${activeNames.join(', ')}` : project.status === 'completed' ? 'Complete' : ''}</span>
           </div>
           <StageBar project={project} big />
         </div>

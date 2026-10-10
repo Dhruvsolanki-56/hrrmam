@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
@@ -13,6 +13,7 @@ export default function Projects() {
   const stages = useStages()
   // Board columns follow the stage groups of the live workflow.
   const phases = [...new Set(stages.map((s) => s.group || 'Stages'))].map((name) => ({ name, keys: stages.filter((s) => (s.group || 'Stages') === name).map((s) => s.key) }))
+  const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const view = params.get('view') === 'board' ? 'board' : 'table'
   const query = params.get('q') || ''
@@ -81,7 +82,7 @@ export default function Projects() {
                 {visible.map((p) => {
                   const s = p.stage
                   return (
-                    <tr key={p.id}>
+                    <tr key={p.id} className="row-link" onClick={(e) => { if (!e.target.closest('a, button, select, input')) navigate(`/projects/${p.id}`) }}>
                       <td className="proj-cell">
                         <Link to={`/projects/${p.id}`} className="cell-main">
                           <strong>{p.name}</strong>
