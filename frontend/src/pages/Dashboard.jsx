@@ -42,7 +42,7 @@ export default function Dashboard() {
   const upcoming = [
     ...d.rfi_deadlines.filter((r) => r.due_date).map((r) => ({ key: `rfi${r.id}`, day: r.due_date, title: `${r.reference || 'RFI'} response`, sub: r.project_name, to: `/projects/${r.project_id}?tab=rfi`, late: r.overdue })),
     ...d.unsigned_agreements.filter((a) => a.due_date && a.overdue).map((a) => ({ key: `ag${a.id}`, day: a.due_date, title: a.label, sub: a.project_name, to: `/projects/${a.project_id}?tab=legal`, late: true })),
-    ...live.filter((p) => p.target_submission).map((p) => ({ key: `ts${p.id}`, day: p.target_submission, title: 'Target submission', sub: p.name, to: `/projects/${p.id}` })),
+    ...live.filter((p) => p.target_submission && !['approved', 'bypassed'].includes(p.stage_states?.submission)).map((p) => ({ key: `ts${p.id}`, day: p.target_submission, title: 'Target submission', sub: p.name, to: `/projects/${p.id}`, late: p.target_submission < new Date().toISOString().slice(0, 10) })),
   ].sort((a, b) => a.day.localeCompare(b.day)).slice(0, 6)
 
   const pct = (n) => `${(n / Math.max(1, c.green + c.amber + c.red)) * 100}%`
