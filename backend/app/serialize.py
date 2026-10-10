@@ -148,9 +148,13 @@ def stage_rows(p: Project) -> list[dict]:
 
 
 def project_detail(p: Project) -> dict:
+    from sqlalchemy.orm import object_session
+    from .models import WorkflowDef
+    wf = object_session(p).get(WorkflowDef, p.workflow_id)
     return {
         **project_row(p),
         "flow": p.flow.payload(),
+        "workflow": {"id": wf.id, "name": wf.name, "version": wf.version} if wf else None,
         "stages": stage_rows(p),
         "tasks": [task_out(t) for t in p.tasks],
         "agreements": [agreement_out(a) for a in p.agreements],

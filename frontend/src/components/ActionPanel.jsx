@@ -158,7 +158,7 @@ function ProjectControls({ project, onChange }) {
               <li key={s.key}>
                 <span>{s.name}</span>
                 {row(s.key).locked
-                  ? <button className="btn line" disabled={busy} onClick={() => go('unlock', { stage_key: s.key })}>🔒 Unlock</button>
+                  ? <button className="btn line" disabled={busy} onClick={() => go('unlock', { stage_key: s.key })}>Unlock</button>
                   : <button className="btn line" disabled={busy} onClick={() => go('lock', { stage_key: s.key })}>Lock</button>}
               </li>
             ))}

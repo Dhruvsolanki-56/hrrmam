@@ -70,71 +70,97 @@ export default function ProjectDetail() {
   const events = area === 'all' ? project.events : project.events.filter((e) => e.area === area)
   const manage = can('manage_project')
 
+  const done = Object.values(project.stage_states).filter((x) => x === 'approved' || x === 'bypassed').length
+  const activeNames = project.stages.filter((r) => ['in_progress', 'awaiting_approval'].includes(r.state)).map((r) => project.flow.stages.find((s) => s.key === r.key)?.name).filter(Boolean)
+  const editable = manage && project.status !== 'rejected' && project.status !== 'completed'
+
   return (
     <FlowScope stages={project.flow.stages}>
-    <Layout title={project.name} subtitle={project.code || 'The project code is issued when the brief is approved'} back="/projects"
-      actions={manage && project.status !== 'rejected' && project.status !== 'completed' && <button className="btn line" onClick={() => setEditing(true)}><Icon name="edit" size={16} />Edit Project 360</button>}>
-      <section className="panel summary-panel">
+    <Layout title={project.name} back="/projects" head={false}>
+      <div className="proj-head">
         <div className="meta">
+          <span className="code">{project.code || 'Code issued at brief approval'}</span>
           <StatusPill status={project.status} />
           <HealthPill health={project.health} reasons={project.health_reasons} />
           <AgeChip project={project} />
-          <span className="chip plain">{project.project_type}</span>
-          {project.category && <span className="chip plain">{project.category}</span>}
+        </div>
+        <div className="proj-title">
+          <h1>{project.name}</h1>
+          {editable && <button className="btn line" onClick={() => setEditing(true)}><Icon name="edit" size={15} />Edit details</button>}
         </div>
         {project.summary && <p className="summary">{project.summary}</p>}
-        <dl className="p360">
-          <div><dt>Project code</dt><dd>{project.code || 'Pending'}</dd></div>
-          <div><dt>Product</dt><dd>{project.product || '–'}</dd></div>
-          <div><dt>Market</dt><dd>{project.market}</dd></div>
-          <div><dt>Project manager</dt><dd>{project.project_manager ? <Person user={project.project_manager} /> : '–'}</dd></div>
-          <div><dt>Submission type</dt><dd>{project.submission_type || 'To be decided'}</dd></div>
-          <div><dt>Target submission</dt><dd>{fmtDay(project.target_submission)}</dd></div>
-          <div><dt>Target launch</dt><dd>{fmtDay(project.target_launch)}</dd></div>
-          <div><dt>Started</dt><dd>{fmtDate(project.created_at)}{project.initiator && <small> by {project.initiator}</small>}</dd></div>
-        </dl>
-        <div className={`blocker ${project.critical_blocker ? 'on' : ''}`}>
-          <Icon name="alert" size={18} />
-          <div><b>Critical blocker</b><span>{project.critical_blocker || 'None reported.'}</span></div>
-          {manage && !['rejected', 'completed'].includes(project.status) && <button className="link" onClick={() => setBlocker(true)}>{project.critical_blocker ? 'Update' : 'Report'}</button>}
-        </div>
-        {project.health_reasons.length > 0 && <ul className="reasons">{project.health_reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
-        <StageBar project={project} big />
-      </section>
-
-      <Tabs value={tab} onChange={goTab} tabs={[
-        { key: 'overview', label: 'Overview' }, { key: 'tasks', label: 'Tasks', count: openTasks || null },
-        { key: 'legal', label: 'Legal' }, { key: 'regulatory', label: 'Regulatory' }, { key: 'artwork', label: 'Artwork' },
-        { key: 'manufacturer', label: 'Manufacturer data' }, { key: 'rfi', label: 'RFI', count: openRfi || null },
-        { key: 'documents', label: 'Documents', count: nonArt || null }, { key: 'activity', label: 'Audit trail' },
-      ]} />
-
-      {tab === 'overview' && (
-        <>
-          <Workstreams project={project} goTab={goTab} />
-          <div className="detail-grid">
-            <div className="stack"><ActionPanel project={project} onChange={setProject} goTab={goTab} /></div>
-            <section className="panel">
-              <header><h3>Project journey</h3><span className="muted">{project.flow.stages.length} phases</span></header>
-              <StageList project={project} />
-            </section>
+        <div className="journey">
+          <div className="journey-top">
+            <span><b>{done} of {project.flow.stages.length}</b> stages approved</span>
+            <span>{activeNames.length ? `Now: ${activeNames.join(', ')}` : project.status === 'completed' ? 'Complete' : ''}</span>
           </div>
-        </>
-      )}
-      {tab === 'tasks' && <TasksTab project={project} onChange={setProject} />}
-      {tab === 'legal' && <LegalTab project={project} onChange={setProject} />}
-      {tab === 'regulatory' && <RegulatoryTab project={project} onChange={setProject} />}
-      {tab === 'artwork' && <DocList project={project} onChange={setProject} artwork />}
-      {tab === 'manufacturer' && <ManufacturerTab project={project} onChange={setProject} />}
-      {tab === 'rfi' && <RfiTab project={project} onChange={setProject} />}
-      {tab === 'documents' && <DocList project={project} onChange={setProject} />}
-      {tab === 'activity' && (
-        <section className="panel">
-          <header><h3>Audit trail</h3><span className="muted">{project.events.length} entries · nothing is overwritten silently</span></header>
-          <Tabs value={area} onChange={setArea} tabs={AREAS.map((a) => ({ key: a, label: a === 'all' ? 'All' : label(a) }))} />
-          <Timeline events={events} />
-        </section>
-      )}
+          <StageBar project={project} big />
+        </div>
+      </div>
+
+      <div className="proj-grid">
+        <div className="proj-main">
+          <Tabs value={tab} onChange={goTab} tabs={[
+            { key: 'overview', label: 'Overview' }, { key: 'tasks', label: 'Tasks', count: openTasks || null },
+            { key: 'legal', label: 'Legal' }, { key: 'regulatory', label: 'Regulatory' }, { key: 'artwork', label: 'Artwork' },
+            { key: 'manufacturer', label: 'Manufacturer data' }, { key: 'rfi', label: 'RFI', count: openRfi || null },
+            { key: 'documents', label: 'Documents', count: nonArt || null }, { key: 'activity', label: 'History' },
+          ]} />
+
+          {tab === 'overview' && (
+            <>
+              <Workstreams project={project} goTab={goTab} />
+              <ActionPanel project={project} onChange={setProject} goTab={goTab} />
+              <section className="panel">
+                <header><h3>Project journey</h3><span className="muted">{project.flow.stages.length} phases · {project.workflow?.name}{project.workflow?.version ? ` v${project.workflow.version}` : ""}</span></header>
+                <StageList project={project} />
+              </section>
+            </>
+          )}
+          {tab === 'tasks' && <TasksTab project={project} onChange={setProject} />}
+          {tab === 'legal' && <LegalTab project={project} onChange={setProject} />}
+          {tab === 'regulatory' && <RegulatoryTab project={project} onChange={setProject} />}
+          {tab === 'artwork' && <DocList project={project} onChange={setProject} artwork />}
+          {tab === 'manufacturer' && <ManufacturerTab project={project} onChange={setProject} />}
+          {tab === 'rfi' && <RfiTab project={project} onChange={setProject} />}
+          {tab === 'documents' && <DocList project={project} onChange={setProject} />}
+          {tab === 'activity' && (
+            <section className="panel">
+              <header><h3>History</h3><span className="muted">{project.events.length} entries · nothing is overwritten</span></header>
+              <Tabs value={area} onChange={setArea} tabs={AREAS.map((a) => ({ key: a, label: a === 'all' ? 'All' : label(a) }))} />
+              <Timeline events={events} />
+            </section>
+          )}
+        </div>
+
+        <aside className="props" aria-label="Project details">
+          <div>
+            <h3>Details</h3>
+            <dl className="p360">
+              <div><dt>Project code</dt><dd>{project.code ? <span className="code">{project.code}</span> : 'Pending'}</dd></div>
+              <div><dt>Product</dt><dd>{project.product || '–'}</dd></div>
+              <div><dt>Type</dt><dd>{project.project_type}{project.category && <small> · {project.category}</small>}</dd></div>
+              <div><dt>Market</dt><dd>{project.market}</dd></div>
+              <div><dt>Manager</dt><dd>{project.project_manager ? <Person user={project.project_manager} /> : '–'}</dd></div>
+              <div><dt>Submission</dt><dd>{project.submission_type || 'To be decided'}</dd></div>
+              <div><dt>Target submit</dt><dd className="num">{fmtDay(project.target_submission)}</dd></div>
+              <div><dt>Target launch</dt><dd className="num">{fmtDay(project.target_launch)}</dd></div>
+              <div><dt>Started</dt><dd className="num">{fmtDate(project.created_at)}{project.initiator && <small> · {project.initiator}</small>}</dd></div>
+            </dl>
+          </div>
+          <div className={`blocker ${project.critical_blocker ? 'on' : ''}`}>
+            <Icon name="alert" size={16} />
+            <div><b>Critical blocker</b><span>{project.critical_blocker || 'None reported'}</span></div>
+            {manage && !['rejected', 'completed'].includes(project.status) && <button className="link" onClick={() => setBlocker(true)}>{project.critical_blocker ? 'Update' : 'Report a blocker'}</button>}
+          </div>
+          {project.health_reasons.length > 0 && (
+            <div className="reasons-box">
+              <h3>Why it is {project.health === 'red' ? 'critical' : 'at risk'}</h3>
+              <ul className="reasons">{project.health_reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+            </div>
+          )}
+        </aside>
+      </div>
 
       {editing && <NewProjectModal project={project} onClose={() => setEditing(false)} onCreated={(p) => { setProject(p); setEditing(false) }} />}
       {blocker && (

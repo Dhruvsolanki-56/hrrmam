@@ -48,11 +48,11 @@ export default function FlowDiagram({ flow, selected, onSelect, states }) {
             <g key={s.key} transform={`translate(${p.x},${p.y})`} className={`fd-node tone-${entityTone(s.entity)} ${selected === s.key ? 'on' : ''} ${st ? `st-${st}` : ''}`}
               tabIndex={onSelect ? 0 : undefined} role={onSelect ? 'button' : undefined} aria-label={s.name}
               onClick={() => onSelect?.(s.key)} onKeyDown={(e) => { if (onSelect && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onSelect(s.key) } }}>
-              <rect width={W} height={H} rx={H / 2.6} />
-              <text x={16} y={26} className="fd-name">{s.name.length > 24 ? `${s.name.slice(0, 23)}…` : s.name}</text>
+              <rect width={W} height={H} rx={10} />
+              <text x={16} y={26} className="fd-name">{s.name.length > ((s.milestone || s.optional) ? 19 : 24) ? `${s.name.slice(0, (s.milestone || s.optional) ? 18 : 23)}…` : s.name}</text>
               <text x={16} y={46} className="fd-sub">{s.approver.length > 28 ? `${s.approver.slice(0, 27)}…` : s.approver}</text>
               {s.milestone && <text x={W - 16} y={26} className="fd-flag" textAnchor="end">LOCK</text>}
-              {s.optional && <text x={W - 16} y={46} className="fd-flag" textAnchor="end">optional</text>}
+              {s.optional && <text x={W - 16} y={s.milestone ? 46 : 26} className="fd-flag" textAnchor="end">opt</text>}
             </g>
           )
         })}

@@ -101,6 +101,8 @@ features; add Alembic migrations for production.
 
 ## Branding
 
-Colours, capsule shapes and type follow the Neo Health Brand Style Guide (Aug 2026): Neo Green `#00817e`,
-Neo Dark Green `#004248`, Neo Bright Green `#C1E1C0`, Neo Black `#231F20`, Neo Grey `#DCDDDD`.
-The interface uses Inter. The logo is the vector brandmark from the guide.
+Colours follow the Neo Health brand palette: Neo Green `#00817e`, Neo Dark Green `#004248`, Neo Bright Green
+`#C1E1C0`, Neo Black `#231F20`, Neo Grey `#DCDDDD`. The interface is a light, data-first layout (light sidebar, one
+white working sheet, hairline borders, tables as the main surface) where colour is used only for meaning: status,
+health, entity and the single primary action. Type is Inter (variable) with IBM Plex Mono for project codes and
+references. All design tokens live at the top of `frontend/src/styles.css`. The logo is the vector brandmark from the guide.

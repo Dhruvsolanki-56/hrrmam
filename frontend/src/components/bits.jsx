@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMe, useStages, useUsers } from '../context'
+import { useMe, useUsers } from '../context'
 
 // ---------------------------------------------------------------- dates
 const parseDay = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d) }
@@ -28,7 +28,7 @@ export const STATUS = {
 
 export function StatusPill({ status }) {
   const s = STATUS[status] || STATUS.active
-  return <span className={`pill status-${status}`}><i aria-hidden>{s.icon}</i>{s.label}</span>
+  return <span className={`pill status-${status}`}>{s.label}</span>
 }
 
 export const HEALTH = { green: 'On track', amber: 'At risk', red: 'Critical', closed: 'Closed' }
@@ -44,7 +44,7 @@ export const STATE = {
   approved: 'Approved',
   bypassed: 'Not needed',
 }
-export const StateChip = ({ state, locked }) => <span className={`state state-${state}`}>{STATE[state]}{locked ? ' 🔒' : ''}</span>
+export const StateChip = ({ state, locked }) => <span className={`state state-${state}`}>{STATE[state]}{locked && <span className="gate">locked</span>}</span>
 
 export const TASK_STATE = {
   assigned: 'Assigned', accepted: 'Accepted', in_progress: 'In progress', submitted: 'Submitted',
@@ -106,9 +106,9 @@ export function DueChip({ task }) {
 // ---------------------------------------------------------------- small building blocks
 export const Avatar = ({ name, size }) => <span className="avatar sm" style={size ? { width: size, height: size } : undefined}>{initials(name)}</span>
 
-export function Person({ user }) {
+export function Person({ user, short }) {
   if (!user) return <span className="muted">Unassigned</span>
-  return <span className="person"><Avatar name={user.name} /><span><b>{user.name}</b><small>{user.role}</small></span></span>
+  return <span className="person" title={`${user.name} · ${user.role}`}><Avatar name={user.name} /><span><b>{user.name}</b>{!short && <small>{user.role}</small>}</span></span>
 }
 
 /** Run an async action with busy + error state. */
@@ -139,11 +139,15 @@ export function UserSelect({ value, onChange, assignable = true, roles, placehol
 export function Modal({ title, intro, onClose, onSubmit, submitLabel = 'Save', busy, error, children, wide }) {
   return (
     <div className="overlay" onClick={onClose}>
-      <form className={`modal ${wide ? 'wide' : ''}`} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); onSubmit() }}>
-        <h2>{title}</h2>
-        {intro && <p className="muted">{intro}</p>}
-        {children}
-        {error && <p className="error">{error}</p>}
+      <form className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); onSubmit() }}>
+        <div className="modal-head">
+          <div><h2>{title}</h2>{intro && <p className="muted">{intro}</p>}</div>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+        </div>
+        <div className="modal-body">
+          {children}
+          {error && <p className="error">{error}</p>}
+        </div>
         <div className="modal-actions">
           <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
           <button className="btn primary" disabled={busy}>{submitLabel}</button>
@@ -155,9 +159,9 @@ export function Modal({ title, intro, onClose, onSubmit, submitLabel = 'Save', b
 
 export const Empty = ({ children }) => <p className="empty-note">{children}</p>
 
-export function Tabs({ tabs, value, onChange }) {
+export function Tabs({ tabs, value, onChange, variant }) {
   return (
-    <div className="tabs" role="tablist">
+    <div className={`tabs ${variant === 'seg' ? 'seg-tabs' : ''}`} role="tablist">
       {tabs.map((t) => (
         <button key={t.key} role="tab" aria-selected={value === t.key} className={value === t.key ? 'on' : ''} onClick={() => onChange(t.key)}>
           {t.label}{t.count != null && <b>{t.count}</b>}
