@@ -43,7 +43,7 @@ function Bell() {
     <div className="pop-wrap" ref={ref}>
       <button className="icon-btn" onClick={toggle} aria-label={`Notifications${me.unread ? `, ${me.unread} unread` : ''}`} aria-expanded={open}>
         <Icon name="bell" size={17} />
-        {me.unread > 0 && <b className="badge">{me.unread > 9 ? '9+' : me.unread}</b>}
+        {me.unread > 0 && <b className="badge" aria-hidden="true" />}
       </button>
       {open && (
         <div className="popover notifs" role="dialog" aria-label="Notifications">
@@ -67,23 +67,15 @@ function Bell() {
   )
 }
 
-function UserMenu({ compact }) {
+function UserMenu() {
   const { me, users, switchUser, signOut } = useApp()
   const [open, setOpen] = useState(false)
   const ref = useOutside(open, () => setOpen(false))
   return (
-    <div className={`pop-wrap ${compact ? 'm-user' : ''}`} ref={ref}>
-      {compact
-        ? <button className="icon-btn" onClick={() => setOpen(!open)} aria-label="Account" aria-expanded={open}><Avatar name={me.name} /></button>
-        : (
-          <button className="side-user" onClick={() => setOpen(!open)} aria-haspopup="true" aria-expanded={open}>
-            <Avatar name={me.name} />
-            <span><b>{me.name}</b><small>{me.role} · {org(me.country)}</small></span>
-            <Icon name="more" size={16} />
-          </button>
-        )}
+    <div className="pop-wrap" ref={ref}>
+      <button className="icon-btn" onClick={() => setOpen(!open)} aria-label="Account" aria-expanded={open}><Avatar name={me.name} /></button>
       {open && (
-        <div className={`popover usermenu-pop ${compact ? '' : 'up'}`}>
+        <div className="popover usermenu-pop">
           <div className="who-am-i"><Avatar name={me.name} /><span><b>{me.name}</b><small>{me.role} · {org(me.country)}</small></span></div>
           <label className="field">Switch user <small>(demo, no passwords yet)</small>
             <select value={me.id} onChange={(e) => { setOpen(false); switchUser(e.target.value) }}>
@@ -117,27 +109,19 @@ export default function Layout({ title, subtitle, back, backLabel = 'All project
   }, [])
 
   const onBoard = pathname === '/projects' && qs.includes('view=board')
-  const NAV = [
-    { h: 'Overview' },
-    { to: '/', icon: 'grid', label: 'Dashboard', on: pathname === '/' },
-    { to: '/my-work', icon: 'tasks', label: 'My work', on: pathname === '/my-work' },
-    { h: 'Projects' },
-    { to: '/projects', icon: 'list', label: 'All projects', on: pathname.startsWith('/projects') && !onBoard },
-    { to: '/projects?view=board', icon: 'board', label: 'Pipeline board', on: onBoard },
-    { h: 'Workstreams' },
-    { to: '/regulatory', icon: 'shield', label: 'Regulatory', on: pathname === '/regulatory' },
-    { to: '/artwork', icon: 'image', label: 'Artwork', on: pathname === '/artwork' },
-    { to: '/legal', icon: 'scale', label: 'Legal register', on: pathname === '/legal' },
-    { h: 'Governance' },
-    { to: '/workflows', icon: 'activity', label: 'Workflows', on: pathname.startsWith('/workflows') },
-    { to: '/audit', icon: 'history', label: 'Audit trail', on: pathname === '/audit' },
-    ...(can('manage_users') ? [{ to: '/admin', icon: 'settings', label: 'Admin', on: pathname === '/admin' }] : []),
+  // `sep` starts a new group in the nav row
+  const links = [
+    { to: '/', label: 'Overview', on: pathname === '/' },
+    { to: '/my-work', label: 'My work', on: pathname === '/my-work' },
+    { to: '/projects', label: 'Projects', on: pathname.startsWith('/projects') && !onBoard, sep: true },
+    { to: '/projects?view=board', label: 'Board', on: onBoard },
+    { to: '/regulatory', label: 'Regulatory', on: pathname === '/regulatory', sep: true },
+    { to: '/artwork', label: 'Artwork', on: pathname === '/artwork' },
+    { to: '/legal', label: 'Legal', on: pathname === '/legal' },
+    { to: '/workflows', label: 'Workflows', on: pathname.startsWith('/workflows'), sep: true },
+    { to: '/audit', label: 'Audit trail', on: pathname === '/audit' },
+    ...(can('manage_users') ? [{ to: '/admin', label: 'Admin', on: pathname === '/admin' }] : []),
   ]
-  const links = NAV.filter((n) => n.to)
-  const on = links.find((l) => l.on)
-  // no crumb when it would just repeat the title ("Regulatory / Regulatory portal")
-  const section = on && !title?.toLowerCase().includes(on.label.toLowerCase().split(' ')[0]) ? on : null
-  const tabs = ['/', '/my-work', '/projects'].map((t) => links.find((l) => l.to === t))
 
   const search = (e) => {
     e.preventDefault()
@@ -146,66 +130,58 @@ export default function Layout({ title, subtitle, back, backLabel = 'All project
 
   return (
     <div className="app">
-      <aside className="side">
-        <div className="side-top">
-          <Link to="/" className="brand" aria-label="Neo Health home" dangerouslySetInnerHTML={{ __html: logo }} />
+      <header className="hdr">
+        <div className="hdr-in hdr-top">
+          <Link to="/" className="brand" aria-label="Neo Health home">
+            <span className="brand-logo" dangerouslySetInnerHTML={{ __html: logo }} />
+            <span className="brand-sep" />
+            <span className="brand-name">Lifecycle &amp; regulatory</span>
+          </Link>
+          <div className="hdr-right">
+            <form className="gsearch" onSubmit={search} role="search">
+              <Icon name="search" size={14} />
+              <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search projects" aria-label="Search projects" />
+              <kbd>/</kbd>
+            </form>
+            <Bell />
+            {can('manage_project') && <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" size={15} /><span>New project</span></button>}
+            <UserMenu />
+            <button className="icon-btn m-only" onClick={() => setMore(true)} aria-label="Menu"><Icon name="more" size={18} /></button>
+          </div>
         </div>
-        <p className="side-org">Product lifecycle &amp; regulatory operations</p>
-        <nav className="nav" aria-label="Main">
-          {NAV.map((n, i) => n.h
-            ? <span key={i} className="nav-h">{n.h}</span>
-            : <Link key={n.to} to={n.to} className={`nav-item ${n.on ? 'active' : ''}`} aria-current={n.on ? 'page' : undefined}><Icon name={n.icon} size={16} />{n.label}</Link>)}
+        <nav className="hdr-in hdr-nav" aria-label="Main">
+          {links.map((l) => (
+            <span key={l.to} style={{ display: 'contents' }}>
+              {l.sep && <span className="sep" />}
+              <Link to={l.to} className={l.on ? 'on' : ''} aria-current={l.on ? 'page' : undefined}>{l.label}</Link>
+            </span>
+          ))}
         </nav>
-        <div className="side-foot"><UserMenu /></div>
-      </aside>
+      </header>
 
-      <div className="main">
-        <div className="sheet-main">
-          <header className="topbar">
-            <Link to="/" className="mlogo" aria-label="Neo Health home" dangerouslySetInnerHTML={{ __html: logo }} />
-            <nav className="crumbs" aria-label="Breadcrumb">
-              {back
-                ? <><Link to={back}>{backLabel}</Link><span className="sep">/</span><b>{title}</b></>
-                : section && section.label !== title
-                  ? <><Link to={section.to}>{section.label}</Link><span className="sep">/</span><b>{title}</b></>
-                  : <b>{title}</b>}
-            </nav>
-            <div className="top-right">
-              <form className="gsearch" onSubmit={search} role="search">
-                <Icon name="search" size={14} />
-                <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search projects" aria-label="Search projects" />
-                <kbd>/</kbd>
-              </form>
-              <Bell />
-              <UserMenu compact />
-              {can('manage_project') && <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" size={15} /><span>New project</span></button>}
+      <main className="page">
+        {back && (
+          <nav className="crumbs" aria-label="Breadcrumb">
+            <Link to={back}>{backLabel}</Link><span className="sep">/</span><span>{title}</span>
+          </nav>
+        )}
+        {head && (
+          <div className="page-head">
+            <div>
+              <h1>{title}</h1>
+              {subtitle && <p>{subtitle}</p>}
             </div>
-          </header>
+            {actions && <div className="page-actions">{actions}</div>}
+          </div>
+        )}
+        {children}
+      </main>
 
-          <main className="content">
-            {head && (
-              <div className="page-head">
-                <div>
-                  <h1>{title}</h1>
-                  {subtitle && <p>{subtitle}</p>}
-                </div>
-                {actions && <div className="page-actions">{actions}</div>}
-              </div>
-            )}
-            {children}
-          </main>
-        </div>
-      </div>
-
-      <nav className="tabbar" aria-label="Main">
-        {tabs.map((t) => <Link key={t.to} to={t.to} className={t.on ? 'on' : ''}><Icon name={t.icon} size={20} /><span>{t.label.replace('All projects', 'Projects')}</span></Link>)}
-        <button onClick={() => setMore(true)}><Icon name="more" size={20} /><span>More</span></button>
-      </nav>
       {more && (
         <div className="overlay sheet-wrap" onClick={() => setMore(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <h3>Menu</h3>
-            {links.map((l) => <Link key={l.to} to={l.to} onClick={() => setMore(false)} className={l.on ? 'on' : ''}><Icon name={l.icon} />{l.label}</Link>)}
+            {links.map((l) => <Link key={l.to} to={l.to} onClick={() => setMore(false)} className={l.on ? 'on' : ''}>{l.label}</Link>)}
             {can('manage_project') && <button onClick={() => { setMore(false); setCreating(true) }}><Icon name="plus" />New project</button>}
           </div>
         </div>
