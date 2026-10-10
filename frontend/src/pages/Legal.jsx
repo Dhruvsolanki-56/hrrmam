@@ -37,7 +37,7 @@ export default function Legal() {
             <thead><tr><th>Project</th><th>Agreement</th><th>Counterparty</th><th>Status</th><th>Owner</th><th>Due</th><th>Signed</th><th>Age</th></tr></thead>
             <tbody>
               {(rows || []).map((r) => (
-                <tr key={r.id} className={r.overdue ? 'row-late' : ''}>
+                <tr key={r.id} className={`reg-row ${r.overdue ? 'row-late' : ''}`}>
                   <td className="proj-cell"><Link to={`/projects/${r.project_id}?tab=legal`} className="cell-main"><span><strong>{r.project_name}</strong><small>{r.project_code || 'Code pending'}</small></span></Link></td>
                   <td data-label="Agreement">{r.label}{r.core && <small className="sub">Core</small>}</td>
                   <td data-label="Counterparty">{r.counterparty || '–'}</td>

@@ -40,12 +40,12 @@ export default function Audit() {
             <thead><tr><th>When</th><th>Project</th><th>Area</th><th>Action</th><th>Detail</th><th>By</th></tr></thead>
             <tbody>
               {(rows || []).slice(0, shown).map((e) => (
-                <tr key={e.id}>
+                <tr key={e.id} className="audit-row">
                   <td className="nowrap muted" data-label="When">{fmtDateTime(e.created_at)}</td>
                   <td data-label="Project"><Link to={`/projects/${e.project_id}?tab=activity`}><strong>{e.project_name}</strong></Link><small className="sub">{stageName(e.stage_key)}</small></td>
                   <td data-label="Area"><span className="chip plain">{label(e.area)}</span></td>
                   <td data-label="Action" className="nowrap">{label(e.action)}</td>
-                  <td data-label="Detail" className="wrap">{e.note || '–'}</td>
+                  <td data-label="Detail" className={`wrap ${e.note ? '' : 'no-note'}`}>{e.note || '–'}</td>
                   <td data-label="By" className="nowrap">{e.actor}</td>
                 </tr>
               ))}

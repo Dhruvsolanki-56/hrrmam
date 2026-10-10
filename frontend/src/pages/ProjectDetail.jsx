@@ -133,7 +133,7 @@ export default function ProjectDetail() {
           )}
         </div>
 
-        <aside className="props" aria-label="Project details">
+        <aside className={`props ${tab === 'overview' ? '' : 'props-off'}`} aria-label="Project details">
           <div>
             <h3>Details</h3>
             <dl className="p360">

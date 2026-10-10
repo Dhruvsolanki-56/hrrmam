@@ -795,7 +795,8 @@ details.controls > summary .muted { margin-left: auto; }
 .resolved { color: var(--neo-green); }
 .stage-edit-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .stage-edit { padding: 12px 16px; }
-.stage-edit > header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 0; }
+.stage-edit > header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 0; border-bottom: 0; padding-bottom: 0; min-height: 0; }
+.stage-edit > header > :last-child { display: flex; flex-wrap: nowrap; gap: 4px; flex: none; }
 .stage-edit > header .link { color: var(--ink); text-align: left; }
 .stage-edit-body { display: grid; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .chipset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
@@ -930,7 +931,7 @@ details.controls > summary .muted { margin-left: auto; }
   .mw-nav { position: static; display: flex; overflow-x: auto; gap: 4px; scrollbar-width: none; }
   .mw-nav button { flex: none; border: 1px solid var(--line); }
   .wf-facts { grid-template-columns: repeat(2, 1fr); }
-  .stage-edit > header { flex-wrap: wrap; }
+  .stage-edit > header { flex-wrap: nowrap; }
   .chip, .state, .health { white-space: normal; }
 
   .popover { position: fixed; left: 12px; right: 12px; top: 60px; width: auto; max-width: none; }
@@ -1001,6 +1002,59 @@ details.controls > summary .muted { margin-left: auto; }
   .panel > header { flex-wrap: nowrap; }
   .panel > header h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .panel > header .btn { height: 34px; padding: 0 12px; font-size: 13px; flex: none; }
+
+  /* segmented controls never get the scroll fade */
+  .tabs.seg-tabs { -webkit-mask-image: none; mask-image: none; padding-right: 0; }
+
+  /* tables inside a card: plain divided rows, not cards within cards */
+  .panel:not(.table-panel) .table tbody { gap: 0; }
+  .panel:not(.table-panel) .table tr { background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 14px 0; }
+  .panel:not(.table-panel) .table tr:last-child { border-bottom: 0; }
+  .row-late td { background: none !important; }
+  .table select, .quick select { min-width: 0; width: 100%; }
+  .panel > header > div { min-width: 0; }
+  .panel > header > div > h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .inline input, .inline textarea { flex: none; }
+
+  /* project details: shown with the Overview tab only */
+  .props.props-off { display: none; }
+
+  /* workflow diagram only scrolls sideways on a phone; the written steps below say the same */
+  .flowdiagram { display: none; }
+  .panel:has(> .flowdiagram):not(:has(.readout)) { display: none; }
+
+  /* legal register: project + agreement, status, due */
+  .table tr.reg-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+  .table tr.reg-row td.proj-cell { grid-column: 1; grid-row: 1; }
+  .table tr.reg-row td[data-label="Status"] { grid-column: 2; grid-row: 1; }
+  .table tr.reg-row td[data-label="Agreement"] { grid-column: 1 / -1; font-weight: 500; }
+  .table tr.reg-row td[data-label="Agreement"] .sub { display: inline; margin-left: 8px; }
+  .table tr.reg-row td[data-label="Due"] { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+  .table tr.reg-row td[data-label="Due"]::before { display: inline; content: 'Due '; text-transform: none; letter-spacing: 0; font-size: 13px; }
+  .table tr.reg-row td[data-label]:not([data-label="Due"])::before { display: none; }
+  .table tr.reg-row td[data-label="Counterparty"], .table tr.reg-row td[data-label="Owner"], .table tr.reg-row td[data-label="Signed"], .table tr.reg-row td[data-label="Age"] { display: none; }
+
+  /* audit trail: what happened, when, where, who */
+  .table tr.audit-row { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; }
+  .table tr.audit-row td[data-label]::before { display: none; }
+  .table tr.audit-row td[data-label="Action"] { grid-column: 1; grid-row: 1; font-weight: 600; }
+  .table tr.audit-row td[data-label="When"] { grid-column: 2; grid-row: 1; font-size: 12.5px; }
+  .table tr.audit-row td[data-label="Project"] { grid-column: 1 / -1; }
+  .table tr.audit-row td[data-label="Detail"] { grid-column: 1 / -1; font-size: 13px; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .table tr.audit-row td[data-label="By"] { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); }
+  .table tr.audit-row td[data-label="Area"] { display: none; }
+
+  /* admin users: person and switch, then role and country */
+  .table td.u-person { grid-column: 1; grid-row: 1; }
+  .table td.u-active { grid-column: 2; grid-row: 1; justify-self: end; align-self: center; }
+  .table tr:has(td.u-person) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .table tr:has(td.u-person) td[data-label]::before { display: none; }
+  .table tr.audit-row td.no-note { display: none; }
+  .kpis.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kpis.three .kpi { border-top: 0; border-left: 1px solid var(--line); padding: 14px 12px; }
+  .kpis.three .kpi:first-child { border-left: 0; }
+  .kpis.three .kpi b { font-size: 26px; }
+  .kpis.three .kpi small { display: none; }
 }
 
 /* =====================================================================

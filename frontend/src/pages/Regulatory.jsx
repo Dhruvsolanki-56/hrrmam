@@ -37,7 +37,7 @@ export default function Regulatory() {
       </section>
 
       <section className="panel">
-        <header><h3>Dossiers and module status</h3><span className="muted">M1–M5 appear only where the submission type needs them</span></header>
+        <header><h3>Dossiers and module status</h3><span className="muted hide-m">M1–M5 appear only where the submission type needs them</span></header>
         {!d.dossiers.length && <Empty>No dossiers in preparation.</Empty>}
         <div className="dossier-grid">
           {d.dossiers.map((x) => (

@@ -25,12 +25,12 @@ function Users() {
         <tbody>
           {(users || []).map((u) => (
             <tr key={u.id} className={u.active ? '' : 'row-off'}>
-              <td><span className="person"><Avatar name={u.name} /><span><b>{u.name}</b><small>{u.email || 'no email'}</small></span></span></td>
-              <td><select value={u.role_key} onChange={(e) => save(u.id, { role_key: e.target.value })} aria-label={`Role for ${u.name}`}>
+              <td className="u-person"><span className="person"><Avatar name={u.name} /><span><b>{u.name}</b><small>{u.email || 'no email'}</small></span></span></td>
+              <td data-label="Role"><select value={u.role_key} onChange={(e) => save(u.id, { role_key: e.target.value })} aria-label={`Role for ${u.name}`}>
                 {config.roles.map((r) => <option key={r.key} value={r.key}>{r.name}</option>)}</select></td>
-              <td><select value={u.country} onChange={(e) => save(u.id, { country: e.target.value })} aria-label={`Country for ${u.name}`}>
+              <td data-label="Country"><select value={u.country} onChange={(e) => save(u.id, { country: e.target.value })} aria-label={`Country for ${u.name}`}>
                 <option value="AU">Neo Health Australia</option><option value="IN">Neo India</option><option value="Partner">Manufacturing partner</option></select></td>
-              <td><label className="switch"><input type="checkbox" checked={u.active} onChange={(e) => save(u.id, { active: e.target.checked })} aria-label={`${u.name} active`} /><i /></label></td>
+              <td className="u-active"><label className="switch"><input type="checkbox" checked={u.active} onChange={(e) => save(u.id, { active: e.target.checked })} aria-label={`${u.name} active`} /><i /></label></td>
             </tr>
           ))}
         </tbody>
