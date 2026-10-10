@@ -24,7 +24,8 @@ function StageCard({ project, row, onChange, goTab, locked }) {
   const can = useCan()
   const st = stageOf(stages, row.key)
   const [note, setNote] = useState('')
-  const { busy, error, run } = useDo()
+  const [showNote, setShowNote] = useState(false)
+  const { busy, error, run, setError } = useDo()
   const sup = me.role_key === 'super_admin'
   const canSubmit = sup || st.owner_roles.includes(me.role_key) || can('manage_project')
   const canDecide = (sup || st.approver_roles.includes(me.role_key))
@@ -35,10 +36,17 @@ function StageCard({ project, row, onChange, goTab, locked }) {
   const blocked = row.blockers.length > 0
   const disabled = busy || locked
 
-  const go = (action) => run(async () => {
-    onChange(await api.act(project.id, { action, note, stage_key: row.key }))
-    setNote('')
-  })
+  const go = (action) => {
+    if (['send_back', 'reject', 'bypass'].includes(action) && !note.trim()) {
+      setShowNote(true)
+      setError('Add a short note first: it goes to the owner and the audit trail.')
+      return
+    }
+    run(async () => {
+      onChange(await api.act(project.id, { action, note, stage_key: row.key }))
+      setNote(''); setShowNote(false)
+    })
+  }
 
   return (
     <section className="panel callout stagecard">
@@ -66,16 +74,16 @@ function StageCard({ project, row, onChange, goTab, locked }) {
       <p className="callout-desc">{st.description}</p>
 
       {blocked && (
-        <div className="blockers" role="note">
-          <b>{row.state === 'in_progress' ? 'Before this can be submitted' : 'Needs attention before approval'}</b>
+        <details className="blockers" role="note">
+          <summary><b>{row.blockers.length} thing{row.blockers.length > 1 ? 's' : ''} to finish first</b></summary>
           <ul>{row.blockers.map((b) => <li key={b}>{b}</li>)}</ul>
           <button className="link" onClick={() => goTab(tabOf(st) || 'tasks')}>Open {tabOf(st) ? 'the workstream' : 'tasks'} →</button>
-        </div>
+        </details>
       )}
 
-      <label className="field">Note <small>(required to send back, reject or bypass)</small>
-        <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short comment for the record…" disabled={locked} />
-      </label>
+      {showNote
+        ? <label className="field">Note<textarea rows={2} autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short comment for the record…" disabled={locked} /></label>
+        : !locked && <button className="link note-toggle" onClick={() => setShowNote(true)}>+ Add a note</button>}
       {error && <p className="error">{error}</p>}
       <div className="actions">
         {row.state === 'in_progress' && canSubmit && (
@@ -120,8 +128,8 @@ function ProjectControls({ project, onChange }) {
   })
 
   return (
-    <section className="panel controls">
-      <header><h3>{closed ? 'Project closed' : 'Project controls'}</h3></header>
+    <details className="panel controls" open={closed || onHold}>
+      <summary><h3>{closed ? 'Project closed' : 'Project actions'}</h3><span className="muted">Hold, move back, lock</span></summary>
       {project.status === 'rejected' && (
         <p className="closed-note">Rejected at {stageOf(stages, rejection?.stage_key || project.stage_key)?.name}.{rejection?.note && <> “{rejection.note}”</>}</p>
       )}
@@ -165,7 +173,7 @@ function ProjectControls({ project, onChange }) {
           </ul>
         </details>
       )}
-    </section>
+    </details>
   )
 }
 
