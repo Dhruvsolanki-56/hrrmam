@@ -138,6 +138,11 @@ export function UserSelect({ value, onChange, assignable = true, roles, placehol
 }
 
 export function Modal({ title, intro, onClose, onSubmit, submitLabel = 'Save', busy, error, children, wide }) {
+  useEffect(() => {
+    const k = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', k)
+    return () => document.removeEventListener('keydown', k)
+  }, [onClose])
   return (
     <div className="overlay" onClick={onClose}>
       <form className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); onSubmit() }}>

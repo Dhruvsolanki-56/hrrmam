@@ -1127,3 +1127,8 @@ a.metric:first-child:hover { background: #00363b; }
 .rv-finds .rv-high { border-color: var(--danger-dot); }
 .rv-finds .rv-medium { border-color: var(--warn-dot); }
 @media (max-width: 640px) { .rv-mods li { grid-template-columns: minmax(0, 1fr); } }
+
+/* long unbroken text must wrap inside its card */
+.clars { grid-template-columns: minmax(0, 1fr); }
+.clar, .clar > header, .clar .t-title, .clar .end, .reopen, .rv-finds > li, .rv-mods li { min-width: 0; }
+.clar, .clar .t-title strong, .clar .t-title small, .clar-answer, .reopen b, .reopen small, .rv-finds, .rv-mods li, .brief dd, .t-files li { overflow-wrap: anywhere; }

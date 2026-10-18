@@ -105,6 +105,7 @@ def _may(user: User, p: Project) -> bool:
     return user.role_key == "super_admin" or (dos is not None and modules.can_edit_stage(user, p, dos.key)) or user.can("manage_project")
 
 
+@common.serial
 def add_value(db: Session, user: User, p: Project, data) -> DossierValue:
     common.ensure_open(p)
     if not _may(user, p):
@@ -119,6 +120,7 @@ def add_value(db: Session, user: User, p: Project, data) -> DossierValue:
     return v
 
 
+@common.serial
 def decide(db: Session, user: User, p: Project, key: str, decision: str, note: str) -> ReviewDecision:
     common.ensure_open(p)
     if user.role_key not in ("regulatory", "super_admin") and not user.can("manage_project"):
@@ -150,6 +152,9 @@ def save_reference(db: Session, user: User, data, rid: int | None = None) -> Ref
             setattr(r, k, v.strip() if isinstance(v, str) else v)
     if not r.parameter:
         raise WorkflowError("Name the parameter.")
+    clash = db.scalar(select(ReferenceLimit).where(ReferenceLimit.parameter == r.parameter, ReferenceLimit.id != (r.id or 0)))
+    if clash:
+        raise WorkflowError("There is already a reference for this parameter. Edit that one instead.")
     if not rid:
         db.add(r)
     db.commit()

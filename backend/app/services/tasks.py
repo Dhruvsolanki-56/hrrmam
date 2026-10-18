@@ -66,6 +66,7 @@ def _only_assignee(user: User, t: Task, verb: str):
         raise Forbidden(f"Only the assignee ({t.assignee.name}) can {verb} this task.")
 
 
+@common.serial
 def apply_action(db: Session, user: User, t: Task, a) -> Task:
     p = t.project
     act, note = a.action, a.note.strip()

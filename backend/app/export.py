@@ -18,6 +18,10 @@ def _sheet(title: str, head: list[str], rows: list[list], widths: list[int], fla
     ws.append(head)
     for r in rows:
         ws.append(r)
+    for row in ws.iter_rows(min_row=2):
+        for c in row:
+            if isinstance(c.value, str) and c.value[:1] in ("=", "+", "-", "@"):
+                c.data_type = "s"  # never let typed text run as a formula in Excel
     fill = PatternFill("solid", fgColor="004248")
     for c in ws[1]:
         c.font, c.fill, c.alignment = Font(bold=True, color="FFFFFF"), fill, Alignment(vertical="center")

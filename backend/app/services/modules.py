@@ -97,6 +97,7 @@ def _guard_status(p: Project, kind: str, obj, new: str):
             raise WorkflowError("This needs approval: submit it for approval and an approver decides.")
 
 
+@common.serial
 def entry_action(db: Session, user: User, kind: str, obj, action: str, note: str):
     p = obj.project
     cfg, rule = ENTRY[kind], _rule(p, kind)
@@ -417,6 +418,7 @@ def get_document(db: Session, doc_id: int) -> Document:
     return d
 
 
+@common.serial
 def add_version(db: Session, user: User, d: Document, data) -> Document:
     p = d.project
     check_edit(user, p, d.stage_key, "this document")
@@ -445,6 +447,7 @@ def review_roles(d: Document) -> list[str]:
     return ["director", "project_manager"]
 
 
+@common.serial
 def document_action(db: Session, user: User, d: Document, action: str, note: str) -> Document:
     p = d.project
     common.ensure_open(p)

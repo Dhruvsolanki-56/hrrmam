@@ -28,7 +28,7 @@ class ProjectCreate(BaseModel):
     name: str = Field(min_length=2, max_length=200)
     product: str = ""
     potential_client: str = Field(default="", max_length=200)
-    opportunity_value: float | None = Field(default=None, ge=0, le=10_000_000_000)
+    opportunity_value: float | None = Field(default=None, ge=0, le=10_000_000_000, allow_inf_nan=False)
     project_type: ProjectType = "Development"
     category: str = ""
     market: str = "Australia"
@@ -49,7 +49,7 @@ class ProjectUpdate(BaseModel):
     initiator: str | None = None
     summary: str | None = None
     potential_client: str | None = Field(default=None, max_length=200)
-    opportunity_value: float | None = Field(default=None, ge=0, le=10_000_000_000)
+    opportunity_value: float | None = Field(default=None, ge=0, le=10_000_000_000, allow_inf_nan=False)
     formulation: str | None = None
     commercial_expectations: str | None = None
     manufacturer_info: str | None = None
@@ -96,7 +96,7 @@ class TaskActionIn(BaseModel):
 
 class ValueIn(BaseModel):
     parameter: str = Field(min_length=1, max_length=120)
-    value: float
+    value: float = Field(allow_inf_nan=False, ge=-1e12, le=1e12)
     unit: str = Field(default="", max_length=20)
     module: Literal["", "M1", "M2", "M3", "M4", "M5"] = ""
     page: str = Field(default="", max_length=60)
@@ -111,7 +111,7 @@ class ReviewDecisionIn(BaseModel):
 class ReferenceIn(BaseModel):
     parameter: str | None = Field(default=None, max_length=120)
     comparator: Literal["max", "min"] | None = None
-    limit_value: float | None = None
+    limit_value: float | None = Field(default=None, allow_inf_nan=False, ge=-1e12, le=1e12)
     unit: str | None = Field(default=None, max_length=20)
     source: str | None = Field(default=None, max_length=200)
     reference_date: date | None = None

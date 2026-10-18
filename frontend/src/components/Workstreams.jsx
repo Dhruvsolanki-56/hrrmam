@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api'
-import { useCan, useConfig, useMe } from '../context'
+import { useCan, useConfig, useMe, useStages } from '../context'
 import { Empty, Person, fmtDay, label, useDo } from './bits'
 import FormModal from './FormModal'
 import ReviewAssistant from './ReviewAssistant'
@@ -8,6 +8,14 @@ import Icon from './Icon'
 import { inDays, fromInput, toInput } from './bits'
 
 const closedProject = (p) => p.status === 'rejected' || p.status === 'completed'
+/** Read-only when the project is closed, or when this person's role does not work on the workstream (the server enforces it too). */
+function useReadOnly(project, feature) {
+  const me = useMe()
+  const can = useCan()
+  const st = useStages().find((s) => (s.features || []).includes(feature))
+  if (closedProject(project)) return true
+  return !!st && !(me.role_key === 'super_admin' || can('manage_project') || st.owner_roles.includes(me.role_key) || st.approver_roles.includes(me.role_key))
+}
 
 /** Select that saves immediately; the server decides if the change is allowed. */
 function QuickSelect({ value, options, onSave, disabled, label: aria }) {
@@ -64,7 +72,7 @@ export function LegalTab({ project, onChange }) {
   const config = useConfig()
   const [adding, setAdding] = useState(false)
   const [edit, setEdit] = useState(null)
-  const off = closedProject(project)
+  const off = useReadOnly(project, 'agreements')
   const core = project.agreements.filter((a) => a.core)
   const other = project.agreements.filter((a) => !a.core)
   const signed = core.filter((a) => a.status === 'signed').length
@@ -129,7 +137,7 @@ export function RegulatoryTab({ project, onChange }) {
   const [item, setItem] = useState(null) // item being edited, or 'new'
   const [recording, setRecording] = useState(false)
   const [ack, setAck] = useState(null)
-  const off = closedProject(project)
+  const off = useReadOnly(project, 'dossier')
   const types = config.submission_types
   const tmpl = types[project.submission_type] || []
   const modulesAllowed = [...new Set(tmpl.map((t) => t.module).filter(Boolean))]
@@ -237,7 +245,7 @@ export function RegulatoryTab({ project, onChange }) {
 export function ManufacturerTab({ project, onChange }) {
   const config = useConfig()
   const [edit, setEdit] = useState(null)
-  const off = closedProject(project)
+  const off = useReadOnly(project, 'mfr')
   const got = project.mfr_requests.filter((m) => m.status === 'accepted').length
   const fields = [
     { key: 'manufacturer', label: 'Manufacturer', type: 'text', placeholder: 'e.g. Zenith Pharma Pvt Ltd' },

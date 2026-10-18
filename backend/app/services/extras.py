@@ -11,6 +11,7 @@ from .common import Forbidden, WorkflowError
 
 
 # ------------------------------------------------------------------ task attachments
+@common.serial
 def add_attachment(db: Session, user: User, t: Task, name: str, link: str, note: str) -> Task:
     p = t.project
     common.ensure_open(p)
@@ -46,6 +47,7 @@ def _may_clarify(user: User, p: Project) -> bool:
     return False
 
 
+@common.serial
 def create_clarification(db: Session, user: User, p: Project, question: str, responder_id: int | None, due: date | None) -> Clarification:
     common.ensure_open(p)
     if not _may_clarify(user, p):
@@ -64,6 +66,7 @@ def create_clarification(db: Session, user: User, p: Project, question: str, res
     return c
 
 
+@common.serial
 def clarification_action(db: Session, user: User, c: Clarification, action: str, note: str) -> Clarification:
     p = c.project
     common.ensure_open(p)
@@ -125,6 +128,7 @@ def _subject(db: Session, p: Project, kind: str, ref: str):
     raise WorkflowError("Unknown kind of record.")
 
 
+@common.serial
 def request_reopen(db: Session, user: User, p: Project, kind: str, ref: str, reason: str) -> ReopenRequest:
     common.ensure_open(p)
     ref = str(ref)
@@ -149,6 +153,7 @@ def request_reopen(db: Session, user: User, p: Project, kind: str, ref: str, rea
     return r
 
 
+@common.serial
 def decide_reopen(db: Session, user: User, r: ReopenRequest, approve: bool, note: str) -> ReopenRequest:
     p = r.project
     common.ensure_open(p)

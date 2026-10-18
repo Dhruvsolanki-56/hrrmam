@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,6 +17,12 @@ app.include_router(core.public)
 app.include_router(core.router)
 app.include_router(projects.router)
 app.include_router(workflows_router.router)
+
+
+@app.exception_handler(RequestValidationError)
+async def _invalid(_: Request, e: RequestValidationError):
+    # keep only the readable parts: echoing the rejected input back can itself fail (NaN, binary)
+    return JSONResponse({"detail": [{"loc": list(x.get("loc", [])), "msg": str(x.get("msg", "Invalid value"))} for x in e.errors()]}, status_code=422)
 
 
 @app.exception_handler(common.WorkflowError)
@@ -51,5 +58,7 @@ if (config.FRONTEND_DIST / "index.html").exists():
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):
+        if path == "api" or path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
         f = config.FRONTEND_DIST / path
         return FileResponse(f if path and f.is_file() else config.FRONTEND_DIST / "index.html")

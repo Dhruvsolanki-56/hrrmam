@@ -1,4 +1,6 @@
 """Shared helpers: errors, permission checks, audit logging, settings."""
+import functools
+import threading
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -17,6 +19,20 @@ class Forbidden(Exception):
 
 class NotFound(Exception):
     """HTTP 404."""
+
+
+_LOCK = threading.RLock()
+
+
+def serial(fn):
+    """Run a state-changing action one at a time and from fresh data, so two people acting on the same record at the
+    same moment cannot both win (SQLite has no row locks)."""
+    @functools.wraps(fn)
+    def run(db, *a, **k):
+        with _LOCK:
+            db.expire_all()
+            return fn(db, *a, **k)
+    return run
 
 
 def now() -> datetime:
