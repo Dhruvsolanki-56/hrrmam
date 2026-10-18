@@ -307,6 +307,9 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
                     raise WorkflowError("Submit the work for approval first." if act == "approve"
                                         else "Only work that is awaiting approval can be decided.")
                 if act == "approve":
+                    mine = [e for e in p.events if e.stage_key == row.stage_key and e.area == "stage" and e.action == "submit"]
+                    if mine and max(mine, key=lambda e: e.id).actor == user.name and user.role_key != "super_admin":
+                        raise Forbidden("Someone else has to approve work you submitted yourself.")
                     b = blockers(p, row.stage_key)
                     if b:
                         raise WorkflowError("Cannot approve yet: " + "; ".join(b) + ".")

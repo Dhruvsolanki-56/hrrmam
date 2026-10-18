@@ -230,8 +230,9 @@ try:
     rt = mktask(pid, 'project_manager', 'commercial', 'commercial', 'Renegotiate the unit cost with the manufacturer')
     check('Commercial cannot resubmit until the renegotiation task is done (422)', act(pid, 'commercial', 'submit', 'commercial')[0] == 422)
     check('renegotiation done, commercial resubmitted', finish_task(rt, 'commercial', 'project_manager') and act(pid, 'commercial', 'submit', 'commercial')[0] == 200)
-    s, p = act(pid, 'commercial', 'approve', 'commercial')
-    check('Amit (Commercial lead) approves the commercial stage', s == 200, p)
+    check('Amit cannot approve the stage he submitted himself (403)', act(pid, 'commercial', 'approve', 'commercial')[0] == 403)
+    s, p = act(pid, 'director', 'approve', 'commercial')
+    check('Rajiv approves the commercial stage', s == 200, p)
     check('the last lane closed: Dossier Ready opens by itself', p['active_stages'] == ['dossier_ready'], p['active_stages'])
 
     # ================================================================ 4. submission, RFI, approval
@@ -319,7 +320,7 @@ try:
         def go(role, key):
             gate.wait()
             res[key] = act(q, role, 'approve', key)[0]
-        th = [threading.Thread(target=go, args=('director', 'commercial')), threading.Thread(target=go, args=('legal', 'legal'))]
+        th = [threading.Thread(target=go, args=('director', 'commercial')), threading.Thread(target=go, args=('super_admin', 'legal'))]
         [x.start() for x in th]; [x.join() for x in th]
         after = stage_state(q)
         if res == {'commercial': 200, 'legal': 200} and after['dossier_ready'] == 'in_progress':

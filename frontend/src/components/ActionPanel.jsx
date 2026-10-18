@@ -28,7 +28,9 @@ function StageCard({ project, row, onChange, goTab, locked, fold }) {
   const { busy, error, run, setError } = useDo()
   const sup = me.role_key === 'super_admin'
   const canSubmit = sup || st.owner_roles.includes(me.role_key) || can('manage_project')
-  const canDecide = (sup || st.approver_roles.includes(me.role_key))
+  const lastSubmit = [...(project.events || [])].reverse().find((e) => e.stage_key === row.key && e.area === 'stage' && e.action === 'submit')
+  const selfSubmitted = !sup && lastSubmit?.actor === me.name
+  const canDecide = (sup || st.approver_roles.includes(me.role_key)) && !selfSubmitted
   const waitsOn = (k) => stageOf(stages, k).name
   const dependents = stages.filter((s) => s.requires.includes(st.key))
   const unlocks = dependents.filter((s) => s.requires.every((r) => r === st.key || ['approved', 'bypassed'].includes(project.stage_states[r])))
@@ -52,7 +54,7 @@ function StageCard({ project, row, onChange, goTab, locked, fold }) {
   const Wrap = fold ? 'details' : 'div'
   const head = fold
     ? <summary><h2>{st.name}</h2><span>{mine && <span className="you">Your turn · </span>}<StateChip state={row.state} /></span></summary>
-    : <><header><span className="eyebrow">Phase {st.phase} of {stages.length}</span><StateChip state={row.state} /></header><h2>{st.name}</h2></>
+    : <><header><span className="eyebrow">Phase {st.phase} of {Math.max(...stages.map((x) => x.phase))}</span><StateChip state={row.state} /></header><h2>{st.name}</h2></>
   return (
     <section className="panel callout stagecard">
       <Wrap className={fold ? 'stagecard-fold' : undefined} {...(fold ? { open: mine } : {})}>
@@ -99,7 +101,7 @@ function StageCard({ project, row, onChange, goTab, locked, fold }) {
             {st.can_close && <button className="btn danger" disabled={disabled} onClick={() => go('reject')}>Reject project</button>}
           </>
         )}
-        {row.state === 'awaiting_approval' && !canDecide && <span className="muted">Waiting for {st.approver} to decide.</span>}
+        {row.state === 'awaiting_approval' && !canDecide && <span className="muted">{selfSubmitted ? 'You submitted this, so someone else has to approve it.' : `Waiting for ${st.approver} to decide.`}</span>}
         {st.optional && can('bypass_optional') && <button className="btn line" disabled={disabled} onClick={() => go('bypass')}>Not needed: bypass</button>}
         {tabOf(st) && <button className="btn ghost" onClick={() => goTab(tabOf(st))}>Open workstream</button>}
       </div>

@@ -121,6 +121,10 @@ def entry_action(db: Session, user: User, kind: str, obj, action: str, note: str
         if obj.status != cfg["review"]:
             raise WorkflowError("This entry has not been submitted for approval.")
         if action == "approve":
+            title = _title(kind, obj)
+            sent = [e for e in p.events if e.area == cfg["area"] and e.action == "submit" and e.note.startswith(title)]
+            if sent and max(sent, key=lambda e: e.id).actor == user.name and user.role_key != "super_admin":
+                raise Forbidden("Someone else has to approve work you submitted yourself.")
             obj.status = cfg["approved"]
             if kind == "mfr":
                 obj.received_on = obj.received_on or date.today()

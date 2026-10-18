@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { api, getUid, setUid } from './api'
-import { AppContext } from './context'
+import { AppContext, useCan } from './context'
 import Admin from './pages/Admin'
 import Artwork from './pages/Artwork'
 import Audit from './pages/Audit'
@@ -23,6 +23,11 @@ function Splash({ waking }) {
       <p>{waking ? 'Waking up the server — the first load can take up to a minute.' : 'Loading…'}</p>
     </div>
   )
+}
+
+function AdminGate() {
+  const can = useCan()
+  return can('manage_users') ? <Admin /> : <Navigate to="/" replace />
 }
 
 export default function App() {
@@ -83,7 +88,7 @@ export default function App() {
         <Route path="/artwork" element={<Artwork />} />
         <Route path="/legal" element={<Legal />} />
         <Route path="/audit" element={<Audit />} />
-        <Route path="/admin" element={<Admin />} />
+        <Route path="/admin" element={<AdminGate />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppContext.Provider>

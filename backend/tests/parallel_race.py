@@ -39,7 +39,7 @@ def race(pid, patched):
         p1, p2 = s1.get(Project, pid), s2.get(Project, pid)
         _ = [r.state for r in p1.stages], [r.state for r in p2.stages]   # both requests have read the project
         u1 = s1.scalar(select(User).where(User.role_key == "director"))
-        u2 = s2.scalar(select(User).where(User.role_key == "legal"))
+        u2 = s2.scalar(select(User).where(User.role_key == "director"))
         E.apply_action(s1, u1, p1, sc.ActionIn(action="approve", stage_key="commercial"))
         E.apply_action(s2, u2, p2, sc.ActionIn(action="approve", stage_key="legal"))
         s1.close(); s2.close()

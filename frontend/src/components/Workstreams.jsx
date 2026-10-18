@@ -22,12 +22,17 @@ function QuickSelect({ value, options, onSave, disabled, label: aria }) {
 }
 /** Submit / approve / request changes for one entry. The server enforces who may do what. */
 const ENTRY_UI = {
-  agreement: { review: 'in_review', work: ['not_started', 'drafting', 'changes_requested'], act: (id, d) => api.agreementAct(id, d) },
-  dossier_item: { review: 'awaiting_approval', work: ['missing', 'draft', 'changes_requested'], act: (id, d) => api.dossierAct(id, d) },
-  mfr: { review: 'under_review', work: ['requested', 'received', 'changes_requested'], act: (id, d) => api.mfrAct(id, d) },
+  agreement: { area: 'legal', title: (o) => o.label, review: 'in_review', work: ['not_started', 'drafting', 'changes_requested'], act: (id, d) => api.agreementAct(id, d) },
+  dossier_item: { area: 'dossier', title: (o) => `${o.module ? o.module + ' ' : ''}${o.title}`, review: 'awaiting_approval', work: ['missing', 'draft', 'changes_requested'], act: (id, d) => api.dossierAct(id, d) },
+  mfr: { area: 'manufacturer', title: (o) => o.label, review: 'under_review', work: ['requested', 'received', 'changes_requested'], act: (id, d) => api.mfrAct(id, d) },
 }
-function EntryApproval({ kind, obj, onChange, disabled }) {
+function EntryApproval({ kind, obj, project, onChange, disabled }) {
   const ui = ENTRY_UI[kind]
+  const me = useMe()
+  const can = useCan()
+  const title = ui.title ? ui.title(obj) : ''
+  const last = [...(project?.events || [])].reverse().find((e) => e.action === 'submit' && e.area === ui.area && e.note.startsWith(title))
+  const mayDecide = can('approve') && !(me.role_key !== 'super_admin' && last?.actor === me.name)
   const { busy, error, run } = useDo()
   const go = (action, ask) => {
     let note = ''
@@ -39,7 +44,8 @@ function EntryApproval({ kind, obj, onChange, disabled }) {
     <span className="entry-actions">
       {obj.status === 'changes_requested' && <span className="chip warn">Changes requested</span>}
       {ui.work.includes(obj.status) && <button className="link" disabled={busy} onClick={() => go('submit')}>Submit for approval</button>}
-      {obj.status === ui.review && (
+      {obj.status === ui.review && !mayDecide && <small className="muted">Waiting for an approver</small>}
+      {obj.status === ui.review && mayDecide && (
         <>
           <button className="link" disabled={busy} onClick={() => go('approve')}>Approve</button>
           <button className="link danger" disabled={busy} onClick={() => go('reject', true)}>Request changes</button>
@@ -70,7 +76,7 @@ export function LegalTab({ project, onChange }) {
           <tr key={a.id} className={a.overdue ? 'row-late' : ''}>
             <td><strong>{a.label}</strong>{a.age_days > 0 && a.status !== 'not_started' && a.status !== 'signed' && <small className="sub">open {a.age_days} days</small>}</td>
             <td data-label="Counterparty">{a.counterparty || <span className="muted">–</span>}</td>
-            <td data-label="Status"><QuickSelect value={a.status} options={opts(config.agreement_status)} disabled={off} label={`${a.label} status`} onSave={async (v) => onChange(await api.updateAgreement(a.id, { status: v }))} /><EntryApproval kind="agreement" obj={a} onChange={onChange} disabled={off} /></td>
+            <td data-label="Status"><QuickSelect value={a.status} options={opts(config.agreement_status)} disabled={off} label={`${a.label} status`} onSave={async (v) => onChange(await api.updateAgreement(a.id, { status: v }))} /><EntryApproval project={project} kind="agreement" obj={a} onChange={onChange} disabled={off} /></td>
             <td data-label="Owner">{a.owner ? a.owner.name : <span className="muted">–</span>}</td>
             <td data-label="Due" className={a.overdue ? 'late' : ''}>{fmtDay(a.due_date)}</td>
             <td data-label="Signed">{fmtDay(a.signed_date)}</td>
@@ -167,7 +173,7 @@ export function RegulatoryTab({ project, onChange }) {
                 <tr key={i.id}>
                   <td data-label="Module">{i.module ? <span className="chip plain">{i.module}</span> : <span className="muted">–</span>}</td>
                   <td><strong>{i.title}</strong>{!i.required && <small className="sub">optional</small>}{i.notes && <small className="sub">{i.notes}</small>}</td>
-                  <td data-label="Status"><QuickSelect value={i.status} options={opts(config.dossier_status)} disabled={off} label={`${i.title} status`} onSave={async (v) => onChange(await api.updateDossierItem(i.id, { status: v }))} /><EntryApproval kind="dossier_item" obj={i} onChange={onChange} disabled={off} /></td>
+                  <td data-label="Status"><QuickSelect value={i.status} options={opts(config.dossier_status)} disabled={off} label={`${i.title} status`} onSave={async (v) => onChange(await api.updateDossierItem(i.id, { status: v }))} /><EntryApproval project={project} kind="dossier_item" obj={i} onChange={onChange} disabled={off} /></td>
                   <td data-label="File"><Link href={i.link} /></td>
                   <td><button className="link" disabled={off} onClick={() => setItem(i)}>Edit</button></td>
                 </tr>
@@ -250,7 +256,7 @@ export function ManufacturerTab({ project, onChange }) {
                 <tr key={m.id} className={m.overdue ? 'row-late' : ''}>
                   <td><strong>{m.label}</strong>{!m.required && <small className="sub">optional</small>}{m.notes && <small className="sub">{m.notes}</small>}</td>
                   <td data-label="Manufacturer">{m.manufacturer || '–'}</td>
-                  <td data-label="Status"><QuickSelect value={m.status} options={opts(config.mfr_status)} disabled={off} label={`${m.label} status`} onSave={async (v) => onChange(await api.updateMfr(m.id, { status: v }))} /><EntryApproval kind="mfr" obj={m} onChange={onChange} disabled={off} /></td>
+                  <td data-label="Status"><QuickSelect value={m.status} options={opts(config.mfr_status)} disabled={off} label={`${m.label} status`} onSave={async (v) => onChange(await api.updateMfr(m.id, { status: v }))} /><EntryApproval project={project} kind="mfr" obj={m} onChange={onChange} disabled={off} /></td>
                   <td data-label="Needed by" className={m.overdue ? 'late' : ''}>{fmtDay(m.due_date)}</td>
                   <td data-label="Received">{fmtDay(m.received_on)}</td>
                   <td data-label="File"><Link href={m.link} /></td>

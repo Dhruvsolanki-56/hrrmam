@@ -111,7 +111,7 @@ export default function DocList({ project, onChange, stageKey, artwork, title })
             { key: 'required', label: 'Required', hint: ' Must be approved before the workstream can be submitted.', type: 'checkbox' },
           ]}
           initial={{ stage_key: stageKey || '', kind: kinds[0], required: true }}
-          onSave={async (d) => onChange(await api.createDocument(project.id, { ...d, stage_key: artwork ? 'artwork' : d.stage_key || stageKey || '' }))}
+          onSave={async (d) => onChange(await api.createDocument(project.id, { ...d, artwork: !!artwork, stage_key: artwork ? 'artwork' : d.stage_key || stageKey || '' }))}
           onClose={() => setAdding(false)} submitLabel="Add" />
       )}
     </section>

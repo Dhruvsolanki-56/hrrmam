@@ -82,7 +82,7 @@ export default function ProjectDetail() {
               <Lanes project={project} goTab={goTab} />
               <ActionPanel project={project} onChange={setProject} goTab={goTab} />
               <section className="panel">
-                <header><h3>Project journey</h3><span className="muted hide-m">{project.flow.stages.length} phases · {project.workflow?.name}{project.workflow?.version ? ` v${project.workflow.version}` : ""}</span></header>
+                <header><h3>Project journey</h3><span className="muted hide-m">{new Set(project.flow.stages.map((x) => x.phase)).size} phases · {project.workflow?.name}{project.workflow?.version ? ` v${project.workflow.version}` : ""}</span></header>
                 <StageList project={project} />
               </section>
             </>
