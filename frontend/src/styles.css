@@ -1110,3 +1110,20 @@ a.metric:first-child:hover { background: #00363b; }
   .clar > header { flex-direction: column; }
   .reopen-act input { min-width: 0; flex: 1 1 100%; }
 }
+
+/* ---- regulatory review assistant ---- */
+.review h4 { margin: 18px 0 8px; font-size: 13px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+.rv-mods, .rv-finds { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rv-mods li { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 2px 14px; padding: 8px 12px; border-radius: var(--r); background: var(--tint); }
+.rv-mods li small { grid-column: 1 / -1; color: var(--muted); overflow-wrap: anywhere; }
+.rv-mods .rv-complete { background: var(--tint-green); }
+.rv-mods .rv-attention, .rv-mods .rv-missing { background: #fdf8ec; color: #5c3f00; }
+.rv-mods .rv-not_applicable { color: var(--muted); }
+.rv-finds > li { display: grid; gap: 4px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); }
+.rv-finds > li > div { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.rv-finds p { margin: 0; }
+.rv-finds ul { margin: 0; padding-left: 18px; }
+.rv-finds small { color: var(--muted); }
+.rv-finds .rv-high { border-color: var(--danger-dot); }
+.rv-finds .rv-medium { border-color: var(--warn-dot); }
+@media (max-width: 640px) { .rv-mods li { grid-template-columns: minmax(0, 1fr); } }

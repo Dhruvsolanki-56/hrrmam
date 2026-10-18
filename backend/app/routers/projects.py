@@ -1,6 +1,7 @@
 """Projects, tasks and the workstream modules. Every write returns the full Project 360 so the screen just replaces its state."""
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import export
@@ -8,8 +9,8 @@ from .. import schemas as sc
 from .. import serialize as S
 from ..auth import current_user
 from ..database import get_db
-from ..models import Agreement, Clarification, DossierItem, ManufacturerRequest, ReopenRequest, RFICase, RFIQuestion, Submission, User
-from ..services import dash, engine, extras, modules, notify, tasks
+from ..models import Agreement, Clarification, DossierItem, ReferenceLimit, ManufacturerRequest, ReopenRequest, RFICase, RFIQuestion, Submission, User
+from ..services import dash, engine, extras, modules, notify, review, tasks
 
 router = APIRouter(prefix="/api", dependencies=[Depends(current_user)])
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -144,6 +145,40 @@ def record_submission(project_id: int, data: sc.SubmissionIn, user: User = Depen
     p = _P(db, project_id)
     modules.record_submission(db, user, p, data)
     return _out(p)
+
+
+@router.get("/projects/{project_id}/review")
+def project_review(project_id: int, db: Session = Depends(get_db)):
+    return review.review(db, _P(db, project_id))
+
+
+@router.post("/projects/{project_id}/values", status_code=201)
+def add_value(project_id: int, data: sc.ValueIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    p = _P(db, project_id)
+    review.add_value(db, user, p, data)
+    return review.review(db, p)
+
+
+@router.post("/projects/{project_id}/review-decisions", status_code=201)
+def review_decision(project_id: int, data: sc.ReviewDecisionIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    p = _P(db, project_id)
+    review.decide(db, user, p, data.key, data.decision, data.note)
+    return review.review(db, p)
+
+
+@router.get("/reference-limits")
+def reference_limits(db: Session = Depends(get_db)):
+    return [review.reference_out(r) for r in db.scalars(select(ReferenceLimit).order_by(ReferenceLimit.parameter))]
+
+
+@router.post("/reference-limits", status_code=201)
+def create_reference(data: sc.ReferenceIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return review.reference_out(review.save_reference(db, user, data))
+
+
+@router.patch("/reference-limits/{rid}")
+def update_reference(rid: int, data: sc.ReferenceIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return review.reference_out(review.save_reference(db, user, data, rid))
 
 
 @router.post("/tasks/{task_id}/attachments", status_code=201)

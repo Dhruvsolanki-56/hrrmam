@@ -3,6 +3,7 @@ import { api } from '../api'
 import { useCan, useConfig, useMe } from '../context'
 import { Empty, Person, fmtDay, label, useDo } from './bits'
 import FormModal from './FormModal'
+import ReviewAssistant from './ReviewAssistant'
 import Icon from './Icon'
 import { inDays, fromInput, toInput } from './bits'
 
@@ -198,10 +199,7 @@ export function RegulatoryTab({ project, onChange }) {
         )}
       </section>
 
-      <section className="panel soft">
-        <header><h3>AI regulatory review <span className="chip plain">Phase 2</span></h3></header>
-        <p className="muted">Planned for Phase 2, not part of this release: dossier completeness check, current trend / limit review against a versioned regulatory knowledge base, and RFI risk assessment. Human review is mandatory; AI never certifies compliance.</p>
-      </section>
+      <ReviewAssistant project={project} />
 
       {item && (
         <FormModal title={item === 'new' ? 'Add dossier item' : item.title}

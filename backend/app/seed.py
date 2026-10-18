@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from . import schemas as sc
 from . import workflow
 from .models import Notification, Project, Role, Setting, User
-from .services import common, engine, extras, modules, tasks, workflows
+from .services import common, engine, extras, modules, review, tasks, workflows
 
 
 def seed_reference(db: Session):
@@ -59,6 +59,22 @@ LANE = {
 LANES = ("commercial", "legal", "regulatory", "artwork", "manufacturer", "quality")
 
 
+REFERENCES = [("Impurity X", "max", 0.5, "%", "ICH Q3B(R2) qualification threshold, reviewed by Neo Regulatory"),
+              ("Largest unspecified impurity", "max", 0.2, "%", "ICH Q3B(R2) identification threshold"),
+              ("Total impurities", "max", 2.0, "%", "ICH Q3B(R2) and the TGA guidance for finished products"),
+              ("Assay", "min", 95.0, "%", "Release specification range 95.0 to 105.0 %"),
+              ("Water content", "max", 5.0, "%", "Ph. Eur. 2.5.12 general limit for tablets")]
+
+
+def seed_references(db: Session):
+    from .models import ReferenceLimit
+    if db.scalar(select(ReferenceLimit.id).limit(1)):
+        return
+    for name, cmp, val, unit, src in REFERENCES:
+        db.add(ReferenceLimit(parameter=name, comparator=cmp, limit_value=val, unit=unit, source=src, reference_date=date(2026, 3, 1)))
+    db.commit()
+
+
 def seed_demo(db: Session):
     if db.scalar(select(Project.id).limit(1)):
         return
@@ -68,6 +84,7 @@ def seed_demo(db: Session):
         first, last = name.lower().split()
         db.add(User(name=name, email=f"{first}.{last}@neo.example", role_key=role, country=country))
     db.commit()
+    seed_references(db)
     Demo(db).build()
     # an inbox that looks lived in: older notifications already read, the newest few still unread
     now = datetime.now(timezone.utc)
@@ -491,6 +508,17 @@ class Demo:
             if level != "nearly":
                 modules.rfi_action(d, ra, r, "close", "TGA confirmed the response answers every question.")
 
+    # ---- values read from the dossier, for the limit review
+    def m_values(self, p):
+        ra = self.R["regulatory"]
+        rows = [("M3", "p. 42", "Impurity X", 0.31 + (p.id % 3) * 0.05, "%"), ("M3", "p. 44", "Assay", 98.4 - (p.id % 4), "%")]
+        if p.id % 4 == 1:
+            rows.append(("M3", "p. 47", "Impurity X", 0.62, "%"))  # above the reference: the reviewer is asked to look
+        if p.id % 5 == 2:
+            rows.append(("M3", "p. 51", "Residual solvent Y", 120.0, "ppm"))  # nothing to compare with
+        for m, page, name, val, unit in rows:
+            review.add_value(self.db, ra, p, sc.ValueIn(module=m, page=page, parameter=name, value=round(val, 2), unit=unit))
+
     # ---- one stage from start to finish
     def run_stage(self, p, key, level, finish=True):
         worker, approver = LANE[key]
@@ -561,6 +589,8 @@ class Demo:
         for key in [s.key for s in p.flow.stages]:
             if key in plan:
                 self.run_stage(p, key, plan[key], finish=key != reject_at)
+        if p.submission_type.startswith("Registered") and p.status == "active":
+            self.m_values(p)
         if blocker:
             p.critical_blocker = blocker
         self.db.commit()

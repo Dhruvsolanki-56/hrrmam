@@ -104,6 +104,8 @@ class Project(Base):
     rfis: Mapped[list["RFICase"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="RFICase.id")
     documents: Mapped[list["Document"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="Document.id")
     clarifications: Mapped[list["Clarification"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="Clarification.id")
+    dossier_values: Mapped[list["DossierValue"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="DossierValue.id")
+    review_decisions: Mapped[list["ReviewDecision"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="ReviewDecision.id")
     reopen_requests: Mapped[list["ReopenRequest"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="ReopenRequest.id")
 
     @property
@@ -306,6 +308,52 @@ class ReopenRequest(Base):
     project: Mapped[Project] = relationship(back_populates="reopen_requests")
     requested_by: Mapped[User] = relationship(foreign_keys=[requested_by_id], lazy="joined")
     decided_by: Mapped[User | None] = relationship(foreign_keys=[decided_by_id], lazy="joined")
+
+
+class ReferenceLimit(Base):
+    """Controlled regulatory reference material the review assistant compares dossier values with."""
+    __tablename__ = "reference_limits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    parameter: Mapped[str] = mapped_column(String(120), unique=True)
+    comparator: Mapped[str] = mapped_column(String(3), default="max")  # max: value must not exceed; min: must not be below
+    limit_value: Mapped[float] = mapped_column(Float, default=0)
+    unit: Mapped[str] = mapped_column(String(20), default="%")
+    source: Mapped[str] = mapped_column(String(200), default="")
+    reference_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class DossierValue(Base):
+    """A value read from the dossier (page and module kept), so the assistant can compare it with the reference."""
+    __tablename__ = "dossier_values"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    module: Mapped[str] = mapped_column(String(4), default="")
+    page: Mapped[str] = mapped_column(String(60), default="")
+    parameter: Mapped[str] = mapped_column(String(120))
+    value: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(20), default="")
+    created_by: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = _ts()
+
+    project: Mapped[Project] = relationship(back_populates="dossier_values")
+
+
+class ReviewDecision(Base):
+    """The human decision on one assistant finding. Findings are never closed by the assistant itself."""
+    __tablename__ = "review_decisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    key: Mapped[str] = mapped_column(String(80))
+    decision: Mapped[str] = mapped_column(String(14))  # acknowledged | dismissed
+    note: Mapped[str] = mapped_column(Text, default="")
+    decided_by: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = _ts()
+
+    project: Mapped[Project] = relationship(back_populates="review_decisions")
 
 
 class Notification(Base):

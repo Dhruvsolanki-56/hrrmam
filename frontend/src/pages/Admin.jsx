@@ -133,14 +133,53 @@ function Log() {
   )
 }
 
+function References() {
+  const [rows, setRows] = useState(null)
+  const [edit, setEdit] = useState(null)
+  const load = () => api.referenceLimits().then(setRows)
+  useEffect(() => { load() }, [])
+  const fields = [
+    { key: 'parameter', label: 'Parameter', type: 'text', required: true, placeholder: 'e.g. Impurity X' },
+    { key: 'comparator', label: 'Rule', type: 'select', required: true, half: true, options: [['max', 'Must not exceed'], ['min', 'Must not be below']] },
+    { key: 'limit_value', label: 'Limit', type: 'text', required: true, half: true },
+    { key: 'unit', label: 'Unit', type: 'text', half: true },
+    { key: 'reference_date', label: 'Reference dated', type: 'date', half: true },
+    { key: 'source', label: 'Source', type: 'text', placeholder: 'e.g. ICH Q3B(R2)' },
+    { key: 'active', label: 'In use', type: 'checkbox' },
+  ]
+  return (
+    <section className="panel">
+      <header><div><h3>Controlled reference material</h3><p className="muted">Limits the review assistant compares dossier values with. Only values listed here are checked; everything else is flagged for a manual look.</p></div>
+        <button className="btn primary" onClick={() => setEdit('new')}><Icon name="plus" size={16} />Add reference</button></header>
+      <div className="table-scroll"><table className="table compact">
+        <thead><tr><th>Parameter</th><th>Rule</th><th>Source</th><th>Dated</th><th>In use</th><th /></tr></thead>
+        <tbody>{(rows || []).map((r) => (
+          <tr key={r.id} className={r.active ? '' : 'row-off'}>
+            <td><strong>{r.parameter}</strong></td><td data-label="Rule">{r.comparator === 'max' ? '≤' : '≥'} {r.limit_value} {r.unit}</td>
+            <td data-label="Source">{r.source || '–'}</td><td data-label="Dated">{r.reference_date || '–'}</td><td data-label="In use">{r.active ? 'Yes' : 'No'}</td>
+            <td><button className="link" onClick={() => setEdit(r)}>Edit</button></td>
+          </tr>))}</tbody>
+      </table></div>
+      {edit && (
+        <FormModal title={edit === 'new' ? 'Add reference' : `Edit ${edit.parameter}`} fields={fields}
+          initial={edit === 'new' ? { comparator: 'max', unit: '%', active: true } : edit}
+          onSave={async (d) => { const n = Number(d.limit_value); if (!Number.isFinite(n)) throw new Error('The limit must be a number.'); const body = { ...d, limit_value: n }
+            edit === 'new' ? await api.createReference(body) : await api.updateReference(edit.id, body); load() }}
+          onClose={() => setEdit(null)} />
+      )}
+    </section>
+  )
+}
+
 export default function Admin() {
   const [tab, setTab] = useState('users')
   return (
     <Layout title="Admin" subtitle="Users, roles and permissions, reminder rules, and a log of every admin change">
-      <Tabs value={tab} onChange={setTab} tabs={[{ key: 'users', label: 'Users' }, { key: 'roles', label: 'Roles & permissions' }, { key: 'settings', label: 'Settings' }, { key: 'log', label: 'Admin log' }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ key: 'users', label: 'Users' }, { key: 'roles', label: 'Roles & permissions' }, { key: 'settings', label: 'Settings' }, { key: 'refs', label: 'Reference material' }, { key: 'log', label: 'Admin log' }]} />
       {tab === 'users' && <Users />}
       {tab === 'roles' && <Roles />}
       {tab === 'settings' && <Settings />}
+      {tab === 'refs' && <References />}
       {tab === 'log' && <Log />}
     </Layout>
   )

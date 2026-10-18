@@ -94,6 +94,30 @@ class TaskActionIn(BaseModel):
     assignee_id: int | None = None
 
 
+class ValueIn(BaseModel):
+    parameter: str = Field(min_length=1, max_length=120)
+    value: float
+    unit: str = Field(default="", max_length=20)
+    module: Literal["", "M1", "M2", "M3", "M4", "M5"] = ""
+    page: str = Field(default="", max_length=60)
+
+
+class ReviewDecisionIn(BaseModel):
+    key: str = Field(max_length=80)
+    decision: Literal["acknowledged", "dismissed"]
+    note: str = ""
+
+
+class ReferenceIn(BaseModel):
+    parameter: str | None = Field(default=None, max_length=120)
+    comparator: Literal["max", "min"] | None = None
+    limit_value: float | None = None
+    unit: str | None = Field(default=None, max_length=20)
+    source: str | None = Field(default=None, max_length=200)
+    reference_date: date | None = None
+    active: bool | None = None
+
+
 class AttachmentIn(BaseModel):
     name: str = Field(default="", max_length=200)
     link: str = Field(max_length=1000)

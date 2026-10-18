@@ -93,8 +93,8 @@ export default function Regulatory() {
       <CompletedProjects rows={d.completed} />
 
       <section className="panel soft">
-        <header><h3>AI review <span className="chip plain">Phase 2</span></h3></header>
-        <p className="muted">Dossier completeness check, current trend / limit review, and RFI risk assessment are planned for Phase 2 and are not part of this release. Human review will remain mandatory; AI never certifies compliance.</p>
+        <header><h3>Regulatory review assistant</h3></header>
+        <p className="muted">Open a project's Regulatory tab to see its dossier completeness, limit review against the controlled reference material and RFI risk. Findings always show why, and a Regulatory reviewer decides on each one.</p>
       </section>
     </Layout>
   )

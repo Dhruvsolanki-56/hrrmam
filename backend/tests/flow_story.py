@@ -467,6 +467,35 @@ try:
         s, r = call('PATCH', f'/submissions/{sid}', {'status': 'queried'}, uid=me('commercial')); check('Amit cannot update a submission (403)', s == 403)
         s, r = call('PATCH', f'/submissions/{sid}', {'status': 'nonsense'}, uid=me('regulatory')); check('an unknown submission status is refused (422)', s == 422)
 
+    # ================================================================ 10. regulatory review assistant
+    print('--- 10. review assistant: completeness, limits, RFI risk')
+    s, r = call('PATCH', f'/projects/{q}', {'submission_type': 'Registered medicine – abridged / generic (AUST R)'}, uid=me('regulatory'))
+    check('Anjali sets the submission type', s == 200)
+    s, rv = call('GET', f'/projects/{q}/review', uid=me('regulatory'))
+    mods = {c['module']: c for c in rv['completeness']}
+    check('completeness lists M1-M5; M4 is not applicable for an abridged submission', s == 200 and mods['M4']['status'] == 'not_applicable' and mods['M3']['status'] in ('attention', 'missing'), mods)
+    check('it states that it never certifies compliance', 'never certifies' in rv['disclaimer'])
+    s, r = call('POST', f'/projects/{q}/values', {'parameter': 'Impurity X', 'value': 0.62, 'unit': '%', 'module': 'M3', 'page': 'p. 47'}, uid=me('commercial')); check('Amit cannot record dossier values (403)', s == 403)
+    s, r = call('POST', f'/projects/{q}/values', {'parameter': 'Impurity X', 'value': 0.62, 'unit': '%', 'module': 'M3', 'page': 'p. 47'}, uid=me('regulatory'))
+    f = [x for x in r['limits'] if x['parameter'] == 'Impurity X']
+    check('Impurity X 0.62 % is above the 0.50 % reference: reviewer attention recommended, with page, reference and date', s == 201 and f and f[0]['level'] == 'high' and f[0]['page'] == 'p. 47' and f[0]['reference_date'] and 'Reviewer attention' in f[0]['reason'], r['limits'])
+    call('POST', f'/projects/{q}/values', {'parameter': 'Impurity X', 'value': 0.31, 'unit': '%', 'module': 'M3', 'page': 'p. 40'}, uid=me('regulatory'))
+    s, r = call('POST', f'/projects/{q}/values', {'parameter': 'Residual solvent Y', 'value': 120, 'unit': 'ppm'}, uid=me('regulatory'))
+    check('a value in range raises nothing; an unknown parameter is flagged for a manual check', len(r['limits']) == 2 and any(x['level'] == 'info' for x in r['limits']), r['limits'])
+    check('the RFI risk names the module and the reason', any(x['module'] == 'M3' and x['reasons'] for x in r['risks']), r['risks'])
+    key = [x for x in r['limits'] if x['level'] == 'high'][0]['key']
+    s, x = call('POST', f'/projects/{q}/review-decisions', {'key': key, 'decision': 'acknowledged', 'note': 'Will query the manufacturer'}, uid=me('commercial')); check('Amit cannot decide on a finding (403)', s == 403)
+    s, x = call('POST', f'/projects/{q}/review-decisions', {'key': key, 'decision': 'acknowledged', 'note': ''}, uid=me('regulatory')); check('a decision needs a note (422)', s == 422)
+    s, x = call('POST', f'/projects/{q}/review-decisions', {'key': 'limit:99999', 'decision': 'dismissed', 'note': 'x'}, uid=me('regulatory')); check('an unknown finding is refused (422)', s == 422)
+    s, x = call('POST', f'/projects/{q}/review-decisions', {'key': key, 'decision': 'acknowledged', 'note': 'Will query the manufacturer'}, uid=me('regulatory'))
+    d = [y for y in x['limits'] if y['key'] == key][0]['decision']
+    check('Anjali records her decision and it stays attached to the finding', s == 201 and d and d['by'] == NAME['regulatory'] and d['note'].startswith('Will query'), d)
+    s, x = call('GET', '/reference-limits', uid=me('regulatory')); check('the controlled reference material is listed', s == 200 and len(x) >= 5)
+    s, x = call('POST', '/reference-limits', {'parameter': 'Residual solvent Y', 'comparator': 'max', 'limit_value': 100, 'unit': 'ppm', 'source': 'ICH Q3C'}, uid=me('regulatory')); check('only an administrator edits the reference material (403)', s == 403)
+    s, x = call('POST', '/reference-limits', {'parameter': 'Residual solvent Y', 'comparator': 'max', 'limit_value': 100, 'unit': 'ppm', 'source': 'ICH Q3C'}, uid=me('super_admin'))
+    s, rv = call('GET', f'/projects/{q}/review', uid=me('regulatory'))
+    check('once it is in the reference, 120 ppm is flagged against the 100 ppm limit', any(y['parameter'] == 'Residual solvent Y' and y['level'] == 'high' for y in rv['limits']), rv['limits'])
+
     print('\nFAILS:', fails)
 finally:
     srv.terminate()
