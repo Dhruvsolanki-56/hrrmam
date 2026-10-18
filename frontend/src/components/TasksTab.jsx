@@ -28,12 +28,12 @@ export default function TasksTab({ project, onChange }) {
       )}
       {!project.tasks.length && <Empty>No tasks yet. Assign work to people in the relevant workstream; each task is accepted, done, submitted and approved here.</Empty>}
       <div className="tasklist">
-        {open.map((t) => <TaskCard key={t.id} task={t} onChanged={onChange} />)}
+        {open.map((t) => <TaskCard key={t.id} task={t} project={project} onChanged={onChange} />)}
       </div>
       {done.length > 0 && (
         <details className="more" open={!open.length}>
           <summary>{done.length} finished task{done.length > 1 ? 's' : ''}</summary>
-          <div className="tasklist">{done.map((t) => <TaskCard key={t.id} task={t} onChanged={onChange} />)}</div>
+          <div className="tasklist">{done.map((t) => <TaskCard key={t.id} task={t} project={project} onChanged={onChange} />)}</div>
         </details>
       )}
       {adding && <NewTaskModal project={project} stageKey={stage !== 'all' ? stage : undefined} onClose={() => setAdding(false)} onCreated={(p) => { setAdding(false); onChange(p) }} />}

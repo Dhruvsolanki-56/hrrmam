@@ -26,7 +26,7 @@ def setup(name):
     with SessionLocal() as s:
         d = Demo(s)
         p = d.drive(dict(name=name, product="x", category="Pain relief", submission_type="Listed medicine (AUST L)", at="parallel",
-                         lanes=dict(commercial="review", legal="review", regulatory="done", artwork="done", manufacturer="done"), age=10))
+                         lanes=dict(commercial="review", legal="review", regulatory="done", artwork="done", manufacturer="done", quality="done"), age=10))
         return p.id
 
 

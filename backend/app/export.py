@@ -51,8 +51,9 @@ def projects_xlsx(rows: list[dict]) -> bytes:
 
 
 def legal_xlsx(rows: list[dict]) -> bytes:
-    head = ["Project code", "Project", "Agreement", "Counterparty", "Status", "Owner", "Due", "Signed", "Age (days, unsigned)", "Overdue", "Link"]
-    out = [[r["project_code"] or "", r["project_name"], r["label"], r["counterparty"], r["status"].replace("_", " ").title(),
-            (r["owner"] or {}).get("name", ""), r["due_date"] or "", r["signed_date"] or "", r["age_days"] if r["age_days"] is not None else "",
-            "Yes" if r["overdue"] else "No", r["link"]] for r in rows]
-    return _sheet("Legal register", head, out, [14, 38, 20, 26, 18, 18, 12, 12, 12, 9, 40], 9)
+    head = ["Sr", "Project code", "Project", "Type", "Parties", "Started", "Owner", "Status", "Due", "Final sign", "Age", "Overdue", "Link"]
+    out = [[i, r["project_code"] or "", r["project_name"], r["label"], r["counterparty"], r["started_on"] or "",
+            (r["owner"] or {}).get("name", ""), r["status"].replace("_", " ").title(), r["due_date"] or "", r["signed_date"] or "",
+            "Closed" if r["closed"] else (f'{r["age_days"]} days' if r["age_days"] is not None else ""),
+            "Yes" if r["overdue"] else "No", r["link"]] for i, r in enumerate(rows, 1)]
+    return _sheet("Legal register", head, out, [6, 14, 38, 20, 26, 12, 18, 18, 12, 12, 12, 9, 40], 11)

@@ -17,6 +17,8 @@ ENTITIES = [AU, IN, MP, JOINT]
 
 # Optional behaviours a stage can switch on. Each may be used by at most one stage in a workflow.
 FEATURES = {
+    "clarifications": "Clarification requests on the brief (all must be accepted before the stage is submitted)",
+    "quality": "Quality / PV workspace (its own tasks and documents, no extra checks)",
     "agreements": "Legal register: Supplier, Quality and PV agreements (must be signed before the stage is submitted)",
     "dossier": "Dossier checklist and submission type (required items must be ready)",
     "mfr": "Manufacturer / technical data requests (required items must be accepted)",
@@ -25,7 +27,7 @@ FEATURES = {
     "rfi": "RFI cases (all must be closed before the stage is submitted)",
     "issue_code": "Issues the project code when the stage is approved",
 }
-FEATURE_TAB = {"agreements": "legal", "dossier": "regulatory", "submission": "regulatory", "rfi": "rfi", "artwork": "artwork", "mfr": "manufacturer"}
+FEATURE_TAB = {"quality": "quality", "clarifications": "brief", "agreements": "legal", "dossier": "regulatory", "submission": "regulatory", "rfi": "rfi", "artwork": "artwork", "mfr": "manufacturer"}
 
 
 @dataclass(frozen=True)
@@ -47,11 +49,13 @@ class Stage:
     can_close: bool = False    # the approver may reject the whole project here
     sla_days: int = 14
     features: tuple = ()
+    soft_requires: tuple = ()  # should be approved first, but only warns when it is not
+    info_requires: tuple = ()  # waiting on information from this workstream / the outside world; shown, never blocks
 
     @staticmethod
     def from_dict(d: dict) -> "Stage":
         d = dict(d)
-        for k in ("requires", "owner_roles", "approver_roles", "features"):
+        for k in ("requires", "owner_roles", "approver_roles", "features", "soft_requires", "info_requires"):
             d[k] = tuple(d.get(k) or ())
         known = {f for f in Stage.__dataclass_fields__}
         return Stage(**{k: v for k, v in d.items() if k in known})
@@ -63,6 +67,7 @@ DEFAULT_RULES = {
     "task": {"approval": True},
     "document": {"approval": True},
     "artwork": {"steps": [{"status": "regulatory_review", "label": "Regulatory review", "roles": ["regulatory"]},
+                          {"status": "quality_review", "label": "Quality review", "roles": ["quality"]},
                           {"status": "director_approval", "label": "Director approval", "roles": ["director"]}]},
     "agreement": {"approval": True, "roles": ["legal", "director"]},
     "dossier_item": {"approval": True, "roles": ["regulatory", "director"]},
@@ -152,7 +157,7 @@ class Flow:
     # ---- (de)serialisation
     def stage_payload(self, s: Stage) -> dict:
         d = asdict(s)
-        for k in ("requires", "owner_roles", "approver_roles", "features"):
+        for k in ("requires", "owner_roles", "approver_roles", "features", "soft_requires", "info_requires"):
             d[k] = list(d[k])
         d["parallel_with"] = self.parallel_with(s)
         d["tab"] = next((FEATURE_TAB[f] for f in s.features if f in FEATURE_TAB), "tasks")
@@ -163,7 +168,7 @@ class Flow:
                 "groups": self.groups, "layers": self.layers()}
 
     def to_def(self) -> dict:
-        return {"stages": [{**asdict(s), **{k: list(getattr(s, k)) for k in ("requires", "owner_roles", "approver_roles", "features")}}
+        return {"stages": [{**asdict(s), **{k: list(getattr(s, k)) for k in ("requires", "owner_roles", "approver_roles", "features", "soft_requires", "info_requires")}}
                            for s in self.stages], "rules": self.rules}
 
     @classmethod
@@ -279,9 +284,10 @@ def _preset(parallel_after: str | None, name: str) -> dict:
     seq = parallel_after is None
     legal_req = ("commercial",) if seq else par_req
     chain = {"legal": legal_req, "regulatory": ("legal",) if seq else par_req,
-             "artwork": ("regulatory",) if seq else par_req, "manufacturer": ("artwork",) if seq else par_req}
-    join = ("manufacturer",) if seq else (("legal", "regulatory", "artwork", "manufacturer") if parallel_after == "commercial"
-                                           else ("commercial", "legal", "regulatory", "artwork", "manufacturer"))
+             "artwork": ("regulatory",) if seq else par_req, "manufacturer": ("artwork",) if seq else par_req,
+             "quality": ("manufacturer",) if seq else par_req}
+    join = ("quality",) if seq else (("legal", "regulatory", "artwork", "manufacturer", "quality") if parallel_after == "commercial"
+                                      else ("commercial", "legal", "regulatory", "artwork", "manufacturer", "quality"))
     ws = parallel_after is not None
     stages = [
         _st("opportunity", "Opportunity", 1, G1, AU, "Commercial / Project team", "Director or Commercial lead", ("commercial", "project_manager"),
@@ -290,23 +296,26 @@ def _preset(parallel_after: str | None, name: str) -> dict:
         _st("brief", "Project Brief", 2, G1, JOINT, "Project Manager", "Director or Commercial lead", ("project_manager", "commercial"),
             ("director", "commercial"), "Australia creates the brief and India reviews it. Anything missing is raised as a clarification "
             "task: who asked, what is missing, who answers, by when, and whether the answer was accepted.",
-            ("opportunity",), sla_days=14),
+            ("opportunity",), sla_days=14, features=("clarifications",)),
         _st("commercial", "Feasibility & Commercial", 3, G2, AU, "Commercial team", "Director or Commercial lead", ("commercial", "project_manager"),
             ("director", "commercial"), "Feasibility and FMEA, cost and financial review, risk adjustment and commercial approval.",
-            com_req, workstream=parallel_after == "brief", can_close=True, sla_days=21),
+            com_req, workstream=parallel_after == "brief", can_close=True, sla_days=21, soft_requires=("manufacturer",)),
         _st("legal", "Legal / Agreements", lane or 4, G3, IN, "Legal team", "Legal lead or Director", ("legal", "project_manager"), ("legal", "director"),
             "Supplier, Quality and PV agreements run in parallel, plus NDA / CDA / POA / notices.", chain["legal"], workstream=ws,
             sla_days=30, features=("agreements",)),
         _st("regulatory", "Regulatory / Dossier", lane or 4, G3, IN, "Regulatory team", "RA reviewer or Director", ("regulatory", "project_manager"),
             ("regulatory", "director"), "Submission type, dossier structure and checklist, RA review.", chain["regulatory"], workstream=ws,
-            sla_days=45, features=("dossier",)),
+            sla_days=45, features=("dossier",), info_requires=("manufacturer",)),
         _st("artwork", "Artwork / Packaging", lane or 4, G3, IN, "Artwork team", "Regulatory review, then Director", ("artwork", "project_manager"),
             ("regulatory", "director"), "Carton, label, leaflet / insert, shade card and revisions.", chain["artwork"], workstream=ws,
-            optional=True, sla_days=30, features=("artwork",)),
+            optional=True, sla_days=30, features=("artwork",), soft_requires=("regulatory",)),
         _st("manufacturer", "Manufacturer / Technical data", lane or 4, G3, MP, "Technical coordinator", "RA reviewer or Technical lead",
             ("technical", "project_manager"), ("regulatory", "technical"),
             "COA, MSDS, specification, testing, stability and manufacturing data from the manufacturer.", chain["manufacturer"], workstream=ws,
             optional=True, sla_days=30, features=("mfr",)),
+        _st("quality", "Quality / PV", lane or 4, G3, IN, "Quality & PV team", "Quality lead or Director", ("quality", "project_manager"),
+            ("quality", "director"), "Quality and pharmacovigilance controls: quality review, PV system checks and their own documents.",
+            chain["quality"], workstream=ws, sla_days=30, soft_requires=("legal",), features=("quality",)),
         _st("dossier_ready", "Dossier Ready", 5 - later, G4, IN, "Regulatory team", "RA reviewer or Director", ("regulatory", "project_manager"),
             ("regulatory", "director"), "Milestone lock. Complete only when the dossier, required artwork, required manufacturer data "
             "and legal / commercial conditions are all approved.", join, milestone=True, sla_days=7),
@@ -371,9 +380,10 @@ DEFAULT_ROLES = {
     "commercial": ("Commercial", ["assign", "approve", "request_changes"], ["commercial", "project_manager", "artwork"]),
     "legal": ("Legal", ["assign", "approve", "request_changes"], ["legal", "project_manager"]),
     "regulatory": ("Regulatory (RA)", ["assign", "approve", "request_changes", "change_dates"],
-                   ["regulatory", "artwork", "technical", "legal", "commercial"]),
+                   ["regulatory", "artwork", "technical", "legal", "commercial", "quality"]),
     "artwork": ("Artwork", [], []),
     "technical": ("Technical / Manufacturer data", ["assign", "approve", "request_changes"], ["technical"]),
+    "quality": ("Quality / PV", ["assign", "approve", "request_changes"], ["quality", "project_manager"]),
     "reviewer": ("Client reviewer (view and comment on the process)", [], []),
 }
 
@@ -387,7 +397,7 @@ SATISFIED = ("approved", "bypassed")
 # ------------------------------------------------------------------ modules
 CORE_AGREEMENTS = ["supplier", "quality", "pv"]
 AGREEMENT_KINDS = {"supplier": "Supplier Agreement", "quality": "Quality Agreement", "pv": "PV Agreement",
-                   "nda": "NDA", "cda": "CDA", "poa": "POA", "notice": "Notice"}
+                   "nda": "NDA", "cda": "CDA", "poa": "POA", "notice": "Legal notice", "addendum": "Addendum"}
 AGREEMENT_STATUS = ["not_started", "drafting", "in_review", "changes_requested", "sent_for_signature", "signed"]
 
 M = {"M1": "Administrative information", "M2": "Summaries / overviews", "M3": "Quality", "M4": "Nonclinical", "M5": "Clinical / bioequivalence"}
@@ -405,11 +415,12 @@ DOSSIER_DONE = ("ready", "reviewed")
 ARTWORK_KINDS = {"carton": "Carton", "label": "Label", "leaflet": "Leaflet / insert", "print_proof": "Print proof", "shade_card": "Shade card"}
 DOC_KINDS = ["Brief", "Feasibility / FMEA", "Agreement", "Dossier", "Specification", "Report", "Correspondence", "Other"]
 
-MFR_KINDS = {"coa": "COA", "msds": "MSDS", "specification": "Specification", "testing": "Testing data",
+MFR_KINDS = {"coa": "COA", "msds": "MSDS", "specification": "Finished product specification", "raw_spec": "Raw material specification", "testing": "Testing data",
              "stability": "Stability data", "manufacturing": "Manufacturing data", "other": "Other"}
 MFR_STATUS = ["requested", "received", "under_review", "changes_requested", "accepted"]
 MFR_DONE = ("accepted",)
 
+SUBMISSION_STATUS = ["submitted", "acknowledged", "under_evaluation", "queried", "approved", "rejected"]
 RFI_STATUS = ["open", "response_ready", "submitted", "closed"]
 HEALTH = ("green", "amber", "red")
 

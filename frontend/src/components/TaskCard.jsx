@@ -3,9 +3,11 @@ import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { stageOf, useCan, useMe, useStages } from '../context'
 import { DueChip, Person, TaskChip, UserSelect, fmtDateTime, fromInput, inDays, label, useDo } from './bits'
+import FormModal from './FormModal'
+import { ReopenButton } from './Reopen'
 
 /** One task with its whole cycle: accept -> work -> submit -> approve / changes requested, plus date negotiation. */
-export default function TaskCard({ task, onChanged, showProject, defaultOpen }) {
+export default function TaskCard({ task, onChanged, showProject, defaultOpen, project }) {
   const me = useMe()
   const can = useCan()
   const stages = useStages()
@@ -16,6 +18,7 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen }) 
   const [asking, setAsking] = useState(false)
   const [noting, setNoting] = useState(false)
   const [newOwner, setNewOwner] = useState(null)
+  const [attaching, setAttaching] = useState(false)
   const { busy, error, run } = useDo()
 
   const isAssignee = me.id === task.assignee.id || me.role_key === 'super_admin'
@@ -53,6 +56,20 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen }) 
         <div className="task-body">
           {task.description && <p className="t-desc">{task.description}</p>}
           <p className="muted">Assigned by {task.assigner?.name || '–'} · due {fmtDateTime(task.due_at)}</p>
+
+          <div className="t-files">
+            <div className="t-files-head"><b>Files</b>
+              {task.open && (isAssignee || isAssigner || can('manage_project')) && <button className="link" onClick={() => setAttaching(true)}>+ Attach a file</button>}</div>
+            {task.attachments?.length > 0 ? (
+              <ul className="versions">
+                {[...task.attachments].reverse().map((a) => (
+                  <li key={a.id}><b>V{a.version_no}</b><span>{a.name}{a.note ? ` · ${a.note}` : ''}</span>
+                    <small>{a.created_by} · {fmtDateTime(a.created_at)} · <a href={a.link} target="_blank" rel="noreferrer">open</a></small></li>
+                ))}
+              </ul>
+            ) : <small className="muted">No files attached.</small>}
+            {task.state === 'changes_requested' && task.attachments?.length > 0 && Math.max(...task.attachments.map((a) => a.version_no)) >= 1 && isAssignee && <small className="muted">Attach the corrected file as a new version, then resubmit.</small>}
+          </div>
 
           {req && (
             <div className="datereq">
@@ -92,6 +109,8 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen }) 
             )}
             {canDecide && <button className="btn primary" disabled={busy} onClick={() => go('approve')}>Approve</button>}
             {canDecide && <button className="btn line" disabled={busy} onClick={() => { if (!note.trim()) { setNoting(true); return } go('request_changes') }}>Request changes</button>}
+            {project && ['approved', 'locked'].includes(task.state) && !can('lock_unlock') && <ReopenButton project={project} kind="task" refId={task.id} onChange={onChanged} />}
+            {project && ['approved', 'locked'].includes(task.state) && can('lock_unlock') && <ReopenButton project={project} kind="task" refId={task.id} onChange={onChanged} text="Request reopen (amend)" />}
             {task.state === 'approved' && can('lock_unlock') && <button className="btn line" disabled={busy} onClick={() => go('lock')}>Lock</button>}
             {task.state === 'locked' && can('lock_unlock') && <button className="btn line" disabled={busy} onClick={() => { if (!note.trim()) { setNoting(true); return } go('unlock') }}>Unlock</button>}
             {!task.required && task.open && can('bypass_optional') && <button className="btn line" disabled={busy} onClick={() => go('bypass')}>Bypass optional work</button>}
@@ -119,6 +138,13 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen }) 
             </details>
           )}
         </div>
+      )}
+      {attaching && (
+        <FormModal title="Attach a file" intro="Add a link to the file. Attaching the same name again creates the next version; earlier versions are kept."
+          fields={[{ key: 'name', label: 'File name', type: 'text', placeholder: task.title }, { key: 'link', label: 'Link', type: 'url', required: true, placeholder: 'https://…' },
+            { key: 'note', label: 'What is this version?', type: 'textarea' }]}
+          initial={{ name: task.attachments?.[task.attachments.length - 1]?.name || '' }}
+          onSave={async (d) => onChanged?.(await api.addAttachment(task.id, d))} onClose={() => setAttaching(false)} submitLabel="Attach" />
       )}
     </article>
   )

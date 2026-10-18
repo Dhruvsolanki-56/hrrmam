@@ -182,7 +182,7 @@ export function usePaged(items, size, resetKey) {
   const pages = Math.max(1, Math.ceil(all.length / size))
   const cur = Math.min(page, pages)
   return {
-    items: all.slice((cur - 1) * size, cur * size),
+    items: all.slice((cur - 1) * size, cur * size), page: cur,
     pager: <Pager page={cur} pages={pages} total={all.length} size={size} onChange={setPage} />,
   }
 }

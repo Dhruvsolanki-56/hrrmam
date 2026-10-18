@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import logo from '../assets/neohealth-logo.svg?raw'
 import { api } from '../api'
-import { useApp, useCan } from '../context'
+import { useApp, useCan, useMe } from '../context'
 import { Avatar, fmtDateTime } from './bits'
 import Icon from './Icon'
 import NewProjectModal from './NewProjectModal'
@@ -126,19 +126,22 @@ export default function Layout({ title, subtitle, back, backLabel = 'All project
 
   const onBoard = pathname === '/projects' && qs.includes('view=board')
   const onDone = pathname === '/projects' && qs.includes('status=completed')
+  const me = useMe()
+  const role = me?.role_key
+  const lead = ['super_admin', 'director', 'project_manager'].includes(role)
+  const who = (...roles) => lead || roles.includes(role)
   const NAV = [
     { to: '/', icon: 'grid', label: 'Overview', on: pathname === '/' },
     { to: '/my-work', icon: 'tasks', label: 'My work', on: pathname === '/my-work' },
     { h: 'Projects' },
     { to: '/projects', icon: 'list', label: 'All projects', on: pathname.startsWith('/projects') && !onBoard && !onDone },
-    { to: '/projects?view=board', icon: 'board', label: 'Board', on: onBoard },
+    ...(lead ? [{ to: '/projects?view=board', icon: 'board', label: 'Board', on: onBoard }] : []),
     { to: '/projects?status=completed', icon: 'check', label: 'Completed', on: onDone },
-    { h: 'Workstreams' },
-    { to: '/regulatory', icon: 'shield', label: 'Regulatory', on: pathname === '/regulatory' },
-    { to: '/artwork', icon: 'image', label: 'Artwork', on: pathname === '/artwork' },
-    { to: '/legal', icon: 'scale', label: 'Legal', on: pathname === '/legal' },
-    { h: 'Governance' },
-    { to: '/audit', icon: 'history', label: 'Audit trail', on: pathname === '/audit' },
+    ...(who('regulatory', 'artwork', 'quality', 'legal') ? [{ h: 'Workstreams' }] : []),
+    ...(who('regulatory') ? [{ to: '/regulatory', icon: 'shield', label: 'Regulatory', on: pathname === '/regulatory' }] : []),
+    ...(who('artwork', 'regulatory', 'quality') ? [{ to: '/artwork', icon: 'image', label: 'Artwork', on: pathname === '/artwork' }] : []),
+    ...(who('legal') ? [{ to: '/legal', icon: 'scale', label: 'Legal', on: pathname === '/legal' }] : []),
+    ...(who('regulatory', 'legal') ? [{ h: 'Governance' }, { to: '/audit', icon: 'history', label: 'Audit trail', on: pathname === '/audit' }] : []),
     ...(can('manage_users') ? [{ to: '/admin', icon: 'settings', label: 'Admin', on: pathname === '/admin' }] : []),
   ]
   const links = NAV.filter((n) => n.to)

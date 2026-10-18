@@ -13,7 +13,7 @@ export default function Legal() {
   const [q, setQ] = useState('')
   useEffect(() => { api.legalRegister({ status, q }).then(setRows) }, [status, q])
   const unsigned = (rows || []).filter((r) => r.status !== 'signed')
-  const { items, pager } = usePaged(rows, 20, `${status}|${q}`)
+  const { items, pager, page } = usePaged(rows, 20, `${status}|${q}`)
   const oldest = unsigned.reduce((m, r) => Math.max(m, r.age_days || 0), 0)
 
   return (
@@ -35,18 +35,20 @@ export default function Legal() {
       <div className="panel table-panel">
         <div className="table-scroll">
           <table className="table">
-            <thead><tr><th>Project</th><th>Agreement</th><th>Counterparty</th><th>Status</th><th>Owner</th><th>Due</th><th>Signed</th><th>Age</th></tr></thead>
+            <thead><tr><th>Sr</th><th>Project</th><th>Type</th><th>Parties</th><th>Started</th><th>Owner</th><th>Status</th><th>Due</th><th>Final sign</th><th>Age</th></tr></thead>
             <tbody>
-              {items.map((r) => (
+              {items.map((r, i) => (
                 <tr key={r.id} className={`reg-row ${r.overdue ? 'row-late' : ''}`}>
+                  <td data-label="Sr" className="num">{(page - 1) * 20 + i + 1}</td>
                   <td className="proj-cell"><Link to={`/projects/${r.project_id}?tab=legal`} className="cell-main"><span><strong>{r.project_name}</strong><small>{r.project_code || 'Code pending'}</small></span></Link></td>
                   <td data-label="Agreement">{r.label}{r.core && <small className="sub">Core</small>}</td>
-                  <td data-label="Counterparty">{r.counterparty || '–'}</td>
-                  <td data-label="Status"><span className={`dstate ag-${r.status}`}>{label(r.status)}</span></td>
+                  <td data-label="Parties">{r.counterparty || '–'}</td>
+                  <td data-label="Started">{fmtDay(r.started_on)}</td>
                   <td data-label="Owner">{r.owner?.name || '–'}</td>
+                  <td data-label="Status"><span className={`dstate ag-${r.status}`}>{label(r.status)}</span></td>
                   <td data-label="Due" className={r.overdue ? 'late' : ''}>{fmtDay(r.due_date)}</td>
-                  <td data-label="Signed">{fmtDay(r.signed_date)}</td>
-                  <td data-label="Age">{r.age_days != null && r.status !== 'not_started' ? `${r.age_days}d` : '–'}</td>
+                  <td data-label="Final sign">{fmtDay(r.signed_date)}</td>
+                  <td data-label="Age">{r.closed ? <b>Closed</b> : r.age_days != null && r.status !== 'not_started' ? `${r.age_days} days` : '–'}</td>
                 </tr>
               ))}
             </tbody>

@@ -15,18 +15,18 @@ export default function NewProjectModal({ onClose, onCreated, project }) {
   const { busy, error, run } = useDo()
   const cats = project?.category && !CATEGORIES.includes(project.category) ? [project.category, ...CATEGORIES] : CATEGORIES
   const [form, setForm] = useState(project ? {
-    name: project.name, product: project.product, project_type: project.project_type, category: project.category,
+    name: project.name, product: project.product, potential_client: project.potential_client || '', opportunity_value: project.opportunity_value ?? '', project_type: project.project_type, category: project.category,
     market: project.market, initiator: project.initiator, summary: project.summary,
     project_manager_id: project.project_manager?.id ?? '', submission_type: project.submission_type,
     target_submission: project.target_submission || '', target_launch: project.target_launch || '',
   } : {
-    name: '', product: '', project_type: 'Development', category: CATEGORIES[0], market: 'Australia', initiator: me.name, summary: '',
+    name: '', product: '', potential_client: '', opportunity_value: '', project_type: 'Development', category: CATEGORIES[0], market: 'Australia', initiator: me.name, summary: '',
     project_manager_id: me.role_key === 'project_manager' ? me.id : '', submission_type: '', target_submission: '', target_launch: '',
   })
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
 
   const submit = () => run(async () => {
-    const body = { ...form, project_manager_id: form.project_manager_id ? Number(form.project_manager_id) : null,
+    const body = { ...form, opportunity_value: form.opportunity_value === '' ? null : Number(form.opportunity_value), project_manager_id: form.project_manager_id ? Number(form.project_manager_id) : null,
       target_submission: form.target_submission || null, target_launch: form.target_launch || null }
     onCreated(project ? await api.updateProject(project.id, body) : await api.createProject(body))
   })
@@ -49,11 +49,19 @@ export default function NewProjectModal({ onClose, onCreated, project }) {
         </label>
       </div>
       <div className="row2">
-        <label>Type
-          <select value={form.project_type} onChange={set('project_type')}><option>Development</option><option>In-Licence</option></select>
+        <label>Product route
+          <select value={form.project_type} onChange={set('project_type')}><option value="Development">New development</option><option value="In-Licence">In-licence</option></select>
         </label>
         <label>Therapeutic category
           <select value={form.category} onChange={set('category')}>{cats.map((c) => <option key={c}>{c}</option>)}</select>
+        </label>
+      </div>
+      <div className="row2">
+        <label>Potential client
+          <input value={form.potential_client} onChange={set('potential_client')} placeholder="e.g. ABC Pharmacy" />
+        </label>
+        <label>Initial commercial opportunity (AUD)
+          <input type="number" min="0" step="1000" value={form.opportunity_value} onChange={set('opportunity_value')} placeholder="e.g. 250000" />
         </label>
       </div>
       <div className="row2">

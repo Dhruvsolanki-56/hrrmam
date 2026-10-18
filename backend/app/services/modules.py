@@ -235,11 +235,28 @@ def record_submission(db: Session, user: User, p: Project, data) -> Submission:
     return s
 
 
+def update_submission(db: Session, user: User, s: Submission, data) -> Submission:
+    p = s.project
+    st = stage_for(p, "submission")
+    if not (common.role_ok(user, st.owner_roles) or user.can("manage_project")):
+        raise Forbidden("Only the Regulatory team can update an external submission.")
+    ch = data.model_dump(exclude_unset=True)
+    if ch.get("status") in ("acknowledged", "under_evaluation") and not (ch.get("acknowledgement_ref") or s.acknowledgement_ref):
+        raise WorkflowError("Record the acknowledgement reference the regulator gave.")
+    if ch.get("status") == "acknowledged":
+        ch.setdefault("acknowledged_on", date.today())
+    d = _diff(s, ch)
+    if d:
+        common.log(p, user, "dossier", "submission", f"Submission {s.reference or s.id}: " + "; ".join(d), st.key)
+    db.commit()
+    return s
+
+
 # ---------------------------------------------------------------- manufacturer data
 def create_mfr(db: Session, user: User, p: Project, data) -> ManufacturerRequest:
     st = stage_for(p, "mfr")
     check_edit(user, p, st.key, st.name)
-    m = ManufacturerRequest(kind=data.kind, manufacturer=data.manufacturer, due_date=data.due_date, required=data.required,
+    m = ManufacturerRequest(kind=data.kind, manufacturer=data.manufacturer, needed_for=data.needed_for.strip(), due_date=data.due_date, required=data.required,
                             notes=data.notes, owner_id=data.owner_id or user.id)
     p.mfr_requests.append(m)
     common.log(p, user, "manufacturer", "requested", f"{workflow.MFR_KINDS[data.kind]} requested from {data.manufacturer or 'the manufacturer'}", st.key)

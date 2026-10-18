@@ -76,6 +76,9 @@ function StageCard({ project, row, onChange, goTab, locked, fold }) {
         </dd>
       </dl>
       <p className="callout-desc">{st.description}</p>
+      {row.warnings?.length > 0 && (
+        <ul className="deps">{row.warnings.map((w) => <li key={w.text} className={`dep dep-${w.kind}`}><b>{w.kind === 'soft' ? 'Heads-up' : 'Waiting for information'}</b> {w.text}</li>)}</ul>
+      )}
 
       {blocked && (
         <details className="blockers" role="note">

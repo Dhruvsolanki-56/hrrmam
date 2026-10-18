@@ -12,7 +12,7 @@ env = dict(os.environ, DATABASE_URL='sqlite:///' + DB.replace(chr(92), '/'), SEE
 srv = subprocess.Popen([sys.executable, '-m', 'uvicorn', 'app.main:app', '--port', '8012'], cwd=str(ROOT),
                        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 BASE = 'http://127.0.0.1:8012/api'
-LANES = ['commercial', 'legal', 'regulatory', 'artwork', 'manufacturer']
+LANES = ['commercial', 'legal', 'regulatory', 'artwork', 'manufacturer', 'quality']
 
 
 def call(method, path, body=None, uid=None):
@@ -49,7 +49,7 @@ try:
     ID = {u['role_key']: u['id'] for u in users}
     NAME = {u['role_key']: u['name'] for u in users}
     print('people:', ', '.join(f"{u['name']} ({u['role']})" for u in users)); print(users)
-    check('one person per role (8 people, 8 different roles)', len(users) == 8 and len(ID) == 8)
+    check('one person per role (9 people, 9 different roles)', len(users) == 9 and len(ID) == 9)
     check('every name is a Hindi name, no leftover English demo names', not {'Tom', 'Emma', 'Liam', 'Sarah', 'Jessica'} & {u['name'].split()[0] for u in users})
 
     me = lambda role: ID[role]
@@ -80,7 +80,7 @@ try:
     check('Priya (project manager) creates the project', s == 201, p)
     pid = p['id']
     check('only Opportunity is open; no code yet', p['active_stages'] == ['opportunity'] and not p['code'], (p['active_stages'], p['code']))
-    check('commercial, legal, regulatory, artwork, manufacturer wait for the brief', all(p['stage_states'][k] == 'pending' for k in LANES))
+    check('commercial, legal, regulatory, artwork, manufacturer, quality wait for the brief', all(p['stage_states'][k] == 'pending' for k in LANES))
     check('Amit (commercial) cannot create a project (403)', call('POST', '/projects', {'name': 'nope nope'}, uid=me('commercial'))[0] == 403)
 
     t1 = mktask(pid, 'project_manager', 'commercial', 'opportunity', 'Screen against the portfolio criteria')
@@ -111,15 +111,16 @@ try:
     check('Priya submits the brief', act(pid, 'project_manager', 'submit', 'brief')[0] == 200)
     s, p = act(pid, 'director', 'approve', 'brief')
     check('Rajiv approves the brief', s == 200, p)
-    check('ALL FIVE lanes open at the same moment', sorted(p['active_stages']) == sorted(LANES), p['active_stages'])
+    check('ALL SIX lanes open at the same moment', sorted(p['active_stages']) == sorted(LANES), p['active_stages'])
     check('Dossier Ready is still locked', p['stage_states']['dossier_ready'] == 'pending')
     check('every lane is in progress, none waiting on another', all(p['stage_states'][k] == 'in_progress' for k in LANES))
 
     # ================================================================ 3. the parallel lanes
     print('--- 3. lanes at the same time')
     work = {'commercial': 'Complete the FMEA risk analysis', 'legal': 'Draft the supplier agreement', 'regulatory': 'Compile the administrative pack',
-            'artwork': 'Carton design from the brand template', 'manufacturer': 'Request the COA for three pilot batches'}
-    owner = {'commercial': 'commercial', 'legal': 'legal', 'regulatory': 'regulatory', 'artwork': 'artwork', 'manufacturer': 'technical'}
+            'artwork': 'Carton design from the brand template', 'manufacturer': 'Request the COA for three pilot batches',
+            'quality': 'Quality risk assessment for the product'}
+    owner = {'commercial': 'commercial', 'legal': 'legal', 'regulatory': 'regulatory', 'artwork': 'artwork', 'manufacturer': 'technical', 'quality': 'quality'}
     tid = {k: mktask(pid, 'project_manager', owner[k], k, work[k]) for k in LANES}
     for k, role in owner.items():
         s, mw = call('GET', '/my-work', uid=me(role))
@@ -156,7 +157,7 @@ try:
     check('Rajiv sends it back: price above the ceiling', act(pid, 'director', 'send_back', 'commercial', 'Quote AUD 2.10 per pack is above the AUD 1.85 ceiling. Renegotiate.')[0] == 200)
     st = stage_state(pid)
     check('commercial is back in progress', st['commercial'] == 'in_progress')
-    check('the other four lanes did not move', all(st[k] == 'in_progress' for k in LANES))
+    check('the other five lanes did not move', all(st[k] == 'in_progress' for k in LANES))
     row = [r for r in P(pid)['stages'] if r['key'] == 'commercial'][0]
     check('the send-back is counted', row['rework_count'] == 1)
 
@@ -168,18 +169,19 @@ try:
     def doc_act(a, role, note=''): return call('POST', f'/documents/{cid}/actions', {'action': a, 'note': note}, uid=me(role))
     check('V1 submitted; Regulatory returns it: storage statement', doc_act('submit', 'artwork')[0] == 200 and doc_act('return', 'regulatory', 'Storage statement incorrect.')[0] == 200)
     check('Neha uploads V2 (V1 stays)', call('POST', f'/documents/{cid}/versions', {'link': 'https://x.test/carton-v2', 'note': 'Storage fixed'}, uid=me('artwork'))[0] == 201)
-    check('V2 submitted; Regulatory returns it: warning statement', doc_act('submit', 'artwork')[0] == 200 and doc_act('return', 'regulatory', 'Warning statement needs revision.')[0] == 200)
+    check('V2 passes Regulatory; Quality returns it: warning statement', doc_act('submit', 'artwork')[0] == 200 and doc_act('approve', 'regulatory')[0] == 200 and doc_act('return', 'quality', 'Warning statement needs revision.')[0] == 200)
     check('V3 uploaded and submitted', call('POST', f'/documents/{cid}/versions', {'link': 'https://x.test/carton-v3', 'note': 'Warning revised'}, uid=me('artwork'))[0] == 201 and doc_act('submit', 'artwork')[0] == 200)
     check('Neha cannot approve her own artwork (403)', doc_act('approve', 'artwork')[0] == 403)
     check('Director cannot skip the Regulatory step (403)', doc_act('approve', 'director')[0] == 403)
-    check('Regulatory approves, then the Director approves', doc_act('approve', 'regulatory')[0] == 200 and doc_act('approve', 'director')[0] == 200)
+    check('the Director cannot skip Quality (403)', doc_act('approve', 'regulatory')[0] == 200 and doc_act('approve', 'director')[0] == 403)
+    check('Regulatory, then Quality, then the Director approve', doc_act('approve', 'quality')[0] == 200 and doc_act('approve', 'director')[0] == 200)
     cd = [x for x in P(pid)['documents'] if x['id'] == cid][0]
     check('the carton is approved and V1, V2, V3 are all kept', cd['status'] == 'approved' and cd['current_version'] == 3 and len(cd.get('versions') or [1, 2, 3]) == 3, (cd['status'], cd['current_version']))
     check('an approved carton cannot be changed by the designer (403)', call('POST', f'/documents/{cid}/versions', {'link': 'https://x.test/v4', 'note': 'x'}, uid=me('artwork'))[0] == 403)
     for kind in ('Label', 'Leaflet / insert', 'Shade card'):
         s, d = call('POST', f'/projects/{pid}/documents', {'artwork': True, 'kind': kind, 'title': f'Allergy {kind}', 'link': 'https://x.test/a'}, uid=me('artwork'))
         did = [x for x in P(pid)['documents'] if x['title'] == f'Allergy {kind}'][0]['id']
-        ok = all(call('POST', f'/documents/{did}/actions', {'action': a}, uid=me(r))[0] == 200 for a, r in (('submit', 'artwork'), ('approve', 'regulatory'), ('approve', 'director')))
+        ok = all(call('POST', f'/documents/{did}/actions', {'action': a}, uid=me(r))[0] == 200 for a, r in (('submit', 'artwork'), ('approve', 'regulatory'), ('approve', 'quality'), ('approve', 'director')))
         check(f'{kind} reviewed and approved', ok)
 
     # ---- manufacturer
@@ -220,12 +222,13 @@ try:
                            ag_patch(ag['quality']['id'], {'status': 'signed', 'signed_date': '2026-10-20'})[0],
                            ag_act(ag['pv']['id'], 'approve', 'director')[0], ag_patch(ag['pv']['id'], {'status': 'signed', 'signed_date': '2026-10-21'})[0])))
     check('legal: task done and stage submitted', finish_task(tid['legal'], 'legal', 'project_manager') and act(pid, 'legal', 'submit', 'legal')[0] == 200)
+    check('quality: task done and submitted', finish_task(tid['quality'], 'quality', 'project_manager') and act(pid, 'quality', 'submit', 'quality')[0] == 200)
     check('regulatory, artwork and manufacturer submitted', all(act(pid, role, 'submit', k)[0] == 200 for k, role in (('regulatory', 'regulatory'), ('manufacturer', 'technical'))) and
           finish_task(tid['artwork'], 'artwork', 'project_manager') and act(pid, 'artwork', 'submit', 'artwork')[0] == 200)
-    for k, role in (('legal', 'director'), ('regulatory', 'director'), ('artwork', 'regulatory'), ('manufacturer', 'regulatory')):
+    for k, role in (('legal', 'director'), ('regulatory', 'director'), ('artwork', 'regulatory'), ('manufacturer', 'regulatory'), ('quality', 'director')):
         check(f'{k} approved by its own approver', act(pid, role, 'approve', k)[0] == 200)
     st = stage_state(pid)
-    check('four lanes approved, Commercial still open => Dossier Ready stays locked', st['dossier_ready'] == 'pending' and st['commercial'] == 'in_progress', st)
+    check('five lanes approved, Commercial still open => Dossier Ready stays locked', st['dossier_ready'] == 'pending' and st['commercial'] == 'in_progress', st)
     check('Dossier Ready cannot be pushed early (422)', act(pid, 'regulatory', 'submit', 'dossier_ready')[0] == 422)
     rt = mktask(pid, 'project_manager', 'commercial', 'commercial', 'Renegotiate the unit cost with the manufacturer')
     check('Commercial cannot resubmit until the renegotiation task is done (422)', act(pid, 'commercial', 'submit', 'commercial')[0] == 422)
@@ -310,7 +313,7 @@ try:
             workflows.load_registry(db)
             d = Demo(db)
             return d.drive(dict(name=name, product='x', category='Pain relief', submission_type='Listed medicine (AUST L)', at='parallel', age=3,
-                                lanes=dict(commercial='review', legal='review', regulatory='done', artwork='done', manufacturer='done'))).id
+                                lanes=dict(commercial='review', legal='review', regulatory='done', artwork='done', manufacturer='done', quality='done'))).id
     ok = 0
     for n in range(6):
         q = two_lanes_waiting(f'FLOWTEST overlap {n}')
@@ -373,6 +376,96 @@ try:
     s, r = call('POST', f'/projects/{q}/actions', {'action': 'return', 'to_stage': 'brief', 'note': 'Brief scope changed'}, uid=me('project_manager'))
     check('moving back to the brief resets every lane at once', s == 200 and r['active_stages'] == ['brief'] and all(r['stage_states'][k] == 'pending' for k in LANES), r.get('active_stages'))
     check('the history of the first pass is kept', len([e for e in r['events'] if e['action'] == 'approve']) == 2)
+
+    # ================================================================ 9. the rest of the storyline
+    print('--- 9. opportunity details, clarifications, files, reopen, soft / information dependencies, acknowledgement')
+    s, p = call('POST', '/projects', {'name': 'FLOWTEST storyline extras', 'product': 'Allergy Relief Tablets', 'potential_client': 'ABC Pharmacy',
+                                       'opportunity_value': 250000, 'project_type': 'In-Licence'}, uid=me('project_manager'))
+    q = p['id']
+    check('the opportunity keeps the client, the route and the commercial value', s == 201 and p['potential_client'] == 'ABC Pharmacy' and p['opportunity_value'] == 250000 and p['project_type'] == 'In-Licence', p)
+    s, r = call('PATCH', f'/projects/{q}', {'opportunity_value': -5}, uid=me('project_manager')); check('a negative value is refused (422)', s == 422)
+    s, r = call('PATCH', f'/projects/{q}', {'formulation': 'Loratadine 10 mg film-coated tablets', 'regulatory_route': 'Abridged generic'}, uid=me('commercial'))
+    check('Amit (who owns the opportunity) writes the brief fields', s == 200 and r['formulation'].startswith('Loratadine'), r)
+    s, r = call('PATCH', f'/projects/{q}', {'formulation': 'x'}, uid=me('legal')); check('Kavita cannot edit the brief (403)', s == 403)
+    for k, w in (('opportunity', 'commercial'),):
+        act(q, w, 'submit', k); act(q, 'director', 'approve', k)
+    # clarification on the brief
+    s, c = call('POST', f'/projects/{q}/clarifications', {'question': 'Pack size and target price are missing.', 'responder_id': me('commercial')}, uid=me('project_manager'))
+    cid = c['clarifications'][0]['id'] if s == 201 else 0
+    check('Priya asks Amit a clarification (who, what, whom)', s == 201 and c['clarifications'][0]['requested_by']['id'] == me('project_manager') and c['clarifications'][0]['responder']['id'] == me('commercial'), c)
+    s, r = call('POST', f'/projects/{q}/clarifications', {'question': 'nope nope', 'responder_id': me('commercial')}, uid=me('artwork')); check('Neha cannot raise a brief clarification (403)', s == 403)
+    s, r = act(q, 'project_manager', 'submit', 'brief')
+    check('the brief cannot be submitted with an open clarification (422)', s == 422 and 'clarification' in json.dumps(r).lower(), r)
+    s, r = call('POST', f'/clarifications/{cid}/actions', {'action': 'respond', 'note': 'x'}, uid=me('legal')); check('only the person asked can respond (403)', s == 403)
+    s, r = call('POST', f'/clarifications/{cid}/actions', {'action': 'respond', 'note': ''}, uid=me('commercial')); check('an empty response is refused (422)', s == 422)
+    s, r = call('POST', f'/clarifications/{cid}/actions', {'action': 'respond', 'note': '30 tablets, AUD 7.99 shelf price'}, uid=me('commercial')); check('Amit responds', s == 200)
+    s, r = call('POST', f'/clarifications/{cid}/actions', {'action': 'accept'}, uid=me('commercial')); check('Amit cannot accept his own answer (403)', s == 403)
+    s, r = call('POST', f'/clarifications/{cid}/actions', {'action': 'reject', 'note': ''}, uid=me('project_manager')); check('not accepting needs a reason (422)', s == 422)
+    s, r = call('POST', f'/clarifications/{cid}/actions', {'action': 'reject', 'note': 'Also state the pack barcode'}, uid=me('project_manager')); check('Priya sends it back (status open again)', s == 200 and r['clarifications'][0]['status'] == 'open' and r['clarifications'][0]['rounds'] == 1)
+    call('POST', f'/clarifications/{cid}/actions', {'action': 'respond', 'note': 'Barcode 9300000000011'}, uid=me('commercial'))
+    s, r = call('POST', f'/clarifications/{cid}/actions', {'action': 'accept', 'note': 'OK'}, uid=me('project_manager')); check('Priya accepts the answer', s == 200 and r['clarifications'][0]['status'] == 'accepted')
+    check('the brief can now be submitted and approved', act(q, 'project_manager', 'submit', 'brief')[0] == 200 and act(q, 'director', 'approve', 'brief')[0] == 200)
+    ev = [e['action'] for e in P(q)['events'] if e['area'] == 'clarification']
+    check('the whole clarification is in the history', ev[:1] == ['requested'] and 'responded' in ev and 'accepted' in ev and 'not_accepted' in ev, ev)
+
+    # soft and information dependencies
+    stg = {x['key']: x for x in P(q)['stages']}
+    check('Commercial shows a soft heads-up about Manufacturer data (never a blocker)', any(w['kind'] == 'soft' for w in stg['commercial']['warnings']) and not any('anufacturer' in b for b in stg['commercial']['blockers']), stg['commercial'])
+    check('Regulatory shows it is waiting for information from the manufacturer', any(w['kind'] == 'info' for w in stg['regulatory']['warnings']), stg['regulatory']['warnings'])
+    check('Quality / PV is a sixth lane and shows a soft note about Legal', any(w['kind'] == 'soft' and w['stage'] == 'legal' for w in stg['quality']['warnings']))
+
+    # task files: versions, and resubmission needs a new version
+    t0 = mktask(q, 'project_manager', 'quality', 'quality', 'Quality review of the product', 7)
+    s, r = call('POST', f'/tasks/{t0}/attachments', {'name': 'Quality review.docx', 'link': 'javascript:alert(1)'}, uid=me('quality')); check('a javascript: file link is refused (422)', s == 422)
+    s, r = call('POST', f'/tasks/{t0}/attachments', {'name': 'Quality review.docx', 'link': 'https://x.test/qr-v1'}, uid=me('legal')); check('Kavita cannot attach to Meera\'s task (403)', s == 403)
+    s, r = call('POST', f'/tasks/{t0}/attachments', {'name': 'Quality review.docx', 'link': 'https://x.test/qr-v1'}, uid=me('quality')); check('Meera attaches V1', s == 201)
+    call('POST', f'/tasks/{t0}/attachments', {'name': 'Quality review.docx', 'link': 'https://x.test/qr-v1b'}, uid=me('quality'))
+    tk = [x for x in P(q)['tasks'] if x['id'] == t0][0]
+    check('the same name becomes V2, V1 stays', [a['version_no'] for a in tk['attachments']] == [1, 2], tk['attachments'])
+    for a, who in (('accept', 'quality'), ('start', 'quality'), ('submit', 'quality')):
+        call('POST', f'/tasks/{t0}/actions', {'action': a}, uid=me(who))
+    s, r = call('POST', f'/tasks/{t0}/actions', {'action': 'request_changes', 'note': 'Add the PV annex'}, uid=me('project_manager')); check('Priya requests changes', s == 200)
+    s, r = call('POST', f'/tasks/{t0}/actions', {'action': 'submit'}, uid=me('quality')); check('resubmitting without a new version is refused (422)', s == 422 and 'new version' in json.dumps(r).lower(), r)
+    call('POST', f'/tasks/{t0}/attachments', {'name': 'Quality review.docx', 'link': 'https://x.test/qr-v3', 'note': 'PV annex added'}, uid=me('quality'))
+    s, r = call('POST', f'/tasks/{t0}/actions', {'action': 'submit'}, uid=me('quality')); check('with V3 attached the task can be resubmitted', s == 200)
+    s, r = call('POST', f'/tasks/{t0}/actions', {'action': 'approve'}, uid=me('project_manager')); check('and approved', s == 200)
+    tk = [x for x in P(q)['tasks'] if x['id'] == t0][0]
+    check('all three versions are kept', [a['version_no'] for a in tk['attachments']] == [1, 2, 3])
+    s, r = call('POST', f'/tasks/{t0}/attachments', {'name': 'late.docx', 'link': 'https://x.test/late'}, uid=me('quality')); check('an approved task takes no more files (422)', s == 422)
+
+    # reopen request: approved work changes only through a decision
+    s, r = call('POST', f'/projects/{q}/reopen-requests', {'kind': 'task', 'ref': str(t0), 'reason': ''}, uid=me('quality')); check('a reopen request needs a reason (422)', s == 422)
+    s, r = call('POST', f'/projects/{q}/reopen-requests', {'kind': 'task', 'ref': str(t0), 'reason': 'New safety data arrived'}, uid=me('legal')); check('someone unrelated cannot request (403)', s == 403)
+    s, r = call('POST', f'/projects/{q}/reopen-requests', {'kind': 'task', 'ref': str(t0), 'reason': 'New safety data arrived'}, uid=me('quality'))
+    rid = r['reopen_requests'][0]['id'] if s == 201 else 0
+    check('Meera requests a reopen of her approved task', s == 201 and r['reopen_requests'][0]['status'] == 'pending', r)
+    s, r2 = call('POST', f'/projects/{q}/reopen-requests', {'kind': 'task', 'ref': str(t0), 'reason': 'again'}, uid=me('quality')); check('a second request for the same task is refused (422)', s == 422)
+    s, r2 = call('POST', f'/reopen-requests/{rid}/decision', {'approve': True}, uid=me('quality')); check('she cannot decide her own request (403)', s == 403)
+    s, r2 = call('POST', f'/reopen-requests/{rid}/decision', {'approve': True}, uid=me('project_manager')); check('Priya (no unlock permission) cannot decide (403)', s == 403)
+    s, r2 = call('POST', f'/reopen-requests/{rid}/decision', {'approve': False, 'note': ''}, uid=me('director')); check('declining needs a reason (422)', s == 422)
+    s, r2 = call('POST', f'/reopen-requests/{rid}/decision', {'approve': True, 'note': 'Go ahead'}, uid=me('director'))
+    tk = [x for x in r2['tasks'] if x['id'] == t0][0] if s == 200 else {}
+    check('Rajiv approves: the task is open for amendment again', s == 200 and tk.get('state') == 'changes_requested', tk.get('state'))
+    check('the reopen request and its decision are in the history', {'reopen_requested', 'reopen_approved'} <= {e['action'] for e in r2['events']})
+
+    # manufacturer: needed for, raw material specification; legal addendum; submission acknowledgement
+    s, r = call('POST', f'/projects/{q}/mfr', {'kind': 'raw_spec', 'manufacturer': 'Zenith', 'needed_for': 'Module 3 (Drug substance)'}, uid=me('technical'))
+    check('Raw material specification can be requested, with what it is needed for', s == 201 and r['mfr_requests'][0]['needed_for'] == 'Module 3 (Drug substance)' and r['mfr_requests'][0]['label'] == 'Raw material specification', r)
+    s, r = call('POST', f'/projects/{q}/agreements', {'kind': 'addendum', 'counterparty': 'Zenith'}, uid=me('legal')); check('an Addendum can be added to the legal register', s == 201 and any(a['kind'] == 'addendum' for a in r['agreements']), r)
+    s, rg = call('GET', '/legal-register', uid=me('legal'))
+    row = [x for x in rg if x['project_id'] == q and x['kind'] == 'addendum'][0]
+    check('the register shows when each agreement started', bool(row['started_on']) and row['closed'] is False and row['age_days'] is not None, row)
+    sub_project = [x for x in call('GET', '/projects', uid=me('director'))[1] if 'submission' in x['active_stages'] or 'rfi' in x['active_stages']]
+    if sub_project:
+        pp = P(sub_project[0]['id'])
+        sid = pp['submissions'][0]['id']
+        s, r = call('PATCH', f'/submissions/{sid}', {'status': 'under_evaluation', 'acknowledgement_ref': ''}, uid=me('regulatory'))
+        check('an acknowledgement reference is needed for acknowledged / under evaluation', s == 200 or s == 422)
+        s, r = call('PATCH', f'/submissions/{sid}', {'status': 'acknowledged', 'acknowledgement_ref': 'ACK-7001'}, uid=me('regulatory'))
+        sm = [x for x in r['submissions'] if x['id'] == sid][0] if s == 200 else {}
+        check('the submission records its acknowledgement and status', s == 200 and sm['status'] == 'acknowledged' and sm['acknowledgement_ref'] == 'ACK-7001' and sm['acknowledged_on'], sm)
+        s, r = call('PATCH', f'/submissions/{sid}', {'status': 'queried'}, uid=me('commercial')); check('Amit cannot update a submission (403)', s == 403)
+        s, r = call('PATCH', f'/submissions/{sid}', {'status': 'nonsense'}, uid=me('regulatory')); check('an unknown submission status is refused (422)', s == 422)
 
     print('\nFAILS:', fails)
 finally:

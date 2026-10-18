@@ -4,6 +4,7 @@ import { useCan, useConfig, useMe, useStages } from '../context'
 import { Empty, Person, fmtDate, label, useDo } from './bits'
 import FormModal from './FormModal'
 import Icon from './Icon'
+import { ReopenButton } from './Reopen'
 
 const FLOW_LABEL = { draft: 'Draft', in_review: 'In review', regulatory_review: 'Regulatory review', director_approval: 'Director approval', approved: 'Approved' }
 const STATUS_LABEL = { ...FLOW_LABEL, returned: 'Returned for changes', locked: 'Locked' }
@@ -12,13 +13,13 @@ function Flow({ doc }) {
   const idx = doc.status === 'returned' ? 0 : doc.status === 'locked' ? doc.flow.length - 1 : doc.flow.indexOf(doc.status)
   return (
     <ol className="docflow" aria-label="Review flow">
-      {doc.flow.map((s, i) => <li key={s} className={i < idx || doc.status === 'locked' ? 'done' : i === idx ? (doc.status === 'returned' ? 'returned' : 'now') : ''}>{FLOW_LABEL[s]}</li>)}
+      {doc.flow.map((s, i) => <li key={s} className={i < idx || doc.status === 'locked' ? 'done' : i === idx ? (doc.status === 'returned' ? 'returned' : 'now') : ''}>{doc.flow_labels?.[s] || FLOW_LABEL[s] || label(s)}</li>)}
     </ol>
   )
 }
 
 /** A document (or artwork item): V1/V2/V3, review -> approve -> lock, return for changes. */
-function Doc({ doc, onChange }) {
+function Doc({ doc, onChange, project }) {
   const me = useMe()
   const can = useCan()
   const stages = useStages()
@@ -28,7 +29,7 @@ function Doc({ doc, onChange }) {
   const { busy, error, run } = useDo()
   const reviewing = doc.flow.slice(1, -1).includes(doc.status)
   const sup = me.role_key === 'super_admin'
-  const roles = doc.is_artwork ? (doc.status === 'regulatory_review' ? ['regulatory'] : ['director'])
+  const roles = doc.is_artwork ? (doc.review_roles?.length ? doc.review_roles : ['director'])
     : (stages.find((s) => s.key === doc.stage_key)?.approver_roles || ['director', 'project_manager'])
   const mayReview = reviewing && (sup || roles.includes(me.role_key))
   const latest = doc.versions[doc.versions.length - 1]
@@ -42,7 +43,7 @@ function Doc({ doc, onChange }) {
           <small>{doc.kind} · V{doc.current_version}{!doc.required && ' · optional'}</small>
         </div>
         <Person user={doc.owner} />
-        <span className={`dstate dstate-${doc.status}`}>{STATUS_LABEL[doc.status]}</span>
+        <span className={`dstate dstate-${doc.status}`}>{doc.flow_labels?.[doc.status] || STATUS_LABEL[doc.status] || label(doc.status)}</span>
       </header>
       {open && (
         <div className="task-body">
@@ -62,9 +63,10 @@ function Doc({ doc, onChange }) {
           <div className="actions">
             {['draft', 'returned'].includes(doc.status) && <button className="btn primary" disabled={busy} onClick={() => go('submit')}>{doc.is_artwork ? 'Send to regulatory review' : 'Submit for review'}</button>}
             {['draft', 'returned', 'approved'].includes(doc.status) && <button className="btn line" onClick={() => setVersion(true)}>Upload new version</button>}
-            {mayReview && <button className="btn primary" disabled={busy} onClick={() => go('approve')}>{doc.is_artwork && doc.status === 'regulatory_review' ? 'Approve (regulatory)' : doc.is_artwork ? 'Approve (director)' : 'Approve'}</button>}
+            {mayReview && <button className="btn primary" disabled={busy} onClick={() => go('approve')}>{doc.is_artwork ? `Approve (${doc.flow_labels[doc.status] || 'review'})` : 'Approve'}</button>}
             {mayReview && <button className="btn line" disabled={busy} onClick={() => go('return')}>Return for changes</button>}
             {reviewing && !mayReview && <span className="muted">Waiting for {roles.map((r) => label(r)).join(' / ')}.</span>}
+            {['approved', 'locked'].includes(doc.status) && project && <ReopenButton project={project} kind="document" refId={doc.id} onChange={onChange} />}
             {doc.status === 'approved' && can('lock_unlock') && <button className="btn line" disabled={busy} onClick={() => go('lock')}>Lock</button>}
             {doc.status === 'locked' && can('lock_unlock') && <button className="btn line" disabled={busy} onClick={() => go('unlock')}>Unlock</button>}
           </div>
@@ -98,7 +100,7 @@ export default function DocList({ project, onChange, stageKey, artwork, title })
         {mayAdd && <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} />{artwork ? 'New artwork item' : 'Add document'}</button>}
       </header>
       {!docs.length && <Empty>{artwork ? 'No artwork yet. Add the carton, label, leaflet, print proof or shade card; each goes through regulatory review, then director approval.' : 'No documents yet. Add a link and it is versioned (V1, V2, V3…) with review, approval and lock.'}</Empty>}
-      <div className="tasklist">{docs.map((d) => <Doc key={d.id} doc={d} onChange={onChange} />)}</div>
+      <div className="tasklist">{docs.map((d) => <Doc key={d.id} doc={d} project={project} onChange={onChange} />)}</div>
       {adding && (
         <FormModal title={artwork ? 'New artwork item' : 'Add a document'} wide
           intro={artwork ? 'Starts as V1 (draft). Send it to regulatory review, then director approval.' : 'Starts as V1 (draft). Reviewers approve it; approved documents can be locked.'}

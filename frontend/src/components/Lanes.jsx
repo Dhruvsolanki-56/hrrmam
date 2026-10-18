@@ -32,6 +32,12 @@ function summarise(project, stage, row) {
     return { done, total: reqs.length, text: reqs.length ? `${done} of ${reqs.length} documents accepted` : 'Nothing requested yet',
       more: reqs.length - done > 0 ? `${reqs.length - done} pending` : '' }
   }
+  if (f.includes('quality')) {
+    const docs = project.documents.filter((d) => d.stage_key === stage.key)
+    const ok = docs.filter((d) => ['approved', 'locked'].includes(d.status)).length
+    const t = `${row.tasks_done} of ${row.tasks_total} tasks approved`
+    return { done: row.tasks_done, total: row.tasks_total, text: row.tasks_total ? t : 'No tasks yet', more: docs.length ? `${ok} of ${docs.length} documents approved` : '' }
+  }
   return { done: row.tasks_done, total: row.tasks_total, text: row.tasks_total ? `${row.tasks_done} of ${row.tasks_total} tasks approved` : 'No tasks yet', more: '' }
 }
 
@@ -75,6 +81,7 @@ export default function Lanes({ project, goTab }) {
                   <small>{sum.text}{sum.more && <> · {sum.more}</>}</small>
                 </span>
                 <span className="lane-meter" aria-hidden="true"><i style={{ width: `${pct}%` }} /></span>
+                {r.warnings?.length > 0 && <span className="lane-deps">{r.warnings.map((w) => <small key={w.text} className={`dep dep-${w.kind}`}>{w.text}</small>)}</span>}
               </button>
             </li>
           )

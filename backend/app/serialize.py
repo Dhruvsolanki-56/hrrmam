@@ -40,6 +40,9 @@ def project_row(p: Project) -> dict:
         "workflow_id": p.workflow_id,
         "id": p.id, "code": p.code, "name": p.name, "product": p.product, "project_type": p.project_type,
         "category": p.category, "market": p.market, "initiator": p.initiator, "summary": p.summary,
+        "potential_client": p.potential_client, "opportunity_value": p.opportunity_value, "formulation": p.formulation,
+        "commercial_expectations": p.commercial_expectations, "manufacturer_info": p.manufacturer_info,
+        "regulatory_route": p.regulatory_route, "stakeholders": p.stakeholders,
         "project_manager": user_brief(p.project_manager), "submission_type": p.submission_type,
         "target_submission": iso(p.target_submission), "target_launch": iso(p.target_launch),
         "critical_blocker": p.critical_blocker, "status": p.status, "stage_key": p.stage_key,
@@ -61,11 +64,27 @@ def task_out(t: Task, with_project: bool = False) -> dict:
         "required": t.required, "bypassed": t.bypassed, "rework_count": t.rework_count, "overdue": t.overdue, "open": t.open,
         "pending_request": date_request_out(req) if req else None,
         "date_requests": [date_request_out(r) for r in t.date_requests],
+        "attachments": [{"id": a.id, "name": a.name, "version_no": a.version_no, "link": a.link, "note": a.note,
+                         "created_by": a.created_by, "created_at": iso(a.created_at)} for a in t.attachments],
         "created_at": iso(t.created_at), "updated_at": iso(t.updated_at),
     }
     if with_project:
         d["project_name"], d["project_code"] = t.project.name, t.project.code
     return d
+
+
+def clarification_out(c) -> dict:
+    return {"id": c.id, "question": c.question, "requested_by": user_brief(c.requested_by), "responder": user_brief(c.responder),
+            "due_date": iso(c.due_date), "status": c.status, "response": c.response, "responded_on": iso(c.responded_on),
+            "decision_note": c.decision_note, "decided_by": user_brief(c.decided_by), "decided_on": iso(c.decided_on),
+            "rounds": c.rounds, "created_at": iso(c.created_at),
+            "overdue": bool(c.due_date and c.status != "accepted" and c.due_date < date.today())}
+
+
+def reopen_out(r) -> dict:
+    return {"id": r.id, "kind": r.kind, "ref": r.ref, "label": r.label, "reason": r.reason, "status": r.status,
+            "requested_by": user_brief(r.requested_by), "decided_by": user_brief(r.decided_by),
+            "decision_note": r.decision_note, "created_at": iso(r.created_at), "decided_at": iso(r.decided_at)}
 
 
 def date_request_out(r: DateRequest) -> dict:
@@ -80,6 +99,8 @@ def agreement_out(a: Agreement, with_project: bool = False) -> dict:
     d = {"id": a.id, "project_id": a.project_id, "kind": a.kind, "label": workflow.AGREEMENT_KINDS[a.kind],
          "counterparty": a.counterparty, "status": a.status, "owner": user_brief(a.owner), "due_date": iso(a.due_date),
          "signed_date": iso(a.signed_date), "link": a.link, "notes": a.notes, "core": a.core, "age_days": age,
+         "started_on": iso(aware(a.created_at).date()), "closed": a.status == "signed",
+         "closed_in_days": (a.signed_date - aware(a.created_at).date()).days if a.status == "signed" and a.signed_date else None,
          "overdue": bool(a.due_date and a.status != "signed" and a.due_date < date.today())}
     if with_project:
         d["project_name"], d["project_code"] = a.project.name, a.project.code
@@ -88,7 +109,7 @@ def agreement_out(a: Agreement, with_project: bool = False) -> dict:
 
 def mfr_out(m: ManufacturerRequest, with_project: bool = False) -> dict:
     d = {"id": m.id, "project_id": m.project_id, "kind": m.kind, "label": workflow.MFR_KINDS[m.kind],
-         "manufacturer": m.manufacturer, "status": m.status, "required": m.required, "requested_on": iso(m.requested_on),
+         "manufacturer": m.manufacturer, "needed_for": m.needed_for, "status": m.status, "required": m.required, "requested_on": iso(m.requested_on),
          "due_date": iso(m.due_date), "received_on": iso(m.received_on), "link": m.link, "notes": m.notes,
          "owner": user_brief(m.owner), "overdue": bool(m.due_date and m.status in ("requested",) and m.due_date < date.today())}
     if with_project:
@@ -143,7 +164,8 @@ def stage_rows(p: Project) -> list[dict]:
                     "started_at": iso(r.started_at), "decided_at": iso(r.decided_at), "days_in_stage": r.days_in_stage,
                     "sla_days": r.sla_days, "overdue": r.overdue,
                     "tasks_total": len(tasks), "tasks_done": sum(1 for t in tasks if t.state in workflow.TASK_DONE),
-                    "blockers": engine.blockers(p, r.stage_key) if active else []})
+                    "blockers": engine.blockers(p, r.stage_key) if active else [],
+                    "warnings": engine.warnings(p, r.stage_key) if active else []})
     return out
 
 
@@ -161,9 +183,12 @@ def project_detail(p: Project) -> dict:
         "dossier_items": [{"id": i.id, "module": i.module, "title": i.title, "status": i.status, "required": i.required,
                            "link": i.link, "notes": i.notes} for i in p.dossier_items],
         "submissions": [{"id": s.id, "kind": s.kind, "reference": s.reference, "platform": s.platform,
-                         "submitted_on": iso(s.submitted_on), "submitted_by": s.submitted_by, "notes": s.notes} for s in p.submissions],
+                         "submitted_on": iso(s.submitted_on), "submitted_by": s.submitted_by, "notes": s.notes, "status": s.status,
+                         "acknowledgement_ref": s.acknowledgement_ref, "acknowledged_on": iso(s.acknowledged_on)} for s in p.submissions],
         "mfr_requests": [mfr_out(m) for m in p.mfr_requests],
         "rfis": [rfi_out(r) for r in p.rfis],
         "documents": [document_out(d) for d in p.documents],
         "events": [event_out(e) for e in p.events],
+        "clarifications": [clarification_out(c) for c in p.clarifications],
+        "reopen_requests": [reopen_out(r) for r in p.reopen_requests],
     }

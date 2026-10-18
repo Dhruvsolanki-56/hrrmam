@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from . import schemas as sc
 from . import workflow
 from .models import Notification, Project, Role, Setting, User
-from .services import common, engine, modules, tasks, workflows
+from .services import common, engine, extras, modules, tasks, workflows
 
 
 def seed_reference(db: Session):
@@ -45,18 +45,18 @@ def publish_process(db: Session):
 PEOPLE = [  # name, role, country
     ("Vikram Malhotra", "super_admin", "AU"), ("Rajiv Kapoor", "director", "AU"), ("Priya Sharma", "project_manager", "IN"),
     ("Amit Verma", "commercial", "AU"), ("Kavita Joshi", "legal", "IN"), ("Anjali Desai", "regulatory", "IN"),
-    ("Neha Kulkarni", "artwork", "IN"), ("Suresh Patel", "technical", "IN"),
+    ("Neha Kulkarni", "artwork", "IN"), ("Suresh Patel", "technical", "IN"), ("Meera Iyer", "quality", "IN"),
 ]
 
 # stage -> (who does the work, who approves it)
 LANE = {
     "opportunity": ("commercial", "director"), "brief": ("project_manager", "director"), "commercial": ("commercial", "director"),
     "legal": ("legal", "director"), "regulatory": ("regulatory", "director"), "artwork": ("artwork", "regulatory"),
-    "manufacturer": ("technical", "regulatory"), "dossier_ready": ("regulatory", "director"), "submission": ("regulatory", "director"),
+    "manufacturer": ("technical", "regulatory"), "quality": ("quality", "director"), "dossier_ready": ("regulatory", "director"), "submission": ("regulatory", "director"),
     "rfi": ("regulatory", "director"), "approval": ("regulatory", "director"), "readiness": ("commercial", "director"),
     "manufacturing": ("technical", "director"), "dispatch": ("technical", "director"), "completion": ("project_manager", "director"),
 }
-LANES = ("commercial", "legal", "regulatory", "artwork", "manufacturer")
+LANES = ("commercial", "legal", "regulatory", "artwork", "manufacturer", "quality")
 
 
 def seed_demo(db: Session):
@@ -85,7 +85,7 @@ TASKS = {
                     ("Market sizing and competitor scan", "Pharmacy sales for the last 12 months plus the top five competing products."),
                     ("Shortlist candidate manufacturers", "At least two Indian manufacturers with TGA GMP clearance for this dosage form.")],
     "brief": [("Draft the project brief", "Product, market, client, formulation, commercial expectations, timings and the regulatory route."),
-              ("Clarification required: confirm pack size and target price", "India's review found these two items missing from the brief. Answer here so the reply stays on record."),
+              ("Confirm the target client and launch window", "Name the pharmacy group and the month Australia wants the product on shelf."),
               ("Brief review with the Director", "Walk through the brief and record the decisions in the minutes.")],
     "commercial": [("Complete the FMEA risk analysis", "Failure modes for supply, quality and regulatory risk, each with an owner and a mitigation."),
                    ("Finalise the cost model", "Landed cost per pack including freight, duty and packaging."),
@@ -107,6 +107,10 @@ TASKS = {
                      ("Chase the MSDS for all excipients", "Current safety data sheets, no older than three years."),
                      ("Review the stability protocol", "Long-term and accelerated conditions with 6, 12 and 24 month pulls."),
                      ("Collect the process description", "Manufacturing flow chart with in-process controls.")],
+    "quality": [("Quality risk assessment for the product", "Critical quality attributes, controls and the residual risk rating."),
+                ("Review the manufacturer's quality system", "Audit report, CAPA status and the last inspection outcome."),
+                ("Set up the pharmacovigilance contact points", "Safety mailbox, 24-hour contact and the reporting timelines."),
+                ("Complete the PV system summary", "Summarise how adverse events are collected, assessed and reported.")],
     "dossier_ready": [("Final dossier QC", "Hyperlinks, bookmarks and page numbering across all modules."),
                       ("Cross-check artwork against the dossier", "Carton and label text against the product information."),
                       ("Submission ready sign-off checklist", "Confirm commercial, legal, dossier, artwork and manufacturer data are all approved.")],
@@ -137,6 +141,7 @@ STAGE_DOCS = {
     "commercial": [("Feasibility / FMEA", "Feasibility and FMEA report"), ("Report", "Cost model and margin analysis")],
     "regulatory": [("Report", "Regulatory strategy")],
     "manufacturer": [("Specification", "Finished product specification")],
+    "quality": [("Report", "Quality risk assessment"), ("Report", "PV system summary")],
     "dossier_ready": [("Dossier", "Submission ready checklist")],
     "submission": [("Correspondence", "TGA acknowledgement letter")],
     "approval": [("Correspondence", "ARTG approval letter")],
@@ -154,11 +159,17 @@ SEND_BACK = {
     "regulatory": "The Module 3 stability justification is incomplete. Include the latest report.",
     "artwork": "Storage statement on the carton does not match the ARTG entry.",
     "manufacturer": "The COA is missing the assay results for batch 3.",
+    "quality": "The PV contact points are missing the out-of-hours number.",
 }
 REWORK_TASK = {
     "commercial": ("Renegotiate the unit cost with the manufacturer", "Target below AUD 1.85 per pack. Report back with the revised quote."),
 }
-AGREEMENT_NOTES = {"supplier": "Five-year supply term, 60-day payment, annual price review.",
+NEEDED_FOR = {"coa": "Module 3 (Quality)", "msds": "Module 3 (Quality)", "specification": "Module 3 (Quality)",
+              "raw_spec": "Module 3 (Drug substance)", "stability": "Module 3 (Stability)", "testing": "Module 3 (Quality)",
+              "manufacturing": "Module 3 (Process)"}
+CLIENTS = ["ABC Pharmacy", "CityCare Pharmacies", "Southern Cross Chemists", "Harbour Health Group", "Wellness Rx Group", "Outback Pharmacy Alliance"]
+AGREEMENT_NOTES = {"addendum": "Adds the second manufacturing site to the supply agreement.", "notice": "Notice of the manufacturer's change of address.",
+                   "supplier": "Five-year supply term, 60-day payment, annual price review.",
                    "quality": "Change control notice period 90 days; both QA heads sign.",
                    "pv": "Serious adverse events exchanged within 24 hours.",
                    "nda": "Mutual NDA covering the formulation and pricing.",
@@ -169,7 +180,8 @@ AGREEMENT_OPEN = {"in_review": "With Legal for review before it goes for signatu
                   "drafting": "First draft on the 2026 template."}
 DOSSIER_NOTES = {"reviewed": "Reviewed by Regulatory, no open comments.", "awaiting_approval": "Submitted for review.",
                  "draft": "Drafting in progress.", "changes_requested": "Update the batch numbers to match the COAs."}
-MFR_NOTES = {"coa": "Three registration batches. Needed for Module 3.", "msds": "Safety data sheets for every excipient.",
+MFR_NOTES = {"raw_spec": "Drug substance and excipient specifications from the approved suppliers.",
+             "coa": "Three registration batches. Needed for Module 3.", "msds": "Safety data sheets for every excipient.",
              "specification": "Release and shelf-life specification. Needed for Module 3.",
              "stability": "Zone IVa conditions, 6/12/24 month pulls. Needed for Module 3.",
              "testing": "Microbial limits and preservative efficacy. Needed for Module 3.",
@@ -232,6 +244,8 @@ class Demo:
         due_at = (datetime.combine(date.today(), time(23, 59), tzinfo=timezone.utc) if due == "today" else self.now + timedelta(days=due))
         t = tasks.create_task(self.db, self.R[creator], p, stage, title, desc, self.R[assignee].id, due_at, required)
         for who, action, *rest in steps:
+            if action == "submit":
+                extras.add_attachment(self.db, self.R[assignee], t, "", self.link(p, "task", str(t.id), "v1"), "First version")
             kw = {"note": rest[0]} if rest else {}
             if len(rest) > 1:
                 kw["due_at"] = self.now + timedelta(days=rest[1])
@@ -305,14 +319,26 @@ class Demo:
         for i, kind in enumerate(("supplier", "quality", "pv")):
             due = today + timedelta(days=(-30 + 4 * i) if level in ("done", "review", "returned") else (-6 + 5 * i if late else 8 + 9 * i))
             self.move_agreement(core[kind], goals[i], due)
-        extras = {"done": ("signed", "signed", "signed"), "review": ("signed", "signed", "signed"), "returned": ("signed", "signed", "signed"),
-                  "nearly": ("signed", "signed", "in_review"), "mid": ("signed", None, "drafting"), "late": ("signed", None, "drafting"),
-                  "early": ("signed", None, None)}[level]
-        for kind, goal in zip(("nda", "cda", "poa"), extras):
+        extras = {"done": ("signed", "signed", "signed", "signed"), "review": ("signed", "signed", "signed", None), "returned": ("signed", "signed", "signed", None),
+                  "nearly": ("signed", "signed", "in_review", "drafting"), "mid": ("signed", None, "drafting", None), "late": ("signed", None, "drafting", "drafting"),
+                  "early": ("signed", None, None, None)}[level]
+        for kind, goal in zip(("nda", "cda", "poa", "addendum"), extras):
             if not goal:
                 continue
             a = modules.create_agreement(self.db, self.R["legal"], p, sc.AgreementCreate(kind=kind, counterparty=self.mfr, owner_id=self.R["legal"].id))
             self.move_agreement(a, goal, today - timedelta(days=40 if goal == "signed" else -12))
+
+    # ---- brief: India reviews it; what is missing is asked, answered and accepted on the record
+    def m_brief(self, p, level):
+        pm, com = self.R["project_manager"], self.R["commercial"]
+        c = extras.create_clarification(self.db, pm, p, "Pack size and the target price per pack are missing from the brief. Please confirm both.",
+                                        com.id, date.today() + timedelta(days=4))
+        if level in ("mid", "late", "early"):
+            if self.k % 2:
+                extras.clarification_action(self.db, com, c, "respond", "30 tablets per pack; target shelf price AUD 7.99.")
+            return
+        extras.clarification_action(self.db, com, c, "respond", "30 tablets per pack; target shelf price AUD 7.99.")
+        extras.clarification_action(self.db, pm, c, "accept", "")
 
     # ---- regulatory: the dossier checklist (M1-M5 only where the submission type needs them)
     def m_regulatory(self, p, level):
@@ -349,9 +375,14 @@ class Demo:
         slug = kind.split()[0].lower()
         doc = modules.create_document(d, designer, p, sc.DocumentCreate(
             artwork=True, kind=kind, title=title, owner_id=designer.id, link=self.link(p, "artwork", f"{slug}-v1"), note="Initial layout from the Neo brand template"))
+        qa = self.R["quality"]
         for v in range(1, versions):
             modules.document_action(d, designer, doc, "submit", "")
-            modules.document_action(d, ra, doc, "return", ART_RETURNS[(self.k + v) % len(ART_RETURNS)] if v > 1 else ART_RETURNS[0])
+            if v == 2:  # the example in the brief: V2 is stopped by Quality
+                modules.document_action(d, ra, doc, "approve", "")
+                modules.document_action(d, qa, doc, "return", "Warning statement needs revision.")
+            else:
+                modules.document_action(d, ra, doc, "return", ART_RETURNS[(self.k + v) % len(ART_RETURNS)] if v > 1 else ART_RETURNS[0])
             modules.add_version(d, designer, doc, sc.VersionIn(link=self.link(p, "artwork", f"{slug}-v{v + 1}"), note="Updated after the review comments"))
         if end == "draft":
             return
@@ -362,6 +393,9 @@ class Demo:
         if end == "regulatory_review":
             return
         modules.document_action(d, ra, doc, "approve", "")
+        if end == "quality_review":
+            return
+        modules.document_action(d, qa, doc, "approve", "")
         if end == "director_approval":
             return
         modules.document_action(d, director, doc, "approve", "")
@@ -373,7 +407,7 @@ class Demo:
                 "returned": [("approved", 2), ("approved", 1), ("approved", 1), ("approved", 1)],
                 # the example in the brief: Carton V3 under review while the rest is further ahead
                 "nearly": [("regulatory_review", 3), ("approved", 1), ("approved", 2), ("approved", 1)],
-                "mid": [("regulatory_review", 2), ("approved", 1), ("director_approval", 1), ("draft", 1)],
+                "mid": [("quality_review", 2), ("approved", 1), ("director_approval", 1), ("draft", 1)],
                 "late": [("returned", 2), ("regulatory_review", 1), ("draft", 1), ("returned", 2)],
                 "early": [("draft", 1), ("draft", 1), None, None]}[level]
         if level == "mid" and self.k % 2:
@@ -398,20 +432,20 @@ class Demo:
 
     def m_manufacturer(self, p, level):
         today = date.today()
-        kinds = ("coa", "msds", "specification", "stability", "testing", "manufacturing")
+        kinds = ("coa", "msds", "specification", "raw_spec", "stability", "testing", "manufacturing")
         rot = self.k % 3
-        goals = {"done": ["accepted"] * 6, "review": ["accepted"] * 6, "returned": ["accepted"] * 6,
+        goals = {"done": ["accepted"] * 7, "review": ["accepted"] * 7, "returned": ["accepted"] * 7,
                  # the example in the brief: two documents still pending
-                 "nearly": ["accepted", "accepted", "accepted", "requested", "under_review", "requested"],
-                 "mid": ["accepted", "under_review", "received", "requested", "requested", "requested"],
-                 "late": ["accepted", "requested", "changes_requested", "requested", "requested", "requested"],
-                 "early": ["received", "requested", "requested", "requested", "requested", "requested"]}[level]
+                 "nearly": ["accepted", "accepted", "accepted", "accepted", "requested", "under_review", "requested"],
+                 "mid": ["accepted", "under_review", "received", "requested", "requested", "requested", "requested"],
+                 "late": ["accepted", "requested", "changes_requested", "requested", "requested", "requested", "requested"],
+                 "early": ["received", "requested", "requested", "requested", "requested", "requested", "requested"]}[level]
         if level in ("mid", "late"):
             goals = goals[rot:] + goals[:rot]
         for i, (kind, goal) in enumerate(zip(kinds, goals)):
             overdue = goal == "requested" and i % 2 == 1 and level in ("late", "mid")
             m = modules.create_mfr(self.db, self.R["technical"], p, sc.MfrCreate(
-                kind=kind, manufacturer=self.mfr, required=kind != "manufacturing", notes=MFR_NOTES[kind], owner_id=self.R["technical"].id,
+                kind=kind, manufacturer=self.mfr, needed_for=NEEDED_FOR[kind], required=kind != "manufacturing", notes=MFR_NOTES[kind], owner_id=self.R["technical"].id,
                 due_date=today + timedelta(days=-25 if level in ("done", "review", "returned") else -4 if overdue else 10 + 3 * i)))
             self.move_mfr(m, goal)
 
@@ -420,11 +454,14 @@ class Demo:
         if level in ("mid", "early", "late"):
             return
         today = date.today()
-        modules.record_submission(self.db, self.R["regulatory"], p, sc.SubmissionIn(
+        s = modules.record_submission(self.db, self.R["regulatory"], p, sc.SubmissionIn(
             kind="variation" if p.submission_type.startswith("Variation") else "initial",
             reference=f"TGA-APP-2026-{10000 + (p.id * 137) % 80000}", platform="TGA Business Services",
             submitted_on=today - timedelta(days=60 if level == "done" else 4),
             notes="Dossier lodged and the evaluation fee paid. The acknowledgement letter is filed under Documents."))
+        modules.update_submission(self.db, self.R["regulatory"], s, sc.SubmissionUpdate(
+            status="approved" if level == "done" else "acknowledged", acknowledgement_ref=f"ACK-{20000 + (p.id * 311) % 70000}",
+            acknowledged_on=date.today() - timedelta(days=58 if level == "done" else 3)))
 
     def m_rfi(self, p, level):
         d, ra, today = self.db, self.R["regulatory"], date.today()
@@ -507,11 +544,19 @@ class Demo:
         sub_in, launch_in = spec.pop("sub_in", None), spec.pop("launch_in", None)
         self.calm, self.mfr, self.want_rfi = spec.pop("calm", False), spec.pop("mfr", "Zenith Pharma Pvt Ltd"), spec.pop("rfi", False)
         today = date.today()
+        spec_product = spec.get("product", "")
+        reopen = spec.pop("reopen", False)
         initiator = spec.pop("initiator", "Amit Verma")
         p = engine.create_project(self.db, self.R["project_manager"], sc.ProjectCreate(
             **spec, market="Australia", initiator=initiator,
             target_submission=today + timedelta(days=sub_in) if sub_in is not None else None,
             target_launch=today + timedelta(days=launch_in) if launch_in is not None else None))
+        engine.update_project(self.db, self.R["project_manager"], p, sc.ProjectUpdate(
+            potential_client=CLIENTS[p.id % len(CLIENTS)], opportunity_value=float(150000 + (p.id * 97531) % 2200000),
+            formulation=spec_product, commercial_expectations="Gross margin above 35% at the target shelf price; first-year volume agreed with the client.",
+            manufacturer_info=self.mfr + ", India (TGA GMP clearance held)",
+            regulatory_route=p.submission_type or "To be decided with Regulatory",
+            stakeholders="Rajiv Kapoor (Director), Amit Verma (Commercial), Priya Sharma (Project Manager)"))
         plan = self.plan(p, at, lanes, state)
         for key in [s.key for s in p.flow.stages]:
             if key in plan:
@@ -524,6 +569,11 @@ class Demo:
             worker, approver = LANE[reject_at]
             self.act(p, worker, "submit", reject_at)
             self.act(p, approver, "reject", reject_at, "Landed cost leaves less than 20% margin at the target shelf price; revisit next financial year.")
+        if reopen:
+            t = next((x for x in p.tasks if x.state == "approved" and x.required), None)
+            if t:
+                extras.request_reopen(self.db, self.R[t.assignee.role_key], p, "task", t.id,
+                                      "The pack size changed after approval; the cost model needs the new figure.")
         if status == "on_hold":
             self.act(p, "project_manager", "hold", note="Waiting for the manufacturer to confirm capacity on the fill line.")
         self.age(p, days)
@@ -629,7 +679,7 @@ PORTFOLIO = [
          at="rfi", state="nearly", calm=True, age=140, sub_in=-35, launch_in=130),
     spec(name="Paracetamol 500 mg Tablets", product="Paracetamol 500 mg film-coated tablets, 20 and 100 packs", category="Pain relief",
          submission_type="Registered medicine – abridged / generic (AUST R)", rfi=True, summary="Generic paracetamol tablets to complete the Neo pain range.",
-         at="approval", state="review", calm=True, age=230, sub_in=-110, launch_in=60),
+         at="approval", state="review", calm=True, age=230, sub_in=-110, launch_in=60, reopen=True),
     spec(name="Sodium Chloride Eye Wash", product="Sterile eye wash, 100 mL with eye cup", category="Eye care",
          submission_type="Listed medicine (AUST L)", mfr="Sterifill Pharma", summary="Sterile eye wash for irritation and foreign bodies.",
          at="readiness", state="mid", calm=True, age=210, sub_in=-90, launch_in=25),

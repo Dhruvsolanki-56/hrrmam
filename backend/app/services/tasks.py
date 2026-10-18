@@ -91,6 +91,9 @@ def apply_action(db: Session, user: User, t: Task, a) -> Task:
         if state in ("accepted", "in_progress"):
             t.state = "submitted"
         elif state == "changes_requested":
+            from .extras import needs_new_version
+            if needs_new_version(t):
+                raise WorkflowError("Attach the corrected file as a new version before resubmitting.")
             t.state = "resubmitted"
         elif state == "assigned":
             raise WorkflowError("Accept the task first.")

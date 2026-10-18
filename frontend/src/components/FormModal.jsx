@@ -30,7 +30,7 @@ export default function FormModal({ title, intro, fields, initial = {}, submitLa
           {f.options.map(([val, lab]) => <option key={val} value={val}>{lab}</option>)}
         </select>
       )
-      case 'user': return <UserSelect value={v[f.key]} onChange={(x) => set(f.key, x)} roles={f.roles} assignable={f.assignable ?? false} />
+      case 'user': return <UserSelect id={`f-${f.key}`} value={v[f.key]} onChange={(x) => set(f.key, x)} roles={f.roles} assignable={f.assignable ?? false} />
       case 'checkbox': return <input type="checkbox" checked={!!v[f.key]} onChange={(e) => set(f.key, e.target.checked)} />
       case 'date': return <input type="date" {...common} value={v[f.key] || ''} onChange={(e) => set(f.key, e.target.value)} />
       case 'datetime': return <input type="datetime-local" {...common} value={v[f.key] || ''} onChange={(e) => set(f.key, e.target.value)} />

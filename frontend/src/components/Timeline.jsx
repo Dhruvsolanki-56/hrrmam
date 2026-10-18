@@ -8,7 +8,9 @@ const VERB = {
   request_changes: 'Changes requested', request_date: 'Date change requested', approve_date: 'Date change approved',
   reject_date: 'Date change rejected', reassign: 'Reassigned', version: 'New version', return: 'Moved back', requested: 'Requested',
   opened: 'RFI opened', question: 'RFI question assigned', response: 'RFI response updated', ready: 'Response package ready',
-  submission: 'Submission recorded', close: 'Closed',
+  submission: 'Submission recorded', close: 'Closed', attachment: 'File attached', responded: 'Clarification answered',
+  accepted: 'Answer accepted', not_accepted: 'Answer not accepted', reopen_requested: 'Reopen requested',
+  reopen_approved: 'Reopen approved', reopen_rejected: 'Reopen declined',
 }
 
 export default function Timeline({ events }) {

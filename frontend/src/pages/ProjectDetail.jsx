@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import ActionPanel from '../components/ActionPanel'
+import BriefTab from '../components/Brief'
+import ReopenPanel from '../components/Reopen'
 import DocList from '../components/DocCard'
 import FormModal from '../components/FormModal'
 import Icon from '../components/Icon'
@@ -15,7 +17,7 @@ import { LegalTab, ManufacturerTab, RegulatoryTab, RfiTab } from '../components/
 import { AgeChip, HealthPill, Person, StageBar, StatusPill, Tabs, fmtDate, fmtDay, label } from '../components/bits'
 import { FlowScope, useCan, useStages } from '../context'
 
-const AREAS = ['all', 'stage', 'task', 'legal', 'dossier', 'artwork', 'manufacturer', 'rfi', 'document', 'project']
+const AREAS = ['all', 'stage', 'task', 'clarification', 'legal', 'dossier', 'artwork', 'manufacturer', 'rfi', 'document', 'project']
 
 export default function ProjectDetail() {
   const { id } = useParams()
@@ -36,6 +38,8 @@ export default function ProjectDetail() {
 
   const openTasks = project.tasks.filter((t) => t.open).length
   const openRfi = project.rfis.filter((r) => r.status !== 'closed').length
+  const openClar = project.clarifications.filter((c) => c.status !== 'accepted').length
+  const hasQuality = project.flow.stages.some((s) => s.key === 'quality')
   const nonArt = project.documents.filter((d) => !d.is_artwork).length
   const events = area === 'all' ? project.events : project.events.filter((e) => e.area === area)
   const manage = can('manage_project')
@@ -71,9 +75,9 @@ export default function ProjectDetail() {
       <div className="proj-grid">
         <div className="proj-main">
           <Tabs value={tab} onChange={goTab} tabs={[
-            { key: 'overview', label: 'Overview' }, { key: 'tasks', label: 'Tasks', count: openTasks || null },
+            { key: 'overview', label: 'Overview' }, { key: 'brief', label: 'Brief', count: openClar || null }, { key: 'tasks', label: 'Tasks', count: openTasks || null },
             { key: 'legal', label: 'Legal' }, { key: 'regulatory', label: 'Regulatory' }, { key: 'artwork', label: 'Artwork' },
-            { key: 'manufacturer', label: 'Manufacturer data' }, { key: 'rfi', label: 'RFI', count: openRfi || null },
+            { key: 'manufacturer', label: 'Manufacturer data' }, ...(hasQuality ? [{ key: 'quality', label: 'Quality / PV' }] : []), { key: 'rfi', label: 'RFI', count: openRfi || null },
             { key: 'documents', label: 'Documents', count: nonArt || null }, { key: 'activity', label: 'History' },
           ]} />
 
@@ -81,12 +85,15 @@ export default function ProjectDetail() {
             <>
               <Lanes project={project} goTab={goTab} />
               <ActionPanel project={project} onChange={setProject} goTab={goTab} />
+              <ReopenPanel project={project} onChange={setProject} />
               <section className="panel">
                 <header><h3>Project journey</h3><span className="muted hide-m">{new Set(project.flow.stages.map((x) => x.phase)).size} phases · {project.workflow?.name}{project.workflow?.version ? ` v${project.workflow.version}` : ""}</span></header>
                 <StageList project={project} />
               </section>
             </>
           )}
+          {tab === 'brief' && <BriefTab project={project} onChange={setProject} />}
+          {tab === 'quality' && <DocList project={project} onChange={setProject} stageKey="quality" title="Quality / PV documents" />}
           {tab === 'tasks' && <TasksTab project={project} onChange={setProject} />}
           {tab === 'legal' && <LegalTab project={project} onChange={setProject} />}
           {tab === 'regulatory' && <RegulatoryTab project={project} onChange={setProject} />}
@@ -109,7 +116,9 @@ export default function ProjectDetail() {
             <dl className="p360">
               <div><dt>Project code</dt><dd>{project.code ? <span className="code">{project.code}</span> : 'Pending'}</dd></div>
               <div><dt>Product</dt><dd>{project.product || '–'}</dd></div>
-              <div><dt>Type</dt><dd>{project.project_type}{project.category && <small> · {project.category}</small>}</dd></div>
+              <div><dt>Product route</dt><dd>{project.project_type === 'In-Licence' ? 'In-licence' : 'New development'}{project.category && <small> · {project.category}</small>}</dd></div>
+              <div><dt>Client</dt><dd>{project.potential_client || '–'}</dd></div>
+              <div><dt>Opportunity</dt><dd className="num">{project.opportunity_value != null ? `AUD ${project.opportunity_value.toLocaleString('en-AU')}` : '–'}</dd></div>
               <div><dt>Market</dt><dd>{project.market}</dd></div>
               <div><dt>Manager</dt><dd>{project.project_manager ? <Person user={project.project_manager} /> : '–'}</dd></div>
               <div><dt>Submission</dt><dd>{project.submission_type || 'To be decided'}</dd></div>

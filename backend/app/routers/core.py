@@ -31,7 +31,7 @@ def config(db: Session = Depends(get_db)):
         "roles": [{"key": r.key, "name": r.name} for r in db.scalars(select(Role))],
         "submission_types": {k: [{"module": m, "title": t} for m, t in v] for k, v in workflow.SUBMISSION_TYPES.items()},
         "agreement_kinds": workflow.AGREEMENT_KINDS, "core_agreements": workflow.CORE_AGREEMENTS, "agreement_status": workflow.AGREEMENT_STATUS,
-        "mfr_kinds": workflow.MFR_KINDS, "mfr_status": workflow.MFR_STATUS, "artwork_kinds": workflow.ARTWORK_KINDS,
+        "mfr_kinds": workflow.MFR_KINDS, "mfr_status": workflow.MFR_STATUS, "artwork_kinds": workflow.ARTWORK_KINDS, "submission_status": workflow.SUBMISSION_STATUS,
         "doc_kinds": workflow.DOC_KINDS, "dossier_status": workflow.DOSSIER_STATUS, "task_states": workflow.TASK_STATES,
         "settings": {k: common.get_setting(db, k) for k in workflow.DEFAULT_SETTINGS},
         "features": workflow.FEATURES, "entities": workflow.ENTITIES, "rule_labels": workflow.RULE_LABELS,

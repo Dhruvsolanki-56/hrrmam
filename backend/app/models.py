@@ -1,7 +1,7 @@
 """Plain tables. The process itself (stages, roles, flows) lives in workflow.py."""
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from . import workflow
@@ -75,6 +75,13 @@ class Project(Base):
     market: Mapped[str] = mapped_column(String(80), default="Australia")
     initiator: Mapped[str] = mapped_column(String(120), default="")
     summary: Mapped[str] = mapped_column(Text, default="")
+    potential_client: Mapped[str] = mapped_column(String(200), default="")
+    opportunity_value: Mapped[float | None] = mapped_column(Float, nullable=True)  # initial commercial opportunity, AUD
+    formulation: Mapped[str] = mapped_column(Text, default="")
+    commercial_expectations: Mapped[str] = mapped_column(Text, default="")
+    manufacturer_info: Mapped[str] = mapped_column(Text, default="")
+    regulatory_route: Mapped[str] = mapped_column(Text, default="")
+    stakeholders: Mapped[str] = mapped_column(Text, default="")
     project_manager_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     submission_type: Mapped[str] = mapped_column(String(120), default="")
     target_submission: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -96,6 +103,8 @@ class Project(Base):
     mfr_requests: Mapped[list["ManufacturerRequest"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="ManufacturerRequest.id")
     rfis: Mapped[list["RFICase"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="RFICase.id")
     documents: Mapped[list["Document"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="Document.id")
+    clarifications: Mapped[list["Clarification"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="Clarification.id")
+    reopen_requests: Mapped[list["ReopenRequest"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="ReopenRequest.id")
 
     @property
     def flow(self) -> "workflow.Flow":
@@ -199,6 +208,7 @@ class Task(Base):
     assignee: Mapped[User] = relationship(foreign_keys=[assignee_id], lazy="joined")
     assigner: Mapped[User | None] = relationship(foreign_keys=[assigner_id], lazy="joined")
     date_requests: Mapped[list["DateRequest"]] = relationship(back_populates="task", cascade="all, delete-orphan", order_by="DateRequest.id")
+    attachments: Mapped[list["TaskAttachment"]] = relationship(back_populates="task", cascade="all, delete-orphan", order_by="TaskAttachment.id")
 
     @property
     def open(self) -> bool:
@@ -230,6 +240,70 @@ class DateRequest(Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     task: Mapped[Task] = relationship(back_populates="date_requests")
+    requested_by: Mapped[User] = relationship(foreign_keys=[requested_by_id], lazy="joined")
+    decided_by: Mapped[User | None] = relationship(foreign_keys=[decided_by_id], lazy="joined")
+
+
+class TaskAttachment(Base):
+    """A file link attached to a task. Immutable: a changed file is a new version (V2, V3 ...), never an overwrite."""
+    __tablename__ = "task_attachments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    version_no: Mapped[int] = mapped_column(Integer, default=1)
+    link: Mapped[str] = mapped_column(String(1000), default="")
+    note: Mapped[str] = mapped_column(Text, default="")
+    round: Mapped[int] = mapped_column(Integer, default=0)  # the task's rework count when this was attached
+    created_by: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = _ts()
+
+    task: Mapped[Task] = relationship(back_populates="attachments")
+
+
+class Clarification(Base):
+    """'Clarification required': what is missing, who asked, who must answer, by when, what they said, whether it was accepted."""
+    __tablename__ = "clarifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    question: Mapped[str] = mapped_column(Text)
+    requested_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    responder_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(12), default="open")  # open | responded | accepted
+    response: Mapped[str] = mapped_column(Text, default="")
+    responded_on: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decision_note: Mapped[str] = mapped_column(Text, default="")
+    decided_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    decided_on: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rounds: Mapped[int] = mapped_column(Integer, default=0)  # times the answer was not accepted
+    created_at: Mapped[datetime] = _ts()
+
+    project: Mapped[Project] = relationship(back_populates="clarifications")
+    requested_by: Mapped[User] = relationship(foreign_keys=[requested_by_id], lazy="joined")
+    responder: Mapped[User | None] = relationship(foreign_keys=[responder_id], lazy="joined")
+    decided_by: Mapped[User | None] = relationship(foreign_keys=[decided_by_id], lazy="joined")
+
+
+class ReopenRequest(Base):
+    """Approved / locked work is only changed through a request that a person with the right permission decides."""
+    __tablename__ = "reopen_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(12))  # task | document | stage
+    ref: Mapped[str] = mapped_column(String(40))   # task id, document id or stage key
+    label: Mapped[str] = mapped_column(String(240), default="")
+    reason: Mapped[str] = mapped_column(Text, default="")
+    requested_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    status: Mapped[str] = mapped_column(String(12), default="pending")  # pending | approved | rejected
+    decided_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    decision_note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = _ts()
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    project: Mapped[Project] = relationship(back_populates="reopen_requests")
     requested_by: Mapped[User] = relationship(foreign_keys=[requested_by_id], lazy="joined")
     decided_by: Mapped[User | None] = relationship(foreign_keys=[decided_by_id], lazy="joined")
 
@@ -297,6 +371,9 @@ class Submission(Base):
     kind: Mapped[str] = mapped_column(String(20), default="initial")  # initial | rfi_response | variation
     reference: Mapped[str] = mapped_column(String(120), default="")
     platform: Mapped[str] = mapped_column(String(200), default="")
+    status: Mapped[str] = mapped_column(String(20), default="submitted")  # see workflow.SUBMISSION_STATUS
+    acknowledgement_ref: Mapped[str] = mapped_column(String(120), default="")
+    acknowledged_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     submitted_on: Mapped[date] = mapped_column(Date)
     submitted_by: Mapped[str] = mapped_column(String(120), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
@@ -312,6 +389,7 @@ class ManufacturerRequest(Base):
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
     kind: Mapped[str] = mapped_column(String(20))
     manufacturer: Mapped[str] = mapped_column(String(200), default="")
+    needed_for: Mapped[str] = mapped_column(String(80), default="")  # e.g. "Module 3"
     status: Mapped[str] = mapped_column(String(16), default="requested")
     required: Mapped[bool] = mapped_column(Boolean, default=True)
     requested_on: Mapped[date] = mapped_column(Date, default=date.today)

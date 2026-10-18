@@ -8,8 +8,8 @@ from .. import schemas as sc
 from .. import serialize as S
 from ..auth import current_user
 from ..database import get_db
-from ..models import Agreement, DossierItem, ManufacturerRequest, RFICase, RFIQuestion, User
-from ..services import dash, engine, modules, notify, tasks
+from ..models import Agreement, Clarification, DossierItem, ManufacturerRequest, ReopenRequest, RFICase, RFIQuestion, Submission, User
+from ..services import dash, engine, extras, modules, notify, tasks
 
 router = APIRouter(prefix="/api", dependencies=[Depends(current_user)])
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -144,6 +144,54 @@ def record_submission(project_id: int, data: sc.SubmissionIn, user: User = Depen
     p = _P(db, project_id)
     modules.record_submission(db, user, p, data)
     return _out(p)
+
+
+@router.post("/tasks/{task_id}/attachments", status_code=201)
+def add_attachment(task_id: int, data: sc.AttachmentIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    t = tasks.get_task(db, task_id)
+    extras.add_attachment(db, user, t, data.name, data.link, data.note)
+    return _out(t.project)
+
+
+@router.post("/projects/{project_id}/clarifications", status_code=201)
+def create_clarification(project_id: int, data: sc.ClarificationCreate, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    p = _P(db, project_id)
+    extras.create_clarification(db, user, p, data.question, data.responder_id, data.due_date)
+    return _out(p)
+
+
+@router.post("/clarifications/{cid}/actions")
+def clarification_action(cid: int, data: sc.ClarificationActionIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    c = db.get(Clarification, cid)
+    if not c:
+        raise modules.common.NotFound("Clarification not found")
+    extras.clarification_action(db, user, c, data.action, data.note)
+    return _out(c.project)
+
+
+@router.post("/projects/{project_id}/reopen-requests", status_code=201)
+def request_reopen(project_id: int, data: sc.ReopenCreate, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    p = _P(db, project_id)
+    extras.request_reopen(db, user, p, data.kind, data.ref, data.reason)
+    return _out(p)
+
+
+@router.post("/reopen-requests/{rid}/decision")
+def decide_reopen(rid: int, data: sc.ReopenDecision, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    r = db.get(ReopenRequest, rid)
+    if not r:
+        raise modules.common.NotFound("Request not found")
+    extras.decide_reopen(db, user, r, data.approve, data.note)
+    return _out(r.project)
+
+
+@router.patch("/submissions/{submission_id}")
+def update_submission(submission_id: int, data: sc.SubmissionUpdate, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    s = db.get(Submission, submission_id)
+    if not s:
+        raise modules.common.NotFound("Submission not found")
+    modules.update_submission(db, user, s, data)
+    return _out(s.project)
 
 
 # ---------------------------------------------------------------- manufacturer data

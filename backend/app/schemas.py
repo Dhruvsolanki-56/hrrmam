@@ -27,6 +27,8 @@ ProjectType = Literal["Development", "In-Licence"]
 class ProjectCreate(BaseModel):
     name: str = Field(min_length=2, max_length=200)
     product: str = ""
+    potential_client: str = Field(default="", max_length=200)
+    opportunity_value: float | None = Field(default=None, ge=0, le=10_000_000_000)
     project_type: ProjectType = "Development"
     category: str = ""
     market: str = "Australia"
@@ -46,6 +48,13 @@ class ProjectUpdate(BaseModel):
     market: str | None = None
     initiator: str | None = None
     summary: str | None = None
+    potential_client: str | None = Field(default=None, max_length=200)
+    opportunity_value: float | None = Field(default=None, ge=0, le=10_000_000_000)
+    formulation: str | None = None
+    commercial_expectations: str | None = None
+    manufacturer_info: str | None = None
+    regulatory_route: str | None = None
+    stakeholders: str | None = None
     project_manager_id: int | None = None
     submission_type: str | None = None
     target_submission: date | None = None
@@ -85,9 +94,37 @@ class TaskActionIn(BaseModel):
     assignee_id: int | None = None
 
 
+class AttachmentIn(BaseModel):
+    name: str = Field(default="", max_length=200)
+    link: str = Field(max_length=1000)
+    note: str = ""
+
+
+class ClarificationCreate(BaseModel):
+    question: str = Field(min_length=3)
+    responder_id: int
+    due_date: date | None = None
+
+
+class ClarificationActionIn(BaseModel):
+    action: Literal["respond", "accept", "reject"]
+    note: str = ""
+
+
+class ReopenCreate(BaseModel):
+    kind: Literal["task", "document", "stage"]
+    ref: str
+    reason: str = ""
+
+
+class ReopenDecision(BaseModel):
+    approve: bool
+    note: str = ""
+
+
 # ---- modules
 class AgreementCreate(BaseModel):
-    kind: Literal["supplier", "quality", "pv", "nda", "cda", "poa", "notice"]
+    kind: Literal["supplier", "quality", "pv", "nda", "cda", "poa", "notice", "addendum"]
     counterparty: str = ""
     owner_id: int | None = None
     due_date: date | None = None
@@ -126,9 +163,19 @@ class SubmissionIn(BaseModel):
     notes: str = ""
 
 
+class SubmissionUpdate(BaseModel):
+    status: Literal["submitted", "acknowledged", "under_evaluation", "queried", "approved", "rejected"] | None = None
+    acknowledgement_ref: str | None = Field(default=None, max_length=120)
+    acknowledged_on: date | None = None
+    reference: str | None = Field(default=None, max_length=120)
+    platform: str | None = Field(default=None, max_length=200)
+    notes: str | None = None
+
+
 class MfrCreate(BaseModel):
-    kind: Literal["coa", "msds", "specification", "testing", "stability", "manufacturing", "other"]
+    kind: Literal["coa", "msds", "specification", "raw_spec", "testing", "stability", "manufacturing", "other"]
     manufacturer: str = ""
+    needed_for: str = Field(default="", max_length=80)
     due_date: date | None = None
     required: bool = True
     notes: str = ""
@@ -138,6 +185,7 @@ class MfrCreate(BaseModel):
 class MfrUpdate(BaseModel):
     status: Literal["requested", "received", "under_review", "changes_requested", "accepted"] | None = None
     manufacturer: str | None = None
+    needed_for: str | None = Field(default=None, max_length=80)
     due_date: date | None = None
     received_on: date | None = None
     link: str | None = None

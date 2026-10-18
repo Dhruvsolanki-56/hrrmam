@@ -127,6 +127,7 @@ export function RegulatoryTab({ project, onChange }) {
   const me = useMe()
   const [item, setItem] = useState(null) // item being edited, or 'new'
   const [recording, setRecording] = useState(false)
+  const [ack, setAck] = useState(null)
   const off = closedProject(project)
   const types = config.submission_types
   const tmpl = types[project.submission_type] || []
@@ -191,8 +192,8 @@ export function RegulatoryTab({ project, onChange }) {
         {!project.submissions.length && <Empty>{subRow.state === 'pending' ? 'No submission yet. Recording opens once the Dossier Ready milestone is approved.' : 'Nothing recorded yet. Record the external submission before the stage can be submitted.'}</Empty>}
         {project.submissions.length > 0 && (
           <div className="table-scroll"><table className="table compact">
-            <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Platform</th><th>By</th></tr></thead>
-            <tbody>{project.submissions.map((s) => <tr key={s.id}><td data-label="Date">{fmtDay(s.submitted_on)}</td><td data-label="Type">{label(s.kind)}</td><td data-label="Reference"><strong>{s.reference || '–'}</strong>{s.notes && <small className="sub">{s.notes}</small>}</td><td data-label="Platform">{s.platform}</td><td data-label="By">{s.submitted_by}</td></tr>)}</tbody>
+            <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Platform / location</th><th>By</th><th>Status</th><th /></tr></thead>
+            <tbody>{project.submissions.map((s) => <tr key={s.id}><td data-label="Date">{fmtDay(s.submitted_on)}</td><td data-label="Type">{label(s.kind)}</td><td data-label="Reference"><strong>{s.reference || '–'}</strong>{s.notes && <small className="sub">{s.notes}</small>}</td><td data-label="Platform">{s.platform}</td><td data-label="By">{s.submitted_by}</td><td data-label="Status"><span className={`dstate sub-${s.status}`}>{label(s.status)}</span>{s.acknowledgement_ref && <small className="sub">Ack {s.acknowledgement_ref}{s.acknowledged_on ? ` · ${fmtDay(s.acknowledged_on)}` : ''}</small>}</td><td><button className="link" disabled={off} onClick={() => setAck(s)}>Update status</button></td></tr>)}</tbody>
           </table></div>
         )}
       </section>
@@ -212,12 +213,20 @@ export function RegulatoryTab({ project, onChange }) {
           onSave={async (d) => onChange(item === 'new' ? await api.createDossierItem(project.id, d) : await api.updateDossierItem(item.id, d))}
           onClose={() => setItem(null)} />
       )}
+      {ack && (
+        <FormModal title="Submission status" intro="Record what the regulator acknowledged and where the submission stands."
+          fields={[{ key: 'status', label: 'Current status', type: 'select', required: true, options: config.submission_status.map((x) => [x, label(x)]) },
+            { key: 'acknowledgement_ref', label: 'Acknowledgement reference', type: 'text', half: true },
+            { key: 'acknowledged_on', label: 'Acknowledged on', type: 'date', half: true },
+            { key: 'notes', label: 'Notes', type: 'textarea' }]}
+          initial={ack} onSave={async (d) => onChange(await api.updateSubmission(ack.id, d))} onClose={() => setAck(null)} />
+      )}
       {recording && (
         <FormModal title="Record external submission" intro="Records what was submitted, when and where. It cannot be silently changed later."
           fields={[{ key: 'kind', label: 'Type', type: 'select', required: true, options: [['initial', 'Initial submission'], ['variation', 'Variation'], ['rfi_response', 'RFI response']], half: true },
             { key: 'submitted_on', label: 'Submitted on', type: 'date', required: true, half: true },
             { key: 'reference', label: 'Reference / application number', type: 'text' },
-            { key: 'platform', label: 'Platform', type: 'text', placeholder: config.settings.submission_platform, hint: '(leave blank to use the configured one)' },
+            { key: 'platform', label: 'Platform / portal / location', type: 'text', placeholder: config.settings.submission_platform, hint: '(leave blank to use the configured one)' },
             { key: 'notes', label: 'Notes', type: 'textarea' }]}
           initial={{ kind: 'initial', submitted_on: new Date().toISOString().slice(0, 10) }}
           onSave={async (d) => onChange(await api.recordSubmission(project.id, d))} onClose={() => setRecording(false)} submitLabel="Record" />
@@ -234,6 +243,7 @@ export function ManufacturerTab({ project, onChange }) {
   const got = project.mfr_requests.filter((m) => m.status === 'accepted').length
   const fields = [
     { key: 'manufacturer', label: 'Manufacturer', type: 'text', placeholder: 'e.g. Zenith Pharma Pvt Ltd' },
+    { key: 'needed_for', label: 'Needed for', type: 'text', placeholder: 'e.g. Module 3 (Quality)', hint: '(which part of the dossier this evidence supports)' },
     { key: 'due_date', label: 'Needed by', type: 'date', half: true },
     { key: 'owner_id', label: 'Owner', type: 'user', roles: ['technical', 'regulatory', 'project_manager'], half: true },
     { key: 'required', label: 'Required', hint: ' The workstream cannot be submitted until required data is accepted.', type: 'checkbox' },
@@ -250,12 +260,13 @@ export function ManufacturerTab({ project, onChange }) {
         {!project.mfr_requests.length && <Empty>No data requested yet.</Empty>}
         {project.mfr_requests.length > 0 && (
           <div className="table-scroll"><table className="table compact">
-            <thead><tr><th>Data</th><th>Manufacturer</th><th>Status</th><th>Needed by</th><th>Received</th><th>File</th><th /></tr></thead>
+            <thead><tr><th>Data</th><th>Manufacturer</th><th>Needed for</th><th>Status</th><th>Needed by</th><th>Received</th><th>File</th><th /></tr></thead>
             <tbody>
               {project.mfr_requests.map((m) => (
                 <tr key={m.id} className={m.overdue ? 'row-late' : ''}>
                   <td><strong>{m.label}</strong>{!m.required && <small className="sub">optional</small>}{m.notes && <small className="sub">{m.notes}</small>}</td>
                   <td data-label="Manufacturer">{m.manufacturer || '–'}</td>
+                  <td data-label="Needed for">{m.needed_for || '–'}</td>
                   <td data-label="Status"><QuickSelect value={m.status} options={opts(config.mfr_status)} disabled={off} label={`${m.label} status`} onSave={async (v) => onChange(await api.updateMfr(m.id, { status: v }))} /><EntryApproval project={project} kind="mfr" obj={m} onChange={onChange} disabled={off} /></td>
                   <td data-label="Needed by" className={m.overdue ? 'late' : ''}>{fmtDay(m.due_date)}</td>
                   <td data-label="Received">{fmtDay(m.received_on)}</td>

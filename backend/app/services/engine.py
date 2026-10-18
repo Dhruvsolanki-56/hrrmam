@@ -134,14 +134,21 @@ def create_project(db: Session, user: User, data) -> Project:
 EDITABLE = {"name": "Name", "product": "Product", "project_type": "Type", "category": "Category", "market": "Market",
             "initiator": "Initiator", "summary": "Summary", "project_manager_id": "Project manager",
             "submission_type": "Submission type", "target_submission": "Target submission",
-            "target_launch": "Target launch", "critical_blocker": "Critical blocker"}
+            "target_launch": "Target launch", "critical_blocker": "Critical blocker",
+            "potential_client": "Potential client", "opportunity_value": "Opportunity value", "formulation": "Formulation / product",
+            "commercial_expectations": "Commercial expectations", "manufacturer_info": "Manufacturer information",
+            "regulatory_route": "Regulatory route", "stakeholders": "Key stakeholders"}
+BRIEF_FIELDS = {"potential_client", "opportunity_value", "formulation", "commercial_expectations", "manufacturer_info",
+                "regulatory_route", "stakeholders", "summary", "target_submission", "target_launch", "category", "project_type"}
 
 
 def update_project(db: Session, user: User, p: Project, data) -> Project:
     changes = data.model_dump(exclude_unset=True)
     # the Regulatory team may set the submission type; everything else needs project management rights
     dossier = p.flow.with_feature("dossier")
-    if not (set(changes) <= {"submission_type"} and dossier and modules.can_edit_stage(user, p, dossier.key)):
+    brief = [p.flow.stage(k) for k in ("opportunity", "brief") if p.flow.has(k)]
+    author = set(changes) <= BRIEF_FIELDS and any(common.role_ok(user, s.owner_roles) for s in brief)
+    if not (set(changes) <= {"submission_type"} and dossier and modules.can_edit_stage(user, p, dossier.key)) and not author:
         common.require(user, "manage_project", "edit projects")
     if p.closed:
         raise WorkflowError(f"This project is {p.status}. Reopen it to edit.")
@@ -183,6 +190,10 @@ def blockers(p: Project, key: str) -> list[str]:
     docs = [d for d in p.documents if d.stage_key == key and d.required and d.status not in ("approved", "locked")]
     if docs:
         out.append(f"{len(docs)} required document(s) are not approved yet")
+    if "clarifications" in feats:
+        n = [c for c in p.clarifications if c.status != "accepted"]
+        if n:
+            out.append(f"{len(n)} clarification(s) are not accepted yet")
     if "agreements" in feats:
         for a in p.agreements:
             if a.core and a.status != "signed":
@@ -203,6 +214,22 @@ def blockers(p: Project, key: str) -> list[str]:
         n = [r for r in p.rfis if r.status != "closed"]
         if n:
             out.append(f"{len(n)} RFI case(s) are still open")
+    return out
+
+
+def warnings(p: Project, key: str) -> list[dict]:
+    """Soft dependencies warn, information dependencies say what is still awaited. Neither blocks anything."""
+    st = p.flow.stage(key)
+    out = []
+    for k in st.soft_requires:
+        if p.flow.has(k) and p.row(k).state not in workflow.SATISFIED:
+            out.append({"kind": "soft", "stage": k, "text": f"{p.flow.stage(k).name} is not approved yet; it normally comes first"})
+    for k in st.info_requires:
+        if not p.flow.has(k) or p.row(k).state in workflow.SATISFIED:
+            continue
+        waiting = [m for m in p.mfr_requests if m.status in ("requested", "received", "changes_requested")] if "mfr" in p.flow.stage(k).features else []
+        extra = f" ({len(waiting)} item{'s' if len(waiting) != 1 else ''} pending)" if waiting else ""
+        out.append({"kind": "info", "stage": k, "text": f"Waiting for information from {p.flow.stage(k).name}{extra}"})
     return out
 
 
