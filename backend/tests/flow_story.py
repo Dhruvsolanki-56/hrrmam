@@ -358,6 +358,7 @@ try:
     s, r = call('POST', f'/projects/{live_id}/actions', {'action': 'hold', 'note': 'x'}, uid=me('commercial')); check('Amit cannot hold a project (403)', s == 403)
     s, r = call('POST', f'/projects/{live_id}/tasks', {'stage_key': 'legal', 'title': 'nope nope', 'assignee_id': me('director'), 'due_at': due(3)}, uid=me('commercial'))
     check('Amit cannot assign work to the Director (403)', s == 403)
+    s, r = call('POST', '/users', {'name': 'Bad Mail', 'email': 'not-an-email', 'role_key': 'legal'}, uid=me('super_admin')); check('an invalid email is refused (422)', s == 422)
     s, r = call('PUT', '/roles/artwork', {'permissions': ['assign'], 'assign_to': ['artwork']}, uid=me('artwork')); check('Neha cannot edit roles (403)', s == 403)
     s, r = call('PUT', '/roles/artwork', {'permissions': ['assign'], 'assign_to': ['artwork']}, uid=me('super_admin')); check('Vikram (admin) edits a role', s == 200)
     s, r = call('PUT', '/roles/super_admin', {'permissions': [], 'assign_to': []}, uid=me('super_admin')); check('the Super Admin role is locked (422)', s == 422)

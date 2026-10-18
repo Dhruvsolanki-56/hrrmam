@@ -70,6 +70,8 @@ def create_user(data: sc.UserCreate, user: User = Depends(current_user), db: Ses
     common.require(user, "manage_users")
     if not db.get(Role, data.role_key):
         raise WorkflowError("Unknown role.")
+    if data.email and db.scalar(select(User).where(func.lower(User.email) == data.email.lower())):
+        raise WorkflowError("A user with this email already exists.")
     u = User(name=data.name.strip(), email=data.email.strip(), role_key=data.role_key, country=data.country)
     db.add(u)
     _admin_log(db, user, "user_created", f"{u.name} added as {data.role_key}")

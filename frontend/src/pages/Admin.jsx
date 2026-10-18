@@ -37,7 +37,7 @@ function Users() {
       </table></div>
       {adding && (
         <FormModal title="Add user" fields={[
-          { key: 'name', label: 'Name', type: 'text', required: true }, { key: 'email', label: 'Email', type: 'text' },
+          { key: 'name', label: 'Name', type: 'text', required: true }, { key: 'email', label: 'Email', type: 'email' },
           { key: 'role_key', label: 'Role', type: 'select', required: true, options: config.roles.map((r) => [r.key, r.name]), half: true },
           { key: 'country', label: 'Country', type: 'select', required: true, options: [['AU', 'Neo Health Australia'], ['IN', 'Neo India'], ['Partner', 'Manufacturing partner']], half: true }]}
           initial={{ role_key: 'project_manager', country: 'AU' }}

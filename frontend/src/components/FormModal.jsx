@@ -34,6 +34,7 @@ export default function FormModal({ title, intro, fields, initial = {}, submitLa
       case 'checkbox': return <input type="checkbox" checked={!!v[f.key]} onChange={(e) => set(f.key, e.target.checked)} />
       case 'date': return <input type="date" {...common} value={v[f.key] || ''} onChange={(e) => set(f.key, e.target.value)} />
       case 'datetime': return <input type="datetime-local" {...common} value={v[f.key] || ''} onChange={(e) => set(f.key, e.target.value)} />
+      case 'email': return <input type="email" {...common} value={v[f.key]} onChange={(e) => set(f.key, e.target.value)} />
       case 'url': return <input type="url" {...common} value={v[f.key]} onChange={(e) => set(f.key, e.target.value)} />
       default: return <input {...common} value={v[f.key]} onChange={(e) => set(f.key, e.target.value)} />
     }

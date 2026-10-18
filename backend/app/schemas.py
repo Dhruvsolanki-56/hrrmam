@@ -1,4 +1,5 @@
 """Request bodies. Responses are built by serialize.py."""
+import re
 from datetime import date, datetime, timezone
 from typing import Annotated, Literal
 
@@ -10,6 +11,16 @@ def _utc(d: datetime) -> datetime:
 
 
 UTC = Annotated[datetime, AfterValidator(_utc)]
+
+
+def _email(v):
+    v = (v or '').strip()
+    if v and not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]{2,}', v):
+        raise ValueError('Enter a valid email address, or leave it blank.')
+    return v
+
+
+Email = Annotated[str, AfterValidator(_email)]
 ProjectType = Literal["Development", "In-Licence"]
 
 
@@ -189,14 +200,14 @@ class DocumentActionIn(BaseModel):
 # ---- admin
 class UserCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
-    email: str = ""
+    email: Email = ""
     role_key: str
     country: Literal["AU", "IN", "Partner"] = "AU"
 
 
 class UserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
-    email: str | None = None
+    email: Email | None = None
     role_key: str | None = None
     country: Literal["AU", "IN", "Partner"] | None = None
     active: bool | None = None
