@@ -5,47 +5,17 @@ import ActionPanel from '../components/ActionPanel'
 import DocList from '../components/DocCard'
 import FormModal from '../components/FormModal'
 import Icon from '../components/Icon'
+import Lanes from '../components/Lanes'
 import Layout from '../components/Layout'
 import NewProjectModal from '../components/NewProjectModal'
 import StageList from '../components/StageList'
 import TasksTab from '../components/TasksTab'
 import Timeline from '../components/Timeline'
 import { LegalTab, ManufacturerTab, RegulatoryTab, RfiTab } from '../components/Workstreams'
-import { AgeChip, HealthPill, Person, StageBar, StateChip, StatusPill, Tabs, fmtDate, fmtDay, label } from '../components/bits'
+import { AgeChip, HealthPill, Person, StageBar, StatusPill, Tabs, fmtDate, fmtDay, label } from '../components/bits'
 import { FlowScope, useCan, useStages } from '../context'
 
 const AREAS = ['all', 'stage', 'task', 'legal', 'dossier', 'artwork', 'manufacturer', 'rfi', 'document', 'project']
-
-function Workstreams({ project, goTab }) {
-  const stages = useStages()
-  const ws = stages.filter((s) => s.workstream)
-  const ms = stages.find((s) => s.milestone)
-  const milestone = ms && project.stages.find((r) => r.key === ms.key)
-  if (!ws.length) return null
-  return (
-    <section className="panel">
-      <header>
-        <div><h3>Workstreams</h3><p className="muted">{ws.length} workstreams run in parallel, each with its own status and approval cycle.{ms && <> <b>{ms.name}</b> is the milestone lock: it needs all of them approved (or bypassed when optional).</>}</p></div>
-        {milestone && <StateChip state={milestone.state} />}
-      </header>
-      <div className="ws-grid">
-        {ws.map((s) => {
-          const r = project.stages.find((x) => x.key === s.key)
-          const tab = s.tab || 'tasks'
-          return (
-            <button key={s.key} className={`ws ws-${r.state}`} onClick={() => goTab(tab)}>
-              <b>{s.name}</b>
-              <StateChip state={r.state} locked={r.locked} />
-              <small>{r.tasks_total ? `${r.tasks_done}/${r.tasks_total} tasks approved` : 'No tasks yet'}</small>
-              {r.blockers.length > 0 && <small className="ws-block">{r.blockers.length} thing{r.blockers.length > 1 ? 's' : ''} to finish</small>}
-              {r.rework_count > 0 && <small>↺ sent back {r.rework_count}×</small>}
-            </button>
-          )
-        })}
-      </div>
-    </section>
-  )
-}
 
 export default function ProjectDetail() {
   const { id } = useParams()
@@ -79,7 +49,7 @@ export default function ProjectDetail() {
     <Layout title={project.name} back="/projects" head={false}>
       <div className="proj-head">
         <div className="meta">
-          <span className="code">{project.code || 'Code issued at brief approval'}</span>
+          <span className="code">{project.code || 'Code issued when the opportunity is approved'}</span>
           <StatusPill status={project.status} />
           <HealthPill health={project.health} reasons={project.health_reasons} />
           <AgeChip project={project} />
@@ -109,10 +79,10 @@ export default function ProjectDetail() {
 
           {tab === 'overview' && (
             <>
-              <Workstreams project={project} goTab={goTab} />
+              <Lanes project={project} goTab={goTab} />
               <ActionPanel project={project} onChange={setProject} goTab={goTab} />
               <section className="panel">
-                <header><h3>Project journey</h3><span className="muted">{project.flow.stages.length} phases · {project.workflow?.name}{project.workflow?.version ? ` v${project.workflow.version}` : ""}</span></header>
+                <header><h3>Project journey</h3><span className="muted hide-m">{project.flow.stages.length} phases · {project.workflow?.name}{project.workflow?.version ? ` v${project.workflow.version}` : ""}</span></header>
                 <StageList project={project} />
               </section>
             </>

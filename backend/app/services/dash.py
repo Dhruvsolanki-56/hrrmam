@@ -48,14 +48,15 @@ def my_work(db: Session, user: User) -> dict:
         # finished work stays here after its project is completed, so nobody loses their own history
         "completed": sorted([t for t in everything if t.state in workflow.TASK_DONE], key=lambda t: t.updated_at, reverse=True)[:50],
     }
-    # things waiting on *my* decision
+    # things waiting on *my* decision: work and date requests go to the person who assigned the task (the manager),
+    # stages go to the stage's approver. Nobody is asked to review every task in the portfolio.
     decide = []
-    for t in db.scalars(select(Task).where(Task.state.in_(workflow.TASK_AWAITING))):
+    for t in db.scalars(select(Task).where(Task.state.in_(workflow.TASK_AWAITING), Task.assigner_id == user.id)):
         if not t.project.closed and _can_decide(user, t, "approve"):
             decide.append({"type": "task", "task": S.task_out(t, True)})
     for r in db.scalars(select(DateRequest).where(DateRequest.status == "pending")):
         t = r.task
-        if not t.project.closed and (user.id == t.assigner_id or user.can("change_dates")):
+        if not t.project.closed and user.id == t.assigner_id:
             decide.append({"type": "date_request", "task": S.task_out(t, True), "request": S.date_request_out(r)})
     for p in _live(db):
         for row in p.active_rows:

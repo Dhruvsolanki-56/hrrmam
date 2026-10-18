@@ -18,7 +18,7 @@ function Cycle({ row }) {
   )
 }
 
-function StageCard({ project, row, onChange, goTab, locked }) {
+function StageCard({ project, row, onChange, goTab, locked, fold }) {
   const stages = useStages()
   const me = useMe()
   const can = useCan()
@@ -48,13 +48,15 @@ function StageCard({ project, row, onChange, goTab, locked }) {
     })
   }
 
+  const mine = !locked && ((row.state === 'in_progress' && canSubmit && !blocked) || (row.state === 'awaiting_approval' && canDecide))
+  const Wrap = fold ? 'details' : 'div'
+  const head = fold
+    ? <summary><h2>{st.name}</h2><span>{mine && <span className="you">Your turn · </span>}<StateChip state={row.state} /></span></summary>
+    : <><header><span className="eyebrow">Phase {st.phase} of {stages.length}</span><StateChip state={row.state} /></header><h2>{st.name}</h2></>
   return (
     <section className="panel callout stagecard">
-      <header>
-        <span className="eyebrow">Phase {st.phase} of {stages.length}{st.parallel_with?.length > 0 && ' · runs in parallel'}</span>
-        <StateChip state={row.state} />
-      </header>
-      <h2>{st.name}</h2>
+      <Wrap className={fold ? 'stagecard-fold' : undefined} {...(fold ? { open: mine } : {})}>
+      {head}
       <div className="chips">
         <EntityChip entity={st.entity} />
         <AgeChip project={{ status: project.status, days_in_stage: row.days_in_stage, sla_days: row.sla_days, overdue: row.overdue }} />
@@ -101,6 +103,7 @@ function StageCard({ project, row, onChange, goTab, locked }) {
         {st.optional && can('bypass_optional') && <button className="btn line" disabled={disabled} onClick={() => go('bypass')}>Not needed: bypass</button>}
         {tabOf(st) && <button className="btn ghost" onClick={() => goTab(tabOf(st))}>Open workstream</button>}
       </div>
+      </Wrap>
     </section>
   )
 }
@@ -189,7 +192,7 @@ export default function ActionPanel({ project, onChange, goTab }) {
       )}
       {live && (
         <div className={`stagecards ${active.length > 1 ? 'multi' : ''}`}>
-          {active.map((row) => <StageCard key={row.key} project={project} row={row} onChange={onChange} goTab={goTab} locked={project.status === 'on_hold'} />)}
+          {active.map((row) => <StageCard key={row.key} project={project} row={row} onChange={onChange} goTab={goTab} fold={active.length > 1} locked={project.status === 'on_hold'} />)}
         </div>
       )}
       <ProjectControls project={project} onChange={onChange} />

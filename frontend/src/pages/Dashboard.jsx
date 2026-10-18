@@ -23,10 +23,9 @@ export default function Dashboard() {
   if (!d) return <Layout title="Overview" head={false}><p className="muted">{error || 'Loading…'}</p></Layout>
 
   const c = d.counts
+  // Stage and artwork approvals only: each task is approved by the person who assigned it (see My work)
   const decisions = [
-    ...d.date_requests.map((r) => ({ key: `r${r.id}`, k: 'due date', to: `/projects/${r.task.project_id}?tab=tasks`, title: r.task.title, sub: r.task.project_name, r: `to ${shortDay(r.proposed_due)}` })),
     ...d.pending_approvals.map((x) => ({ key: `s${x.project_id}${x.stage_key}`, k: 'stage', to: `/projects/${x.project_id}`, title: x.stage_name, sub: x.project_name })),
-    ...d.task_approvals.map((t) => ({ key: `t${t.id}`, k: 'task', to: `/projects/${t.project_id}?tab=tasks`, title: t.title, sub: t.project_name })),
     ...d.doc_approvals.map((x) => ({ key: `d${x.id}`, k: 'artwork', to: `/projects/${x.project_id}?tab=artwork`, title: x.title, sub: x.project_name })),
   ]
 
@@ -72,7 +71,7 @@ export default function Dashboard() {
             <span><i style={{ background: 'var(--danger-dot)' }} />Critical <b>{c.red}</b></span>
           </div>
         </Link>
-        <a href="#approvals" className="metric"><span>Awaiting your decision</span><b>{decisions.length}</b></a>
+        <a href="#approvals" className="metric"><span>Awaiting approval</span><b>{decisions.length}</b></a>
         <Link to="/projects" className={`metric ${d.delayed.length ? 'alert' : ''}`}><span>Delayed</span><b>{d.delayed.length}</b></Link>
         <Link to="/regulatory" className="metric"><span>Open RFIs</span><b>{d.rfi_deadlines.length}</b></Link>
         <Link to="/legal" className="metric"><span>Unsigned agreements</span><b>{d.unsigned_agreements.length}</b></Link>

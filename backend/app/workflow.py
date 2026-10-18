@@ -271,7 +271,9 @@ def _preset(parallel_after: str | None, name: str) -> dict:
     'brief' (all five workstreams start together after the brief) or None (strict sequence)."""
     G1, G2, G3, G4, G5 = "Initiation", "Governance", "Parallel workstreams", "Dossier & regulatory", "Delivery"
     if parallel_after == "brief":
-        G2 = G3 = "Governance & parallel work"
+        G2 = G3 = "Parallel workstreams"
+    # when every lane opens together they share one phase number and the later phases close the gap
+    lane, later = (3, 1) if parallel_after == "brief" else (None, 0)
     com_req = ("brief",)
     par_req = ("commercial",) if parallel_after == "commercial" else ("brief",)
     seq = parallel_after is None
@@ -283,44 +285,46 @@ def _preset(parallel_after: str | None, name: str) -> dict:
     ws = parallel_after is not None
     stages = [
         _st("opportunity", "Opportunity", 1, G1, AU, "Commercial / Project team", "Director or Commercial lead", ("commercial", "project_manager"),
-            ("director", "commercial"), "Opportunity identified and screened by Neo Health Australia.", can_close=True, sla_days=7),
+            ("director", "commercial"), "Opportunity identified and screened by Neo Health Australia. When it is approved the project gets its code and "
+            "everything else attaches to it.", can_close=True, sla_days=7, features=("issue_code",)),
         _st("brief", "Project Brief", 2, G1, JOINT, "Project Manager", "Director or Commercial lead", ("project_manager", "commercial"),
-            ("director", "commercial"), "Brief created and reviewed. The project code is issued when the brief is approved.",
-            ("opportunity",), sla_days=14, features=("issue_code",)),
+            ("director", "commercial"), "Australia creates the brief and India reviews it. Anything missing is raised as a clarification "
+            "task: who asked, what is missing, who answers, by when, and whether the answer was accepted.",
+            ("opportunity",), sla_days=14),
         _st("commercial", "Feasibility & Commercial", 3, G2, AU, "Commercial team", "Director or Commercial lead", ("commercial", "project_manager"),
             ("director", "commercial"), "Feasibility and FMEA, cost and financial review, risk adjustment and commercial approval.",
             com_req, workstream=parallel_after == "brief", can_close=True, sla_days=21),
-        _st("legal", "Legal / Agreements", 4, G3, IN, "Legal team", "Legal lead or Director", ("legal", "project_manager"), ("legal", "director"),
+        _st("legal", "Legal / Agreements", lane or 4, G3, IN, "Legal team", "Legal lead or Director", ("legal", "project_manager"), ("legal", "director"),
             "Supplier, Quality and PV agreements run in parallel, plus NDA / CDA / POA / notices.", chain["legal"], workstream=ws,
             sla_days=30, features=("agreements",)),
-        _st("regulatory", "Regulatory / Dossier", 4, G3, IN, "Regulatory team", "RA reviewer or Director", ("regulatory", "project_manager"),
+        _st("regulatory", "Regulatory / Dossier", lane or 4, G3, IN, "Regulatory team", "RA reviewer or Director", ("regulatory", "project_manager"),
             ("regulatory", "director"), "Submission type, dossier structure and checklist, RA review.", chain["regulatory"], workstream=ws,
             sla_days=45, features=("dossier",)),
-        _st("artwork", "Artwork / Packaging", 4, G3, IN, "Artwork team", "Regulatory review, then Director", ("artwork", "project_manager"),
+        _st("artwork", "Artwork / Packaging", lane or 4, G3, IN, "Artwork team", "Regulatory review, then Director", ("artwork", "project_manager"),
             ("regulatory", "director"), "Carton, label, leaflet / insert, shade card and revisions.", chain["artwork"], workstream=ws,
             optional=True, sla_days=30, features=("artwork",)),
-        _st("manufacturer", "Manufacturer / Technical data", 4, G3, MP, "Technical coordinator", "RA reviewer or Technical lead",
+        _st("manufacturer", "Manufacturer / Technical data", lane or 4, G3, MP, "Technical coordinator", "RA reviewer or Technical lead",
             ("technical", "project_manager"), ("regulatory", "technical"),
             "COA, MSDS, specification, testing, stability and manufacturing data from the manufacturer.", chain["manufacturer"], workstream=ws,
             optional=True, sla_days=30, features=("mfr",)),
-        _st("dossier_ready", "Dossier Ready", 5, G4, IN, "Regulatory team", "RA reviewer or Director", ("regulatory", "project_manager"),
+        _st("dossier_ready", "Dossier Ready", 5 - later, G4, IN, "Regulatory team", "RA reviewer or Director", ("regulatory", "project_manager"),
             ("regulatory", "director"), "Milestone lock. Complete only when the dossier, required artwork, required manufacturer data "
             "and legal / commercial conditions are all approved.", join, milestone=True, sla_days=7),
-        _st("submission", "Regulatory Submission", 6, G4, IN, "Regulatory team", "RA reviewer", ("regulatory",), ("regulatory", "director"),
+        _st("submission", "Regulatory Submission", 6 - later, G4, IN, "Regulatory team", "RA reviewer", ("regulatory",), ("regulatory", "director"),
             "RA review, then the external submission is recorded (platform configurable).", ("dossier_ready",), sla_days=14, features=("submission",)),
-        _st("rfi", "RFI / Changes", 7, G4, IN, "Regulatory team", "RA reviewer", ("regulatory",), ("regulatory", "director"),
+        _st("rfi", "RFI / Changes", 7 - later, G4, IN, "Regulatory team", "RA reviewer", ("regulatory",), ("regulatory", "director"),
             "Authority questions are assigned, evidence and responses tracked. Closes when no RFI is open.", ("submission",), sla_days=60,
             features=("rfi",)),
-        _st("approval", "Regulatory Approval", 8, G4, IN, "Regulatory team", "RA reviewer or Director", ("regulatory", "project_manager"),
+        _st("approval", "Regulatory Approval", 8 - later, G4, IN, "Regulatory team", "RA reviewer or Director", ("regulatory", "project_manager"),
             ("regulatory", "director"), "Regulatory approval / market authorisation received.", ("rfi",), can_close=True, sla_days=90),
-        _st("readiness", "Commercial Readiness", 9, G5, JOINT, "Commercial + Artwork", "Director or Commercial lead",
+        _st("readiness", "Commercial Readiness", 9 - later, G5, JOINT, "Commercial + Artwork", "Director or Commercial lead",
             ("commercial", "artwork", "project_manager"), ("director", "commercial"), "Final readiness: print proof, packaging and launch plan.",
             ("approval",), sla_days=30),
-        _st("manufacturing", "Manufacturing", 10, G5, MP, "Technical coordinator", "Technical lead or Director", ("technical", "project_manager"),
+        _st("manufacturing", "Manufacturing", 10 - later, G5, MP, "Technical coordinator", "Technical lead or Director", ("technical", "project_manager"),
             ("technical", "director"), "Commercial manufacturing with quality oversight.", ("readiness",), sla_days=60),
-        _st("dispatch", "Samples / Dispatch", 11, G5, JOINT, "Technical coordinator", "Technical lead or Director", ("technical", "project_manager"),
+        _st("dispatch", "Samples / Dispatch", 11 - later, G5, JOINT, "Technical coordinator", "Technical lead or Director", ("technical", "project_manager"),
             ("technical", "director"), "Pre-shipment sample review and dispatch.", ("manufacturing",), sla_days=21),
-        _st("completion", "Project Completion", 12, G5, AU, "Project Manager", "Director", ("project_manager",), ("director",),
+        _st("completion", "Project Completion", 12 - later, G5, AU, "Project Manager", "Director", ("project_manager",), ("director",),
             "Final closure. The full project history is retained and the record is locked.", ("dispatch",), sla_days=7),
     ]
     return {"stages": stages, "rules": {k: dict(v) for k, v in DEFAULT_RULES.items()}}

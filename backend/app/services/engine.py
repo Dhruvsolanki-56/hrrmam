@@ -3,7 +3,7 @@ parallel workstreams, milestone / lock rules and the Project 360 health rating.
 Nothing here names a stage: the process comes from the project's workflow version (`p.flow`)."""
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from .. import workflow
@@ -59,9 +59,22 @@ def _sync(p: Project):
         p.stage_key = p.flow.terminals[-1].key
 
 
-def _next_code(db: Session, year: int) -> str:
-    n = db.scalar(select(func.count()).select_from(Project).where(Project.code.like(f"NH-{year}-%"))) + 1
-    return f"NH-{year}-{n:03d}"
+def _project_code(p: Project) -> str:
+    """Derived from the project's own id, so two projects approved in the same moment can never be given the same code."""
+    return f"NEO-AU-{p.created_at.year}-{p.id:03d}"
+
+
+def _reconcile(db: Session, p: Project):
+    """Two people can approve different parallel stages at the same moment, each unaware of the other, so neither sees
+    the join as complete. Looking again after our own commit means whoever commits last sees both and opens what follows."""
+    db.expire_all()
+    _unlock(p)
+    _sync(p)
+    if p.status == "active" and p.stages and all(r.state in SAT for r in p.stages):
+        p.status = "completed"
+        for r in p.stages:
+            r.locked = True
+    db.commit()
 
 
 # ---------------------------------------------------------------- health (Project 360)
@@ -102,7 +115,7 @@ def create_project(db: Session, user: User, data) -> Project:
         raise WorkflowError("Unknown submission type.")
     wf = workflows.current(db)
     if not wf:
-        raise WorkflowError("There is no published workflow yet. Publish one first (Workflow page).")
+        raise WorkflowError("The process definition is missing. Restart the server so it is created.")
     flow = workflow.get(wf.id)
     fields = data.model_dump()
     if not fields.get("project_manager_id") and user.role_key == "project_manager":
@@ -299,7 +312,7 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
                         raise WorkflowError("Cannot approve yet: " + "; ".join(b) + ".")
                     row.state, row.decided_at = "approved", common.now()
                     if "issue_code" in st.features and not p.code:
-                        p.code = _next_code(db, p.created_at.year)
+                        p.code = _project_code(p)
                     _unlock(p)
                     if all(r.state in SAT for r in p.stages):
                         p.status = "completed"
@@ -334,4 +347,6 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
     _sync(p)
     common.log(p, user, "stage", act, note, ev_stage, to_stage=to_stage)
     db.commit()
+    if act in ("approve", "bypass"):
+        _reconcile(db, p)
     return p
