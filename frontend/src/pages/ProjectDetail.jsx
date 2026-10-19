@@ -65,8 +65,8 @@ export default function ProjectDetail() {
         {project.summary && <p className="summary">{project.summary}</p>}
         <div className="journey">
           <div className="journey-top">
-            <span><b>{done} of {project.flow.stages.length}</b> stages approved</span>
-            <span className="journey-now">{activeNames.length ? `Now: ${activeNames.join(', ')}` : project.status === 'completed' ? 'Complete' : ''}</span>
+            <span><b>{done} of {project.flow.stages.length}</b> steps done</span>
+            <span className="journey-now" title={activeNames.join(', ')}>{activeNames.length > 2 ? `Now: ${activeNames.length} workstreams in progress` : activeNames.length ? `Now: ${activeNames.join(', ')}` : project.status === 'completed' ? 'Complete' : ''}</span>
           </div>
           <StageBar project={project} big />
         </div>
@@ -77,17 +77,17 @@ export default function ProjectDetail() {
           <Tabs value={tab} onChange={goTab} tabs={[
             { key: 'overview', label: 'Overview' }, { key: 'brief', label: 'Brief', count: openClar || null }, { key: 'tasks', label: 'Tasks', count: openTasks || null },
             { key: 'legal', label: 'Legal' }, { key: 'regulatory', label: 'Regulatory' }, { key: 'artwork', label: 'Artwork' },
-            { key: 'manufacturer', label: 'Manufacturer data' }, ...(hasQuality ? [{ key: 'quality', label: 'Quality / PV' }] : []), { key: 'rfi', label: 'RFI', count: openRfi || null },
+            { key: 'manufacturer', label: 'Manufacturer' }, ...(hasQuality ? [{ key: 'quality', label: 'Quality / PV' }] : []), { key: 'rfi', label: 'RFI', count: openRfi || null },
             { key: 'documents', label: 'Documents', count: nonArt || null }, { key: 'activity', label: 'History' },
           ]} />
 
           {tab === 'overview' && (
             <>
-              <Lanes project={project} goTab={goTab} />
               <ActionPanel project={project} onChange={setProject} goTab={goTab} />
+              <Lanes project={project} goTab={goTab} />
               <ReopenPanel project={project} onChange={setProject} />
               <section className="panel">
-                <header><h3>Project journey</h3><span className="muted hide-m">{new Set(project.flow.stages.map((x) => x.phase)).size} phases · {project.workflow?.name}{project.workflow?.version ? ` v${project.workflow.version}` : ""}</span></header>
+                <header><h3>Project journey</h3><span className="muted hide-m">{project.flow.stages.length} steps in {new Set(project.flow.stages.map((x) => x.phase)).size} phases · {project.workflow?.name}{project.workflow?.version ? ` v${project.workflow.version}` : ""}</span></header>
                 <StageList project={project} />
               </section>
             </>

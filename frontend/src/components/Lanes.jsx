@@ -61,8 +61,8 @@ export default function Lanes({ project, goTab }) {
     <section className="panel lanes-panel">
       <header>
         <div>
-          <h3>Project 360</h3>
-          <p className="muted">{lanes.length} lanes run at the same time, each with one owner and its own approval.</p>
+          <h3>Workstreams</h3>
+          <p className="muted">Project 360: {lanes.length} workstreams run at the same time, each with one owner and its own approval.</p>
         </div>
       </header>
       <ul className="lanes">

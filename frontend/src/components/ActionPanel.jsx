@@ -18,6 +18,35 @@ function Cycle({ row }) {
   )
 }
 
+/** Is it this person's move on this stage? One definition, used by the banner and by the cards. */
+function turnOf(project, row, me, st, can) {
+  const sup = me.role_key === 'super_admin'
+  const canSubmit = sup || st.owner_roles.includes(me.role_key) || can('manage_project')
+  const last = [...(project.events || [])].reverse().find((e) => e.stage_key === row.key && e.area === 'stage' && e.action === 'submit')
+  const self = !sup && last?.actor === me.name
+  const canDecide = (sup || st.approver_roles.includes(me.role_key)) && !self
+  const blocked = row.blockers.length > 0
+  if (row.state === 'in_progress' && canSubmit) return blocked ? 'finish' : 'submit'
+  if (row.state === 'awaiting_approval' && canDecide) return 'decide'
+  return ''
+}
+
+function YourTurn({ project, active }) {
+  const me = useMe()
+  const can = useCan()
+  const stages = useStages()
+  const mine = active.map((r) => ({ r, t: turnOf(project, r, me, stageOf(stages, r.key), can) })).filter((x) => x.t)
+  if (!active.length) return null
+  if (!mine.length) return <p className="yourturn quiet"><span><b>Nothing needs you on this project right now.</b><p>You can still look around. Who is doing what is shown below.</p></span></p>
+  const verb = { submit: 'submit your work', finish: 'finish the open items, then submit', decide: 'approve or send it back' }
+  return (
+    <div className="yourturn" role="status">
+      <span><b>It is your turn on {mine.length === 1 ? 'this step' : `${mine.length} steps`}</b>
+        {mine.map(({ r, t }) => <p key={r.key}>{stageOf(stages, r.key).name}: {verb[t]}.</p>)}</span>
+    </div>
+  )
+}
+
 function StageCard({ project, row, onChange, goTab, locked, fold }) {
   const stages = useStages()
   const me = useMe()
@@ -50,7 +79,7 @@ function StageCard({ project, row, onChange, goTab, locked, fold }) {
     })
   }
 
-  const mine = !locked && ((row.state === 'in_progress' && canSubmit && !blocked) || (row.state === 'awaiting_approval' && canDecide))
+  const mine = !locked && ['submit', 'decide'].includes(turnOf(project, row, me, st, can))
   const Wrap = fold ? 'details' : 'div'
   const head = fold
     ? <summary><h2>{st.name}</h2><span>{mine && <span className="you">Your turn · </span>}<StateChip state={row.state} /></span></summary>
@@ -190,6 +219,7 @@ export default function ActionPanel({ project, onChange, goTab }) {
   const active = project.stages.filter((r) => ['in_progress', 'awaiting_approval'].includes(r.state))
   return (
     <>
+      {live && <YourTurn project={project} active={active} />}
       {live && active.length > 1 && (
         <p className="parallel-banner">
           <b>{active.length} workstreams are running in parallel.</b> Each has its own status and approval cycle. The next milestone starts only when all required ones are approved.

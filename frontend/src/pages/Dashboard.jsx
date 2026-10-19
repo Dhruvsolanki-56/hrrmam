@@ -9,8 +9,25 @@ const parseDay = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').ma
 const shortDay = (s) => parseDay(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 // phase order, light to dark, in Neo palette shades
 const RAMP = ['#8fcab9', '#3fa39a', '#00817e', '#00626a', '#004248', '#231f20']
-const KIND = { 'due date': 'Due date request', stage: 'Stage approval', task: 'Task', artwork: 'Artwork' }
+const KIND = { 'due date': 'Decide on a new date', stage: 'Approve this step', task: 'Approve a task', artwork: 'Approve artwork' }
 const today = () => new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
+function Hint() {
+  const [show, setShow] = useState(() => { try { return localStorage.getItem('nh-hint') !== 'off' } catch { return true } })
+  if (!show) return null
+  const close = () => { try { localStorage.setItem('nh-hint', 'off') } catch { /* private window */ } setShow(false) }
+  return (
+    <aside className="hint" role="note">
+      <div><b>New here? Three things to know</b>
+        <ul>
+          <li><b>My work</b> lists what is waiting for you, most urgent first.</li>
+          <li>Open a <b>project</b> to see its workstreams. The green box at the top says if it is your turn.</li>
+          <li>If a button is missing, your role does not do that step. The screen says who does.</li>
+        </ul></div>
+      <button className="btn line" onClick={close}>Got it</button>
+    </aside>
+  )
+}
 
 export default function Dashboard() {
   const stages = useStages()
@@ -48,6 +65,7 @@ export default function Dashboard() {
 
   return (
     <Layout title="Overview" head={false}>
+      <Hint />
       <div className="ph">
         <div>
           <p className="ph-date">{today()}</p>
@@ -86,7 +104,7 @@ export default function Dashboard() {
               <li key={x.key}>
                 <Link to={x.to}>
                   <span className="dmain"><strong>{x.title}</strong><small>{KIND[x.k]} · {x.sub}</small></span>
-                  <span className="dside">{x.r || 'Review'}</span>
+                  <span className="dside">{x.r || 'Approve'}</span>
                 </Link>
               </li>
             ))}

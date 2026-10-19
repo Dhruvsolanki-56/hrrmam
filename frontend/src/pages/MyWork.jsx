@@ -8,7 +8,7 @@ import { Empty, usePaged } from '../components/bits'
 
 const BUCKETS = [
   ['needs_decision', 'Needs my decision'], ['overdue', 'Overdue'], ['due_today', 'Due today'], ['due_this_week', 'Due this week'],
-  ['returned_for_changes', 'Returned to me'], ['waiting_for_someone', 'Waiting on others'], ['submitted_for_approval', 'Submitted'],
+  ['returned_for_changes', 'Returned to me'], ['waiting_for_someone', 'Waiting on others (no action)'], ['submitted_for_approval', 'Submitted'],
   ['upcoming', 'Upcoming'], ['completed', 'Completed'],
 ]
 const HELP = {
@@ -34,7 +34,7 @@ export default function MyWork() {
     })
   }, [load])
 
-  const listFor = (k) => (!data || !k ? [] : k === 'needs_decision' ? data.needs_decision : data.buckets[k] || [])
+  const listFor = (k) => (!data || !k ? [] : k === 'needs_decision' ? [...data.needs_decision].sort((a, b) => (a.task?.due_at || a.due_at || '9').localeCompare(b.task?.due_at || b.due_at || '9')) : data.buckets[k] || [])
   const { items, pager } = usePaged(listFor(tab), 10, tab)
 
   if (!data) return <Layout title="My work"><p className="muted">{error || 'Loading…'}</p></Layout>
@@ -46,8 +46,8 @@ export default function MyWork() {
       if (!data.needs_decision.length) return <Empty>Nothing is waiting for your decision.</Empty>
       return items.map((x, i) => x.type === 'stage' ? (
         <Link key={`s${i}`} to={`/projects/${x.project_id}`} className="decide-row">
-          <div><strong>{x.stage_name} approval</strong><small>{x.project_name} · waiting {x.days_waiting}d</small></div>
-          <span className="go">Review<Icon name="arrow" size={14} /></span>
+          <div><strong>Approve: {x.stage_name}</strong><small>{x.project_name} · waiting {x.days_waiting}d</small></div>
+          <span className="go">Open<Icon name="arrow" size={14} /></span>
         </Link>
       ) : <TaskCard key={`${x.type}${x.task.id}`} task={x.task} showProject onChanged={load} />)
     }
@@ -62,7 +62,7 @@ export default function MyWork() {
           {BUCKETS.map(([k, l]) => {
             const n = count(k)
             return (
-              <button key={k} className={`${tab === k ? 'on' : ''} ${n ? '' : 'zero'} ${k === 'overdue' && n ? 'hot' : ''}`} onClick={() => setTab(k)} aria-current={tab === k ? 'true' : undefined}>
+              <button key={k} className={`${tab === k ? 'on' : ''} ${n ? '' : 'zero'} ${k === 'overdue' && n ? 'hot' : ''} ${['waiting_for_someone', 'completed'].includes(k) ? 'quiet' : ''}`} onClick={() => setTab(k)} aria-current={tab === k ? 'true' : undefined}>
                 <span>{l}</span><b>{n}</b>
               </button>
             )
