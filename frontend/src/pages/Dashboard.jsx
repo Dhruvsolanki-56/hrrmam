@@ -21,7 +21,7 @@ function Hint() {
       <div><b>New here? Three things to know</b>
         <ul>
           <li><b>My work</b> lists what is waiting for you, most urgent first.</li>
-          <li>Open a <b>project</b> to see its workstreams. The green box at the top says if it is your turn.</li>
+          <li>Open a <b>project</b> to see who has each step and whether it is your turn.</li>
           <li>If a button is missing, your role does not do that step. The screen says who does.</li>
         </ul></div>
       <button className="btn line" onClick={close}>Got it</button>

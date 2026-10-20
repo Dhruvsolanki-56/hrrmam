@@ -48,7 +48,7 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
   })
 
   return (
-    <article className={`task t-${task.state} ${task.overdue ? 'is-late' : ''}`}>
+    <article className={`task t-${task.state} ${task.overdue ? 'is-late' : ''} ${showProject && task.assignee.id === me.id ? 'mine' : ''}`}>
       <header onClick={() => setOpen(!open)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setOpen(!open)} aria-expanded={open}>
         <div className="t-title">
           <strong>{task.title}</strong>

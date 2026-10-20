@@ -5,8 +5,10 @@ import Icon from '../components/Icon'
 import Layout from '../components/Layout'
 import TaskCard from '../components/TaskCard'
 import { Empty, Person, usePaged } from '../components/bits'
+import { useMe } from '../context'
 
 function DocRows({ docs, empty }) {
+  const me = useMe()
   if (!docs.length) return <Empty>{empty}</Empty>
   return (
     <ul className="rows">
@@ -14,7 +16,7 @@ function DocRows({ docs, empty }) {
         <li key={d.id}>
           <Link to={`/projects/${d.project_id}?tab=artwork`}>
             <div><strong>{d.title}</strong><small>{d.project_name} · {d.kind} · V{d.current_version}</small></div>
-            <span className="row-end"><Person user={d.owner} /><Icon name="arrow" size={14} /></span>
+            <span className="row-end">{d.owner?.id !== me.id && <Person user={d.owner} />}<Icon name="arrow" size={14} /></span>
           </Link>
         </li>
       ))}

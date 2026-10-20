@@ -11,6 +11,7 @@ const VERB = {
   submission: 'Submission recorded', close: 'Closed', attachment: 'File attached', responded: 'Clarification answered',
   accepted: 'Answer accepted', not_accepted: 'Answer not accepted', reopen_requested: 'Reopen requested',
   reopen_approved: 'Reopen approved', reopen_rejected: 'Reopen declined',
+  value: 'Dossier value recorded', review_acknowledged: 'Finding acknowledged', review_dismissed: 'Finding dismissed',
 }
 
 /** Plain wording for one event's action, the same on the history tab and the audit trail. */

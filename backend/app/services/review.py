@@ -115,7 +115,8 @@ def add_value(db: Session, user: User, p: Project, data) -> DossierValue:
     v = DossierValue(parameter=data.parameter.strip(), value=data.value, unit=data.unit.strip(), module=data.module or "",
                      page=data.page.strip(), created_by=user.name)
     p.dossier_values.append(v)
-    common.log(p, user, "dossier", "value", f"{v.parameter} = {v.value:g} {v.unit} recorded from the dossier ({v.module or 'no module'}, {v.page or 'no page'})")
+    dos = p.flow.with_feature("dossier")
+    common.log(p, user, "dossier", "value", f"{v.parameter} = {v.value:g} {v.unit} recorded from the dossier ({v.module or 'no module'}, {v.page or 'no page'})", dos.key if dos else "")
     db.commit()
     return v
 
@@ -125,13 +126,17 @@ def decide(db: Session, user: User, p: Project, key: str, decision: str, note: s
     common.ensure_open(p)
     if user.role_key not in ("regulatory", "super_admin") and not user.can("manage_project"):
         raise Forbidden("A Regulatory reviewer decides on these findings. The assistant never decides for them.")
-    known = {f["key"] for f in limit_findings(db, p) + rfi_risk(db, p, limit_findings(db, p))}
-    if key not in known:
+    lim = limit_findings(db, p)
+    found = {f["key"]: f for f in lim + rfi_risk(db, p, lim)}
+    if key not in found:
         raise WorkflowError("That finding no longer applies.")
     note = common.need_note(note, "Write what you decided and why.")
     d = ReviewDecision(key=key, decision=decision, note=note, decided_by=user.name)
     p.review_decisions.append(d)
-    common.log(p, user, "dossier", "review_" + decision, f"{key}: {note}")
+    f = found[key]
+    what = f.get("parameter") or " ".join(x for x in (f.get("module"), f.get("section")) if x) or "finding"
+    dos = p.flow.with_feature("dossier")
+    common.log(p, user, "dossier", "review_" + decision, f"{what}: {note}", dos.key if dos else "")
     db.commit()
     return d
 
