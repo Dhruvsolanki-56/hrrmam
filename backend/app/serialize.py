@@ -1,6 +1,8 @@
 """Turns ORM rows into the JSON the frontend uses (one shape per thing, no per-endpoint duplication)."""
 from datetime import date, datetime
 
+from sqlalchemy import select
+
 from . import workflow
 from .models import Agreement, DateRequest, Document, ManufacturerRequest, Project, RFICase, Task, User, aware
 from .services import engine, modules
@@ -68,6 +70,12 @@ def task_out(t: Task, with_project: bool = False) -> dict:
                          "created_by": a.created_by, "created_at": iso(a.created_at)} for a in t.attachments],
         "created_at": iso(t.created_at), "updated_at": iso(t.updated_at),
     }
+    evs = [e for e in t.project.events if e.task_id == t.id and e.area == "task"]
+    sub = next((e for e in reversed(evs) if e.action == "submit"), None)
+    chg = next((e for e in reversed(evs) if e.action == "request_changes"), None)
+    plain = lambda e: {**_ev(e), "note": (e.note or "").removeprefix(f"{t.title}: ").removeprefix(t.title)}
+    d["submitted"] = plain(sub) if sub and t.state in ("submitted", "resubmitted") else None
+    d["last_changes"] = plain(chg) if chg and t.state == "changes_requested" else None
     if with_project:
         d["project_name"], d["project_code"] = t.project.name, t.project.code
     return d
@@ -155,7 +163,42 @@ def event_out(e, with_project: bool = False) -> dict:
     return d
 
 
+def _holders(db, roles) -> list[str]:
+    """Names of the active people in these roles, e.g. 'Rajiv Kapoor, Director'. Shown so nobody has to guess who has a request."""
+    if not roles:
+        return []
+    us = db.scalars(select(User).where(User.active.is_(True), User.role_key.in_(list(roles))).order_by(User.id)).all()
+    return [f"{u.name} ({u.role.name.split(' (')[0]})" for u in us]
+
+
+def _ev(e) -> dict:
+    return {"by": e.actor, "at": iso(e.created_at), "note": e.note or ""}
+
+
+def handoff(p: Project, r, db) -> dict:
+    """Everything the stage card needs to say who has the request, why, and what happened last, without opening the history."""
+    st = p.flow.stage(r.stage_key)
+    evs = [e for e in p.events if e.stage_key == r.stage_key and e.area == "stage"]
+    last = lambda *acts: next((e for e in reversed(evs) if e.action in acts), None)
+    sub, back, ok = last("submit"), last("send_back"), last("approve", "bypass")
+    out = {"submitted": None, "sent_back": None, "decided": None, "with": None, "owners": [], "approvers": []}
+    if r.state in ("in_progress", "awaiting_approval"):
+        out["owners"], out["approvers"] = _holders(db, st.owner_roles), _holders(db, st.approver_roles)
+    if r.state == "awaiting_approval":
+        out["with"] = {"action": "approve", "label": st.approver, "people": _holders(db, st.approver_roles)}
+        out["submitted"] = _ev(sub) if sub else None
+    elif r.state == "in_progress":
+        out["with"] = {"action": "work", "label": st.owner, "people": _holders(db, st.owner_roles)}
+    if back and r.state in ("in_progress", "awaiting_approval"):
+        out["sent_back"] = {**_ev(back), "resolved": bool(sub and sub.id > back.id)}
+    if ok and r.state in ("approved", "bypassed", "locked"):
+        out["decided"] = {**_ev(ok), "action": ok.action}
+    return out
+
+
 def stage_rows(p: Project) -> list[dict]:
+    from sqlalchemy.orm import object_session
+    db = object_session(p)
     out = []
     for r in p.stages:
         active = r.state in ("in_progress", "awaiting_approval")
@@ -165,7 +208,8 @@ def stage_rows(p: Project) -> list[dict]:
                     "sla_days": r.sla_days, "overdue": r.overdue,
                     "tasks_total": len(tasks), "tasks_done": sum(1 for t in tasks if t.state in workflow.TASK_DONE),
                     "blockers": engine.blockers(p, r.stage_key) if active else [],
-                    "warnings": engine.warnings(p, r.stage_key) if active else []})
+                    "warnings": engine.warnings(p, r.stage_key) if active else [],
+                    "handoff": handoff(p, r, db)})
     return out
 
 

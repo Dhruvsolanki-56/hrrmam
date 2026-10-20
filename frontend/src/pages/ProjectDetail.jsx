@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
-import ActionPanel from '../components/ActionPanel'
+import ActionPanel, { StepPanel } from '../components/ActionPanel'
+import StepBar from '../components/StepBar'
 import BriefTab from '../components/Brief'
 import ReopenPanel from '../components/Reopen'
 import DocList from '../components/DocCard'
@@ -14,7 +15,7 @@ import StageList from '../components/StageList'
 import TasksTab from '../components/TasksTab'
 import Timeline from '../components/Timeline'
 import { LegalTab, ManufacturerTab, RegulatoryTab, RfiTab } from '../components/Workstreams'
-import { AgeChip, HealthPill, Person, StageBar, StatusPill, Tabs, fmtDate, fmtDay, label } from '../components/bits'
+import { AgeChip, HealthPill, Person, StatusPill, Tabs, fmtDate, fmtDateTime, fmtDay, label, useDo } from '../components/bits'
 import { FlowScope, useCan, useStages } from '../context'
 
 const AREAS = ['all', 'stage', 'task', 'clarification', 'legal', 'dossier', 'artwork', 'manufacturer', 'rfi', 'document', 'project']
@@ -29,9 +30,17 @@ export default function ProjectDetail() {
   const [editing, setEditing] = useState(false)
   const [blocker, setBlocker] = useState(false)
   const [area, setArea] = useState('all')
+  const [confirmClear, setConfirmClear] = useState(false)
+  const clearing = useDo()
 
   useEffect(() => { api.project(id).then(setProject).catch((e) => setError(e.message)) }, [id])
-  const goTab = (t) => { const n = new URLSearchParams(params); n.set('tab', t); setParams(n, { replace: true }); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  const step = params.get('step')
+  const pick = (k) => {
+    const n = new URLSearchParams(params); n.set('tab', 'overview'); n.set('step', k); setParams(n, { replace: true })
+    setTimeout(() => document.getElementById('step-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+  }
+  const unpick = () => { const n = new URLSearchParams(params); n.delete('step'); setParams(n, { replace: true }) }
+  const goTab = (t) => { const n = new URLSearchParams(params); n.set('tab', t); n.delete('step'); setParams(n, { replace: true }); window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
   if (error) return <Layout title="Project" back="/projects"><p className="error">{error}</p></Layout>
   if (!project) return <Layout title="Project" back="/projects" />
@@ -43,6 +52,11 @@ export default function ProjectDetail() {
   const nonArt = project.documents.filter((d) => !d.is_artwork).length
   const events = area === 'all' ? project.events : project.events.filter((e) => e.area === area)
   const manage = can('manage_project')
+  const bEv = project.critical_blocker ? [...project.events].reverse().find((e) => e.area === 'project' && e.action === 'edit' && /Critical blocker:/.test(e.note)) : null
+  const pm = project.project_manager?.name
+  const canClear = manage && !['rejected', 'completed'].includes(project.status)
+  const clear = () => clearing.run(async () => { setProject(await api.updateProject(project.id, { critical_blocker: '' })); setConfirmClear(false) })
+  const tabStage = tab === 'tasks' || tab === 'overview' ? null : project.flow.stages.find((s) => s.tab === tab) || project.flow.stages.find((s) => s.key === tab)
 
   const done = Object.values(project.stage_states).filter((x) => x === 'approved' || x === 'bypassed').length
   const activeNames = project.stages.filter((r) => ['in_progress', 'awaiting_approval'].includes(r.state)).map((r) => project.flow.stages.find((s) => s.key === r.key)?.name).filter(Boolean)
@@ -68,12 +82,28 @@ export default function ProjectDetail() {
             <span><b>{done} of {project.flow.stages.length}</b> steps done</span>
             <span className="journey-now" title={activeNames.join(', ')}>{activeNames.length > 2 ? `Now: ${activeNames.length} workstreams in progress` : activeNames.length ? `Now: ${activeNames.join(', ')}` : project.status === 'completed' ? 'Complete' : ''}</span>
           </div>
-          <StageBar project={project} big />
+          <StepBar project={project} selected={step} onPick={pick} />
         </div>
       </div>
 
       <div className="proj-grid">
         <div className="proj-main">
+          {project.critical_blocker && (
+            <div className="blocker-bar" role="alert">
+              <div>
+                <b>Critical blocker: {project.critical_blocker}</b>
+                <small>{bEv ? `Reported by ${bEv.actor} on ${fmtDateTime(bEv.created_at)}. ` : ''}It keeps the project red until it is cleared.</small>
+              </div>
+              {canClear && !confirmClear && <button className="btn line" onClick={() => setConfirmClear(true)}>Mark as resolved</button>}
+              {canClear && confirmClear && (
+                <span className="blocker-confirm">Is this fixed?
+                  <button className="btn primary" disabled={clearing.busy} onClick={clear}>Yes, clear it</button>
+                  <button className="btn line" onClick={() => setConfirmClear(false)}>Not yet</button></span>
+              )}
+              {!canClear && <small>Only a project manager{pm ? ` (${pm})` : ''} or a Director can clear it.</small>}
+              {clearing.error && <p className="error">{clearing.error}</p>}
+            </div>
+          )}
           <Tabs value={tab} onChange={goTab} tabs={[
             { key: 'overview', label: 'Overview' }, { key: 'brief', label: 'Brief', count: openClar || null }, { key: 'tasks', label: 'Tasks', count: openTasks || null },
             { key: 'legal', label: 'Legal' }, { key: 'regulatory', label: 'Regulatory' }, { key: 'artwork', label: 'Artwork' },
@@ -81,14 +111,16 @@ export default function ProjectDetail() {
             { key: 'documents', label: 'Documents', count: nonArt || null }, { key: 'activity', label: 'History' },
           ]} />
 
+          {tabStage && <StepPanel project={project} stageKey={tabStage.key} onChange={setProject} goTab={goTab} inTab />}
           {tab === 'overview' && (
             <>
-              <ActionPanel project={project} onChange={setProject} goTab={goTab} />
+              {step && <div id="step-panel"><StepPanel project={project} stageKey={step} onChange={setProject} goTab={goTab} onClose={unpick} /></div>}
+              <ActionPanel project={project} onChange={setProject} goTab={goTab} skip={step} />
               <Lanes project={project} goTab={goTab} />
               <ReopenPanel project={project} onChange={setProject} />
               <section className="panel">
                 <header><h3>Project journey</h3><span className="muted hide-m">{project.flow.stages.length} steps in {new Set(project.flow.stages.map((x) => x.phase)).size} phases · {project.workflow?.name}{project.workflow?.version ? ` v${project.workflow.version}` : ""}</span></header>
-                <StageList project={project} />
+                <StageList project={project} selected={step} onPick={pick} />
               </section>
             </>
           )}
@@ -130,7 +162,7 @@ export default function ProjectDetail() {
           <div className={`blocker ${project.critical_blocker ? 'on' : ''}`}>
             <Icon name="alert" size={16} />
             <div><b>Critical blocker</b><span>{project.critical_blocker || 'None reported'}</span></div>
-            {manage && !['rejected', 'completed'].includes(project.status) && <button className="link" onClick={() => setBlocker(true)}>{project.critical_blocker ? 'Update' : 'Report a blocker'}</button>}
+            {canClear && <button className="link" onClick={() => setBlocker(true)}>{project.critical_blocker ? 'Change the wording' : 'Report a blocker'}</button>}
           </div>
           {project.health_reasons.length > 0 && (
             <div className="reasons-box">
@@ -143,7 +175,7 @@ export default function ProjectDetail() {
 
       {editing && <NewProjectModal project={project} onClose={() => setEditing(false)} onCreated={(p) => { setProject(p); setEditing(false) }} />}
       {blocker && (
-        <FormModal title="Critical blocker" intro="Anything that stops the project moving. A blocker turns the project's health red until it is cleared (leave the box empty to clear it)."
+        <FormModal title="Critical blocker" intro="Anything that stops the project moving. It turns the project's health red and shows a banner on every tab. When it is fixed, use Mark as resolved."
           fields={[{ key: 'critical_blocker', label: 'What is blocking the project?', type: 'textarea' }]} initial={project}
           onSave={async (d) => setProject(await api.updateProject(project.id, d))} onClose={() => setBlocker(false)} />
       )}

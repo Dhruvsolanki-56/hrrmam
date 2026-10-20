@@ -29,6 +29,28 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
   const req = task.pending_request
   const canDates = isAssigner || can('change_dates')
 
+  const approverName = task.assigner?.name || 'the approver'
+  const holder = {
+    assigned: <>With <b>{task.assignee.name}</b>: waiting for them to accept the task.</>,
+    accepted: <>With <b>{task.assignee.name}</b>: accepted, not started yet.</>,
+    in_progress: <>With <b>{task.assignee.name}</b>: work in progress.</>,
+    submitted: <>Waiting for approval from <b>{approverName}</b>. Submitted by {task.submitted?.by || task.assignee.name}{task.submitted ? ` on ${fmtDateTime(task.submitted.at)}` : ''}.</>,
+    resubmitted: <>Waiting for approval from <b>{approverName}</b>. Resubmitted by {task.submitted?.by || task.assignee.name}{task.submitted ? ` on ${fmtDateTime(task.submitted.at)}` : ''}.</>,
+    changes_requested: <>Back with <b>{task.assignee.name}</b> to make the changes.</>,
+    approved: <>Approved. Nothing more to do.</>,
+    locked: <>Approved and locked.</>,
+  }[task.state] || label(task.state)
+  const nextLine = {
+    assigned: `Next: ${task.assignee.name} accepts it, does the work and submits it to ${approverName}.`,
+    accepted: `Next: ${task.assignee.name} starts the work and submits it to ${approverName}.`,
+    in_progress: `Next: when submitted, it goes to ${approverName} to approve or send back.`,
+    submitted: `Next: ${approverName} approves it, or sends it back with a reason.`,
+    resubmitted: `Next: ${approverName} approves it, or sends it back with a reason.`,
+    changes_requested: `Next: after the fix, press Resubmit. It goes to ${approverName} again.`,
+    approved: 'The task counts towards its step.',
+    locked: 'Unlocking needs permission and a reason.',
+  }[task.state] || ''
+
   const go = (action, extra = {}) => run(async () => {
     const result = await api.taskAct(task.id, { action, note, ...extra })
     setNote(''); setAsking(false)
@@ -56,6 +78,17 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
         <div className="task-body">
           {task.description && <p className="t-desc">{task.description}</p>}
           <p className="muted">Assigned by {task.assigner?.name || '–'} · due {fmtDateTime(task.due_at)}</p>
+          <div className={`handoff t-${task.state}`}>
+            <p className="handoff-line">{holder}</p>
+            <p className="handoff-why">{nextLine}</p>
+          </div>
+          {task.last_changes && (
+            <div className="sentback" role="note">
+              <b>Changes requested by {task.last_changes.by} on {fmtDateTime(task.last_changes.at)}</b>
+              <p>Reason: “{task.last_changes.note || 'No reason was written.'}”</p>
+              <small>Fix this, attach the corrected file, then resubmit.</small>
+            </div>
+          )}
 
           <div className="t-files">
             <div className="t-files-head"><b>Files</b>
@@ -81,12 +114,12 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
                   <button className="btn line sm" disabled={busy} onClick={() => { if (!note.trim()) { setNoting(true); return } go('reject_date') }}>Keep original</button>
                 </div>
               )}
-              {!canDates && <small className="muted">Waiting for {task.assigner?.name || 'the assigner'} to decide.</small>}
+              {!canDates && <small className="muted">Sent to {task.assigner?.name || 'the assigner'} on {fmtDateTime(req.created_at)}. Waiting for their decision. Until then the original date stands.</small>}
             </div>
           )}
 
           {(noting || asking) && (
-            <label className="field">Note <small>(needed to request changes, keep a date, ask for a date or unlock)</small>
+            <label className="field">{asking ? 'Why do you need a different date? (required)' : 'Note (kept in the record)'}
               <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short comment for the record…" autoFocus />
             </label>
           )}

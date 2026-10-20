@@ -223,13 +223,13 @@ def warnings(p: Project, key: str) -> list[dict]:
     out = []
     for k in st.soft_requires:
         if p.flow.has(k) and p.row(k).state not in workflow.SATISFIED:
-            out.append({"kind": "soft", "stage": k, "text": f"{p.flow.stage(k).name} is not approved yet; it normally comes first"})
+            out.append({"kind": "soft", "stage": k, "text": f"{p.flow.stage(k).name} is not approved yet. It usually finishes first, but you can carry on."})
     for k in st.info_requires:
         if not p.flow.has(k) or p.row(k).state in workflow.SATISFIED:
             continue
         waiting = [m for m in p.mfr_requests if m.status in ("requested", "received", "changes_requested")] if "mfr" in p.flow.stage(k).features else []
         extra = f" ({len(waiting)} item{'s' if len(waiting) != 1 else ''} pending)" if waiting else ""
-        out.append({"kind": "info", "stage": k, "text": f"Waiting for information from {p.flow.stage(k).name}{extra}"})
+        out.append({"kind": "info", "stage": k, "text": f"Still waiting for information from {p.flow.stage(k).name}{extra}. This does not block you."})
     return out
 
 

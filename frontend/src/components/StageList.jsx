@@ -1,8 +1,9 @@
 import { useStages } from '../context'
+import { withText } from './ActionPanel'
 import { EntityChip, STATE } from './bits'
 
 /** The project journey. Stages that can run at the same time (same prerequisites) are grouped as "run in parallel". */
-export default function StageList({ project }) {
+export default function StageList({ project, selected, onPick }) {
   const stages = useStages()
   const states = project.stage_states
   const by = Object.fromEntries(stages.map((s) => [s.key, s]))
@@ -14,7 +15,8 @@ export default function StageList({ project }) {
     const d = detail(s.key)
     const join = st === 'pending' && s.requires.length > 1
     return (
-      <li key={s.key} className={`st-${st}`}>
+      <li key={s.key} className={`st-${st} ${selected === s.key ? 'sel' : ''}`}>
+        <button type="button" className="st-hit" onClick={() => onPick?.(s.key)} aria-label={`Open details of ${s.name}`}>
         <span className="node">{['approved', 'bypassed'].includes(st) ? '✓' : s.phase}</span>
         <div className="st-main">
           <strong>{s.name}{d?.locked && <i className="gate">locked</i>}</strong>
@@ -23,9 +25,12 @@ export default function StageList({ project }) {
               ? join ? `Starts when ${s.requires.map(name).join(', ')} are complete` : s.requires.length ? `Starts after ${name(s.requires[0])}` : 'Not started'
               : `${STATE[st]}${d?.rework_count ? ` · sent back ${d.rework_count}×` : ''}${d?.tasks_total ? ` · ${d.tasks_done}/${d.tasks_total} tasks` : ''}`}
           </span>
-          <span className="owner">Approver: {s.approver}</span>
+          {d?.handoff?.with
+            ? <span className="owner holder">{d.handoff.with.action === 'approve' ? 'Waiting for approval from' : 'Work is with'} <b>{withText(d.handoff.with)}</b></span>
+            : <span className="owner">Approver: {s.approver}</span>}
         </div>
         <EntityChip entity={s.entity} />
+        </button>
       </li>
     )
   }
