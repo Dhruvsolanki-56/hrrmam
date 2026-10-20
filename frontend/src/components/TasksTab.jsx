@@ -22,6 +22,7 @@ export default function TasksTab({ project, onChange }) {
         <h3>Tasks</h3>
         {can('assign') && !closed && <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} />Assign a task</button>}
       </header>
+      <p className="muted tasks-intro">Tasks are the individual jobs inside each step. The person assigned accepts it, does it and submits it; the person who assigned it approves it. A step cannot be submitted until its required tasks are approved. Click a task to open it.</p>
       {withTasks.length > 1 && (
         <Tabs value={stage} onChange={setStage}
           tabs={[{ key: 'all', label: 'All', count: project.tasks.length }, ...withTasks.map((s) => ({ key: s.key, label: s.name, count: project.tasks.filter((t) => t.stage_key === s.key).length }))]} />

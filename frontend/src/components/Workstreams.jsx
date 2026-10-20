@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { useCan, useConfig, useMe, useStages } from '../context'
-import { Empty, Person, fmtDay, label, useDo } from './bits'
+import { withText } from './ActionPanel'
+import { Empty, Person, fmtDateTime, fmtDay, label, useDo } from './bits'
 import FormModal from './FormModal'
 import ReviewAssistant from './ReviewAssistant'
 import Icon from './Icon'
@@ -42,24 +43,35 @@ function EntryApproval({ kind, obj, project, onChange, disabled }) {
   const title = ui.title ? ui.title(obj) : ''
   const last = [...(project?.events || [])].reverse().find((e) => e.action === 'submit' && e.area === ui.area && e.note.startsWith(title))
   const mayDecide = can('approve') && !(me.role_key !== 'super_admin' && last?.actor === me.name)
+  const feature = { agreement: 'agreements', dossier_item: 'dossier', mfr: 'mfr' }[kind]
+  const st = project?.flow.stages.find((x) => (x.features || []).includes(feature))
+  const row = st && project.stages.find((r) => r.key === st.key)
+  const approvers = st ? withText({ people: row?.handoff?.approvers, label: st.approver }) : 'an approver'
+  const asked = [...(project?.events || [])].reverse().find((e) => e.area === ui.area && ['reject', 'request_changes'].includes(e.action) && e.note.startsWith(title))
+  const reason = asked ? asked.note.slice(title.length).replace(/^: /, '') : ''
   const { busy, error, run } = useDo()
+  const [asking, setAsking] = useState(false)
+  const [why, setWhy] = useState('')
   const go = (action, ask) => {
-    let note = ''
-    if (ask) { note = window.prompt('What needs to change? (required)') || ''; if (!note.trim()) return }
-    run(async () => onChange(await ui.act(obj.id, { action, note })))
+    if (ask && !asking) { setAsking(true); return }
+    if (ask && !why.trim()) { setErr('Write what needs to change. The person who did the work will see it.'); return }
+    run(async () => { onChange(await ui.act(obj.id, { action, note: ask ? why : '' })); setAsking(false); setWhy('') })
   }
+  const [localErr, setErr] = useState('')
   if (disabled) return null
   return (
     <span className="entry-actions">
-      {obj.status === 'changes_requested' && <span className="chip warn">Changes requested</span>}
-      {ui.work.includes(obj.status) && <button className="link" disabled={busy} onClick={() => go('submit')}>Submit for approval</button>}
-      {obj.status === ui.review && !mayDecide && <small className="muted">Waiting for an approver</small>}
+      {obj.status === 'changes_requested' && <small className="sentback-inline"><b>Changes requested{asked ? ` by ${asked.actor}` : ''}.</b> {reason && <>Reason: “{reason}”. </>}Fix it, then submit again.</small>}
+      {ui.work.includes(obj.status) && <button className="link" disabled={busy} title={`Sends it to ${approvers} to approve`} onClick={() => go('submit')}>Submit for approval</button>}
+      {obj.status === ui.review && !mayDecide && <small className="muted">Waiting for approval from {approvers}{last ? `. Submitted by ${last.actor}, ${fmtDateTime(last.created_at)}` : ''}</small>}
       {obj.status === ui.review && mayDecide && (
         <>
           <button className="link" disabled={busy} onClick={() => go('approve')}>Approve</button>
-          <button className="link danger" disabled={busy} onClick={() => go('reject', true)}>Request changes</button>
+          <button className="link danger" disabled={busy} onClick={() => go('reject', true)}>{asking ? 'Send back with this reason' : 'Request changes'}</button>
+          {asking && <textarea className="entry-why" rows={2} autoFocus value={why} onChange={(e) => { setWhy(e.target.value); setErr('') }} placeholder="What needs to change? (required)" aria-label="What needs to change" />}
         </>
       )}
+      {localErr && <small className="error" role="alert">{localErr}</small>}
       {error && <small className="error" role="alert">{error}</small>}
     </span>
   )

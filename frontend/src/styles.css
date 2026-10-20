@@ -273,7 +273,7 @@ details.controls > summary { min-height: 32px; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 16px; font-size: 12.5px; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 7px; }
 .legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
-.callout-desc, .bucket-help, .parallel-banner { display: none; }
+.bucket-help, .parallel-banner { display: none; }
 
 /* numbers strip used on My work / Legal */
 .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
@@ -562,7 +562,7 @@ details.controls > summary .muted { margin-left: auto; }
 .st-main { display: grid; gap: 1px; min-width: 0; }
 .stagelist strong { font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .owner { font-size: 12.5px; color: var(--muted); }
-.stagelist .owner + .owner, .stagelist .chip, .stagelist .st-pending .owner { display: none; }
+.stagelist .chip { display: none; }
 .node { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 400 11px var(--sans); background: #fff; border: 1px solid var(--line-2); color: var(--muted); position: relative; z-index: 1; }
 .stagelist .st-pending strong { color: var(--muted); font-weight: 400; }
 .stagelist .st-approved .node { background: var(--neo-green); border-color: var(--neo-green); color: #fff; font-family: var(--sans); }
@@ -1194,3 +1194,31 @@ a.metric:first-child:hover { background: #00363b; }
 .steppanel-bar { display: flex; justify-content: flex-end; margin-bottom: 4px; }
 .stagecard-fold > summary { flex-wrap: wrap; }
 .fold-who { flex-basis: 100%; color: var(--muted); font-size: 13px; }
+.decide-wrap { display: grid; }
+.decide-tag { margin: 0; padding: 8px 12px; font-size: 13px; background: var(--tint-green); color: var(--ink-2); border-radius: var(--r) var(--r) 0 0; }
+.decide-tag b { color: var(--neo-dark); font-weight: 600; }
+
+.callout-desc { margin: 0 0 10px; font-size: 13.5px; color: var(--ink-2); }
+.steps-toggle { justify-self: start; }
+.steps-all { margin-top: 6px; }
+.proj-main > .tabs { flex-wrap: wrap; row-gap: 4px; overflow: visible; }
+
+.stagelist li:not(.parallel) { display: block; padding: 0; }
+.stagelist li:not(.parallel) > .st-hit { padding: 8px 8px; }
+.stagelist > li:not(:last-child)::after, .stagelist li.parallel li:not(:last-child)::after { left: 21px; top: 36px; bottom: -6px; }
+.stagelist .owner { font-size: 13px; color: var(--muted); }
+/* the details column belongs to the Overview; other tabs get the full width so their tables fit */
+.props.props-off { display: none; }
+.proj-grid:has(> .props-off) { grid-template-columns: minmax(0, 1fr); }
+.sentback-inline { display: block; margin-top: 4px; padding: 6px 8px; font-size: 12.5px; background: #fdf8ec; color: #5c3f00; border-radius: var(--r); max-width: 280px; }
+.sentback-inline b { font-weight: 600; }
+.entry-why { display: block; width: 100%; max-width: 280px; margin-top: 4px; font: inherit; font-size: 13px; }
+.tasks-intro { margin: 0 0 8px; font-size: 13px; }
+/* board cards must stay inside their column */
+.cards, .card, .card > * { min-width: 0; }
+.card strong, .card-stage { overflow-wrap: anywhere; }
+.card .stagebar { width: 100%; }
+.card-top { flex-wrap: wrap; row-gap: 2px; }
+/* the account card opens inside the sidebar, so it must not be wider than the sidebar */
+.side .usermenu-pop { width: 100%; box-sizing: border-box; padding: 14px; }
+.side .usermenu-pop select { width: 100%; min-width: 0; }

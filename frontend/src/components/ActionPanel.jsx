@@ -62,7 +62,7 @@ export function withText(h) {
   return p.length > 2 ? `${p.slice(0, 2).join(', ')} and ${p.length - 2} more` : p.join(' or ')
 }
 
-function StageCard({ project, row, onChange, goTab, locked, fold }) {
+function StageCard({ project, row, onChange, goTab, locked, fold, inTab }) {
   const stages = useStages()
   const me = useMe()
   const can = useCan()
@@ -85,8 +85,11 @@ function StageCard({ project, row, onChange, goTab, locked, fold }) {
   const turn = locked ? '' : turnOf(project, row, me, st, can)
   const acting = ['submit', 'finish', 'decide'].includes(turn)
   const awaiting = row.state === 'awaiting_approval'
+  // nobody approves their own work, so the person who did it is never named as its approver
+  const doer = awaiting ? h.submitted?.by : ['submit', 'finish'].includes(turn) ? me.name : ''
+  const others = (list) => (list || []).filter((n) => !doer || !n.startsWith(`${doer} (`))
   const owners = withText({ people: h.owners, label: st.owner })
-  const approvers = withText({ people: h.approvers, label: st.approver })
+  const approvers = withText({ people: others(h.approvers), label: st.approver })
   const steppingIn = row.state === 'in_progress' && !turn && !locked && (sup || can('manage_project'))
   const since = row.days_in_stage ? `In this step for ${row.days_in_stage} day${row.days_in_stage === 1 ? '' : 's'}` : 'Opened today'
   const afterApprove = dependents.length === 0 ? 'the project closes' : unlocks.length ? `${unlocks.map((s) => s.name).join(' and ')} opens` : `it then waits for ${[...new Set(waiting)].join(', ')}`
@@ -122,6 +125,7 @@ function StageCard({ project, row, onChange, goTab, locked, fold }) {
     <section className="panel callout stagecard" id={`step-${row.key}`}>
       <Wrap className={fold ? 'stagecard-fold' : undefined} {...(fold ? { open: mine || (awaiting && selfSubmitted) } : {})}>
       {head}
+      <p className="callout-desc">{st.description}</p>
       <div className={`handoff ${row.state}`}>
         <p className="handoff-line">
           {awaiting ? <>Waiting for approval from <b>{approvers}</b></> : <>Work is with <b>{owners}</b></>}
@@ -144,7 +148,6 @@ function StageCard({ project, row, onChange, goTab, locked, fold }) {
       )}
 
       <Cycle row={row} />
-      <p className="callout-desc">{st.description}</p>
 
       <div className="whatnext">
         <b>What happens next</b>
@@ -157,14 +160,14 @@ function StageCard({ project, row, onChange, goTab, locked, fold }) {
       <p className={`youdo ${acting ? 'on' : ''}`}>{youdo}</p>
 
       {row.warnings?.length > 0 && (
-        <ul className="deps">{row.warnings.map((w) => <li key={w.text} className={`dep dep-${w.kind}`}><b>{w.kind === 'soft' ? 'Good to know' : 'Still waiting'}</b> {w.text}</li>)}</ul>
+        <ul className="deps">{row.warnings.map((w) => <li key={w.text} className={`dep dep-${w.kind}`}><b>{w.kind === 'soft' ? 'Good to know' : 'Information pending'}</b> {w.text}</li>)}</ul>
       )}
 
       {blocked && (
         <details className="blockers" role="note" open={turn === 'finish'}>
           <summary><b>{row.blockers.length} thing{row.blockers.length > 1 ? 's' : ''} to finish before this can be submitted</b></summary>
           <ul>{row.blockers.map((b) => <li key={b}>{b}</li>)}</ul>
-          <button className="link" onClick={() => goTab(tabOf(st) || 'tasks')}>Open {tabOf(st) ? 'the workstream' : 'tasks'} →</button>
+          {!inTab && <button className="link" onClick={() => goTab(tabOf(st) || 'tasks')}>Open {tabOf(st) ? 'the workstream' : 'tasks'} →</button>}
         </details>
       )}
 
@@ -206,6 +209,7 @@ function StepSummary({ project, stageKey, goTab, inTab }) {
     <section className="panel callout stagecard" id={`step-${stageKey}`}>
       <header><span className="eyebrow">Phase {st.phase} of {Math.max(...stages.map((x) => x.phase))}</span><StateChip state={row.state} locked={row.locked} /></header>
       <h2>{st.name}</h2>
+      <p className="callout-desc">{st.description}</p>
       <div className={`handoff ${row.state}`}>
         {done && <p className="handoff-line">{row.state === 'bypassed' ? 'Skipped as not needed' : 'Approved'}{h.decided ? <> by <b>{h.decided.by}</b> on {fmtDateTime(h.decided.at)}</> : null}</p>}
         {done && h.decided?.note && <p className="handoff-sub">Note: “{h.decided.note}”</p>}
@@ -218,7 +222,6 @@ function StepSummary({ project, stageKey, goTab, inTab }) {
         {row.state === 'locked' && <p className="handoff-line">Locked. It needs permission to unlock.</p>}
       </div>
       {row.rework_count > 0 && <p className="sentback-old">This step was sent back {row.rework_count} time{row.rework_count > 1 ? 's' : ''} before it was approved. The reasons are in the history.</p>}
-      <p className="callout-desc">{st.description}</p>
       <dl className="who">
         <dt>Work by</dt><dd>{st.owner}</dd>
         <dt>Approved by</dt><dd>{st.approver}</dd>
@@ -238,7 +241,7 @@ export function StepPanel({ project, stageKey, onChange, goTab, onClose, inTab }
     <div className="steppanel">
       {onClose && <div className="steppanel-bar"><button className="link" onClick={onClose}>Close this step ×</button></div>}
       {active
-        ? <StageCard project={project} row={row} onChange={onChange} goTab={goTab} locked={project.status === 'on_hold'} />
+        ? <StageCard project={project} row={row} onChange={onChange} goTab={goTab} locked={project.status === 'on_hold'} inTab={inTab} />
         : <StepSummary project={project} stageKey={stageKey} goTab={goTab} inTab={inTab} />}
     </div>
   )

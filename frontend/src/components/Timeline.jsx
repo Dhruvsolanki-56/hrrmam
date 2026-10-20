@@ -13,13 +13,16 @@ const VERB = {
   reopen_approved: 'Reopen approved', reopen_rejected: 'Reopen declined',
 }
 
+/** Plain wording for one event's action, the same on the history tab and the audit trail. */
+export const actionLabel = (e) => (e.action === 'reject' && e.area !== 'stage' ? 'Changes requested' : VERB[e.action] || label(e.action))
+
 export default function Timeline({ events }) {
   const stages = useStages()
   const name = (k) => stages.find((s) => s.key === k)?.name
   const title = (e) => {
     if (e.action === 'return' && name(e.to_stage)) return `Moved back to ${name(e.to_stage)}`
     if (e.action === 'return') return `Returned for changes${name(e.stage_key) ? ` · ${name(e.stage_key)}` : ''}`
-    const base = VERB[e.action] || label(e.action)
+    const base = actionLabel(e)
     const where = ['created', 'edit', 'hold', 'resume', 'reopen'].includes(e.action) && e.area === 'project' ? '' : name(e.stage_key)
     return where ? `${base} · ${where}` : base
   }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { actionLabel } from '../components/Timeline'
 import Layout from '../components/Layout'
 import { Tabs, fmtDateTime, label, usePaged } from '../components/bits'
 import { useStages } from '../context'
@@ -44,7 +45,7 @@ export default function Audit() {
                   <td className="nowrap muted" data-label="When">{fmtDateTime(e.created_at)}</td>
                   <td data-label="Project"><Link to={`/projects/${e.project_id}?tab=activity`}><strong>{e.project_name}</strong></Link><small className="sub">{stageName(e.stage_key)}</small></td>
                   <td data-label="Area"><span className="chip plain">{label(e.area)}</span></td>
-                  <td data-label="Action" className="nowrap">{label(e.action)}</td>
+                  <td data-label="Action" className="nowrap">{actionLabel(e)}</td>
                   <td data-label="Detail" className={`wrap ${e.note ? '' : 'no-note'}`}>{e.note || '–'}</td>
                   <td data-label="By" className="nowrap">{e.actor}</td>
                 </tr>

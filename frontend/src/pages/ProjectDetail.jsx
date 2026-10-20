@@ -31,6 +31,7 @@ export default function ProjectDetail() {
   const [blocker, setBlocker] = useState(false)
   const [area, setArea] = useState('all')
   const [confirmClear, setConfirmClear] = useState(false)
+  const [allSteps, setAllSteps] = useState(false)
   const clearing = useDo()
 
   useEffect(() => { api.project(id).then(setProject).catch((e) => setError(e.message)) }, [id])
@@ -83,6 +84,8 @@ export default function ProjectDetail() {
             <span className="journey-now" title={activeNames.join(', ')}>{activeNames.length > 2 ? `Now: ${activeNames.length} workstreams in progress` : activeNames.length ? `Now: ${activeNames.join(', ')}` : project.status === 'completed' ? 'Complete' : ''}</span>
           </div>
           <StepBar project={project} selected={step} onPick={pick} />
+          <button className="link steps-toggle" aria-expanded={allSteps} onClick={() => setAllSteps(!allSteps)}>{allSteps ? "Hide the step names" : `Show all ${project.flow.stages.length} steps with their names`}</button>
+          {allSteps && <div className="panel steps-all"><StageList project={project} selected={step} onPick={(k) => { setAllSteps(false); pick(k) }} /></div>}
         </div>
       </div>
 

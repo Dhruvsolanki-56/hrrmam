@@ -229,7 +229,7 @@ def warnings(p: Project, key: str) -> list[dict]:
             continue
         waiting = [m for m in p.mfr_requests if m.status in ("requested", "received", "changes_requested")] if "mfr" in p.flow.stage(k).features else []
         extra = f" ({len(waiting)} item{'s' if len(waiting) != 1 else ''} pending)" if waiting else ""
-        out.append({"kind": "info", "stage": k, "text": f"Still waiting for information from {p.flow.stage(k).name}{extra}. This does not block you."})
+        out.append({"kind": "info", "stage": k, "text": f"{p.flow.stage(k).name} has not finished supplying it{extra}. This does not block you."})
     return out
 
 

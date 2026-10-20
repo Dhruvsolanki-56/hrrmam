@@ -4,7 +4,7 @@ import { api } from '../api'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
 import TaskCard from '../components/TaskCard'
-import { Empty, usePaged } from '../components/bits'
+import { Empty, fmtDateTime, usePaged } from '../components/bits'
 
 const BUCKETS = [
   ['needs_decision', 'Needs my decision'], ['overdue', 'Overdue'], ['due_today', 'Due today'], ['due_this_week', 'Due this week'],
@@ -49,7 +49,14 @@ export default function MyWork() {
           <div><strong>Approve: {x.stage_name}</strong><small>{x.project_name} · waiting {x.days_waiting}d</small></div>
           <span className="go">Open<Icon name="arrow" size={14} /></span>
         </Link>
-      ) : <TaskCard key={`${x.type}${x.task.id}`} task={x.task} showProject onChanged={load} />)
+      ) : (
+        <div key={`${x.type}${x.task.id}`} className="decide-wrap">
+          <p className="decide-tag">{x.type === 'date_request'
+            ? <><b>Date request:</b> {x.request.requested_by.name} asks to move the due date to {fmtDateTime(x.request.proposed_due)}. Approve the new date or keep the original.</>
+            : <><b>Submitted for approval:</b> {x.task.assignee.name} says this task is done. Approve it or request changes.</>}</p>
+          <TaskCard task={x.task} showProject onChanged={load} />
+        </div>
+      ))
     }
     if (!items.length) return <Empty>Nothing here.</Empty>
     return items.map((t) => <TaskCard key={t.id} task={t} showProject onChanged={load} />)
