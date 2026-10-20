@@ -37,29 +37,32 @@ export default function ReviewAssistant({ project }) {
   return (
     <section className="panel review">
       <header>
-        <div><h3>Regulatory review assistant</h3><p className="muted">A second pair of eyes for Regulatory. Every finding shows why.</p></div>
+        <div><h3>Regulatory review assistant</h3></div>
         {!closed && <button className="btn line" onClick={() => setAdding(true)}><Icon name="plus" size={16} />Record a dossier value</button>}
       </header>
-      <p className="notice soft">{r.disclaimer}</p>
+      <p className="rv-note">A second pair of eyes. It never certifies compliance: a Regulatory reviewer decides on every finding.</p>
 
       <h4>Dossier completeness</h4>
       {!r.completeness.length && <p className="muted">Choose the submission type to see what is expected.</p>}
-      <ul className="rv-mods">
+      <ul className="rv-chips">
         {r.completeness.map((c) => (
-          <li key={c.module || 'list'} className={`rv-${c.status}`}>
-            <b>{c.module ? `${c.module} · ` : ''}{c.title}</b><span>{c.text}</span>
-            {c.missing.length > 0 && <small>{c.missing.join(' · ')}</small>}
+          <li key={c.module || 'list'} className={`rv-${c.status}`} title={c.text}>
+            <b>{c.module || c.title}</b>
+            <span>{c.status === 'complete' ? '✓' : c.status === 'not_applicable' ? 'Not applicable' : c.text}</span>
           </li>
         ))}
       </ul>
+      {r.completeness.filter((c) => c.missing.length > 0).map((c) => (
+        <p key={c.module || 'list'} className="rv-missing-line"><b>{c.module ? `${c.module} · ` : ''}{c.title}:</b> {c.missing.join(' · ')}</p>
+      ))}
 
       <h4>Limit review against the controlled reference</h4>
-      {!r.values.length && <p className="muted">No values recorded yet. Record values read from the dossier (for example Impurity X ≤ 0.50 %) and they are compared with the reference material Neo has approved.</p>}
+      {!r.values.length && <p className="muted">No values recorded yet. Record a number from the dossier and it is compared with Neo's approved reference limits.</p>}
       {r.limits.length === 0 && r.values.length > 0 && <p className="muted">{r.values.length} recorded value{r.values.length > 1 ? 's are' : ' is'} within the reference limits.</p>}
       <ul className="rv-finds">
         {r.limits.map((f) => (
           <li key={f.key} className={`rv-${f.level}`}>
-            <div><b>{LEVEL[f.level]}</b> · {f.parameter} {f.value}<small>{f.module || 'No module'} · {f.page || 'no page'}</small></div>
+            <div className="rv-top"><span><b>{LEVEL[f.level]}</b> · {f.parameter} {f.value}</span><span className="rv-where">{f.module || 'No module'} · {f.page || 'no page'}</span></div>
             <p>{f.reason}</p>
             <small>Reference: {f.reference}{f.reference_date && <> · dated {fmtDay(f.reference_date)}</>}</small>
             <Decision f={f} project={project} canDecide={canDecide} onDone={setR} />
@@ -72,8 +75,8 @@ export default function ReviewAssistant({ project }) {
       <ul className="rv-finds">
         {r.risks.map((f) => (
           <li key={f.key} className={`rv-${f.level}`}>
-            <div><b>{LEVEL[f.level]}</b> · {f.module} · {f.section}<small>Possible result: {f.result}</small></div>
-            <ul>{f.reasons.map((x) => <li key={x}>{x}</li>)}</ul>
+            <div className="rv-top"><span><b>{LEVEL[f.level]}</b> · {f.module} · {f.section}</span><span className="rv-where">{f.result}</span></div>
+            <p>{f.reasons.join(' · ')}</p>
             <Decision f={f} project={project} canDecide={canDecide} onDone={setR} />
           </li>
         ))}

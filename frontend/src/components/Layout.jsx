@@ -55,7 +55,7 @@ function Bell() {
               <li key={n.id} className={`n-${n.kind} ${n.read ? '' : 'unread'}`}>
                 <button onClick={() => { setOpen(false); n.project_id && nav(`/projects/${n.project_id}${n.task_id ? '?tab=tasks' : ''}`) }}>
                   <strong>{n.title}</strong>
-                  <span>{n.body}</span>
+                  <span>{tidy(n.body)}</span>
                   <small>{fmtDateTime(n.created_at)}</small>
                 </button>
               </li>
@@ -65,6 +65,14 @@ function Bell() {
       )}
     </div>
   )
+}
+
+/** "Project: A · Task: B · Owner: C · Due: D · Action: E" -> "A · B. E". Owner and due date are on the task itself. */
+function tidy(body = '') {
+  const parts = body.split(' · ').filter((x) => !/^(Owner|Due): /.test(x))
+  const head = parts.filter((x) => /^(Project|Task|Stage): /.test(x)).map((x) => x.replace(/^\w+: /, ''))
+  const rest = parts.filter((x) => !/^(Project|Task|Stage): /.test(x)).map((x) => x.replace(/^Action: /, ''))
+  return [head.join(' · '), rest.join(' · ')].filter(Boolean).join(' — ') || body
 }
 
 function UserMenu({ side }) {

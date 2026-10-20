@@ -47,49 +47,72 @@ function Users() {
   )
 }
 
-function RoleCard({ role, allRoles, perms, onSaved }) {
-  const locked = role.key === 'super_admin'
-  const [p, setP] = useState(new Set(role.permissions))
-  const [a, setA] = useState(new Set(role.assign_to))
-  const { busy, error, run } = useDo()
-  const [saved, setSaved] = useState(false)
-  const toggle = (set, setter, v) => { const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); setter(n); setSaved(false) }
-  const dirty = !locked && (JSON.stringify([...p].sort()) !== JSON.stringify([...role.permissions].sort()) || JSON.stringify([...a].sort()) !== JSON.stringify([...role.assign_to].sort()))
-  return (
-    <article className="panel role">
-      <header><div><h3>{role.name}</h3><p className="muted">{role.users} active user{role.users === 1 ? '' : 's'}{locked && ' · always has every permission'}</p></div>
-        {!locked && <button className="btn primary" disabled={busy || !dirty} onClick={() => run(async () => { await api.updateRole(role.key, { permissions: [...p], assign_to: [...a] }); setSaved(true); onSaved() })}>{saved ? 'Saved' : 'Save'}</button>}</header>
-      <ul className="perm-list">
-        {Object.entries(perms).map(([k, desc]) => (
-          <li key={k}><label className="check"><input type="checkbox" checked={locked || p.has(k)} disabled={locked} onChange={() => toggle(p, setP, k)} /><span>{label(k)}<small>{desc}</small></span></label></li>
-        ))}
-      </ul>
-      <div className="assign-scope">
-        <b>Can assign work to</b>
-        <div className="chips">
-          <label className="chipcheck"><input type="checkbox" disabled={locked} checked={locked || a.has('*')} onChange={() => toggle(a, setA, '*')} />Anyone</label>
-          {allRoles.filter((r) => r.key !== role.key).map((r) => (
-            <label key={r.key} className="chipcheck"><input type="checkbox" disabled={locked || a.has('*')} checked={locked || a.has('*') || a.has(r.key)} onChange={() => toggle(a, setA, r.key)} />{r.name}</label>
-          ))}
-        </div>
-      </div>
-      {error && <p className="error">{error}</p>}
-    </article>
-  )
-}
+const same = (x, y) => JSON.stringify([...x].sort()) === JSON.stringify([...y].sort())
 
+/** Every role and every permission in one grid: tick a box, press one Save. */
 function Roles() {
   const config = useConfig()
   const { refreshMe } = useApp()
   const [roles, setRoles] = useState(null)
-  const load = useCallback(() => api.roles().then(setRoles), [])
+  const [draft, setDraft] = useState({})
+  const [saved, setSaved] = useState(false)
+  const { busy, error, run } = useDo()
+  const load = useCallback(() => api.roles().then((r) => {
+    setRoles(r)
+    setDraft(Object.fromEntries(r.map((x) => [x.key, { p: new Set(x.permissions), a: new Set(x.assign_to) }])))
+  }), [])
   useEffect(() => { load() }, [load])
   if (!roles) return null
+  const perms = Object.entries(config.permissions)
+  const locked = (r) => r.key === 'super_admin'
+  const dirty = roles.filter((r) => !locked(r) && (!same(draft[r.key].p, r.permissions) || !same(draft[r.key].a, r.assign_to)))
+  const flip = (key, part, v) => {
+    setSaved(false)
+    setDraft((d) => { const n = new Set(d[key][part]); n.has(v) ? n.delete(v) : n.add(v); return { ...d, [key]: { ...d[key], [part]: n } } })
+  }
+  const save = () => run(async () => {
+    for (const r of dirty) await api.updateRole(r.key, { permissions: [...draft[r.key].p], assign_to: [...draft[r.key].a] })
+    setSaved(true); await load(); refreshMe()
+  })
   return (
-    <>
-      <p className="notice">Super Admin decides who can assign, reassign, approve, request changes, bypass optional work, change dates, lock / unlock and edit approved records. Changes apply immediately and are logged.</p>
-      <div className="roles-grid">{roles.map((r) => <RoleCard key={r.key} role={r} allRoles={roles} perms={config.permissions} onSaved={() => { load(); refreshMe() }} />)}</div>
-    </>
+    <section className="panel">
+      <header>
+        <div><h3>Who can do what</h3><p className="muted">Tick what each role may do. Super Admin always can. Changes apply when you save and are logged.</p></div>
+        <button className="btn primary" disabled={busy || !dirty.length} onClick={save}>{saved && !dirty.length ? 'Saved' : dirty.length ? `Save ${dirty.length} change${dirty.length > 1 ? 's' : ''}` : 'Save'}</button>
+      </header>
+      {error && <p className="error">{error}</p>}
+      <div className="table-scroll"><table className="table matrix">
+        <thead><tr><th>Permission</th>{roles.map((r) => <th key={r.key} title={`${r.users} active user${r.users === 1 ? '' : 's'}`}>{r.name}</th>)}</tr></thead>
+        <tbody>
+          {perms.map(([k, desc]) => (
+            <tr key={k}>
+              <th scope="row" title={desc}>{label(k)}</th>
+              {roles.map((r) => (
+                <td key={r.key}><input type="checkbox" aria-label={`${r.name}: ${label(k)}`} checked={locked(r) || draft[r.key].p.has(k)} disabled={locked(r)} onChange={() => flip(r.key, 'p', k)} /></td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table></div>
+      <details className="more">
+        <summary>Who can assign work to whom</summary>
+        <div className="table-scroll"><table className="table matrix">
+          <thead><tr><th>Can assign to →</th><th>Anyone</th>{roles.map((r) => <th key={r.key}>{r.name}</th>)}</tr></thead>
+          <tbody>
+            {roles.map((r) => (
+              <tr key={r.key}>
+                <th scope="row">{r.name}</th>
+                <td><input type="checkbox" aria-label={`${r.name} can assign to anyone`} disabled={locked(r)} checked={locked(r) || draft[r.key].a.has('*')} onChange={() => flip(r.key, 'a', '*')} /></td>
+                {roles.map((t) => (
+                  <td key={t.key}>{t.key === r.key ? <span className="muted">–</span>
+                    : <input type="checkbox" aria-label={`${r.name} can assign to ${t.name}`} disabled={locked(r) || draft[r.key].a.has('*')} checked={locked(r) || draft[r.key].a.has('*') || draft[r.key].a.has(t.key)} onChange={() => flip(r.key, 'a', t.key)} />}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table></div>
+      </details>
+    </section>
   )
 }
 

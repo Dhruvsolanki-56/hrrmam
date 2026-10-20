@@ -100,7 +100,7 @@ export default function Dashboard() {
           <header><h2>Approvals <span className="count">{decisions.length}</span></h2><Link to="/my-work" className="link">My work</Link></header>
           {!decisions.length && <p className="empty-note">Nothing is waiting for you.</p>}
           <ul className="drows">
-            {decisions.slice(0, 5).map((x) => (
+            {decisions.slice(0, 4).map((x) => (
               <li key={x.key}>
                 <Link to={x.to}>
                   <span className="dmain"><strong>{x.title}</strong><small>{KIND[x.k]} · {x.sub}</small></span>
@@ -116,7 +116,7 @@ export default function Dashboard() {
           <header><h2>Upcoming</h2></header>
           {!upcoming.length && <p className="empty-note">Nothing scheduled.</p>}
           <ul className="drows">
-            {upcoming.slice(0, 5).map((x) => (
+            {upcoming.slice(0, 4).map((x) => (
               <li key={x.key}>
                 <Link to={x.to}>
                   <span className="ddate">{shortDay(x.day)}</span>
@@ -132,7 +132,7 @@ export default function Dashboard() {
           <header><h2>At risk <span className="count">{d.at_risk.length}</span></h2><Link to="/projects" className="link">All projects</Link></header>
           {!d.at_risk.length && <p className="empty-note">Every project is on track.</p>}
           <ul className="drows">
-            {d.at_risk.slice(0, 5).map((p) => (
+            {d.at_risk.slice(0, 4).map((p) => (
               <li key={p.id}>
                 <Link to={`/projects/${p.id}`}>
                   <span className="dmain"><strong>{p.name}</strong><small>{p.health_reasons[0]}</small></span>
