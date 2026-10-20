@@ -40,16 +40,6 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
     approved: <>Approved. Nothing more to do.</>,
     locked: <>Approved and locked.</>,
   }[task.state] || label(task.state)
-  const nextLine = {
-    assigned: `Next: ${task.assignee.name} accepts it, does the work and submits it to ${approverName}.`,
-    accepted: `Next: ${task.assignee.name} starts the work and submits it to ${approverName}.`,
-    in_progress: `Next: when submitted, it goes to ${approverName} to approve or send back.`,
-    submitted: `Next: ${approverName} approves it, or sends it back with a reason.`,
-    resubmitted: `Next: ${approverName} approves it, or sends it back with a reason.`,
-    changes_requested: `Next: after the fix, press Resubmit. It goes to ${approverName} again.`,
-    approved: 'The task counts towards its step.',
-    locked: 'Unlocking needs permission and a reason.',
-  }[task.state] || ''
 
   const go = (action, extra = {}) => run(async () => {
     const result = await api.taskAct(task.id, { action, note, ...extra })
@@ -80,7 +70,6 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
           <p className="muted">Assigned by {task.assigner?.name || '–'} · due {fmtDateTime(task.due_at)}</p>
           <div className={`handoff t-${task.state}`}>
             <p className="handoff-line">{holder}</p>
-            <p className="handoff-why">{nextLine}</p>
           </div>
           {task.last_changes && (
             <div className="sentback" role="note">
@@ -91,17 +80,16 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
           )}
 
           <div className="t-files">
-            <div className="t-files-head"><b>Files</b>
-              {task.open && (isAssignee || isAssigner || can('manage_project')) && <button className="link" onClick={() => setAttaching(true)}>+ Attach a file</button>}</div>
-            {task.attachments?.length > 0 ? (
+            {task.attachments?.length > 0 && (
               <ul className="versions">
                 {[...task.attachments].reverse().map((a) => (
                   <li key={a.id}><b>V{a.version_no}</b><span>{a.name}{a.note ? ` · ${a.note}` : ''}</span>
                     <small>{a.created_by} · {fmtDateTime(a.created_at)} · <a href={a.link} target="_blank" rel="noreferrer">open</a></small></li>
                 ))}
               </ul>
-            ) : <small className="muted">No files attached.</small>}
-            {task.state === 'changes_requested' && task.attachments?.length > 0 && Math.max(...task.attachments.map((a) => a.version_no)) >= 1 && isAssignee && <small className="muted">Attach the corrected file as a new version, then resubmit.</small>}
+            )}
+            {task.open && (isAssignee || isAssigner || can('manage_project')) && <button className="link" onClick={() => setAttaching(true)}>+ Attach a file</button>}
+            {task.state === 'changes_requested' && task.attachments?.length > 0 && isAssignee && <small className="muted">Attach the corrected file as a new version, then resubmit.</small>}
           </div>
 
           {req && (

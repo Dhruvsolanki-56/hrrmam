@@ -62,7 +62,7 @@ export default function Lanes({ project, goTab }) {
       <header>
         <div>
           <h3>Workstreams</h3>
-          <p className="muted">Project 360: {lanes.length} workstreams run at the same time, each with one owner and its own approval.</p>
+          <p className="muted">{lanes.length} workstreams run at the same time. Click one to open it.</p>
         </div>
       </header>
       <ul className="lanes">
@@ -81,7 +81,6 @@ export default function Lanes({ project, goTab }) {
                   <small>{sum.text}{sum.more && <> · {sum.more}</>}</small>
                 </span>
                 <span className="lane-meter" aria-hidden="true"><i style={{ width: `${pct}%` }} /></span>
-                {r.warnings?.length > 0 && <span className="lane-deps">{r.warnings.map((w) => <small key={w.text} className={`dep dep-${w.kind}`}>{w.text}</small>)}</span>}
               </button>
             </li>
           )

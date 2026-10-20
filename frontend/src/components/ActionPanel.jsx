@@ -6,18 +6,6 @@ import { StateChip, fmtDateTime, useDo } from './bits'
 const tabOf = (st) => (st.tab && st.tab !== 'tasks' ? st.tab : null)
 
 
-/** work -> submit -> approval -> (approved | sent back and the cycle repeats) */
-function Cycle({ row }) {
-  const steps = ['Work', 'Approval', 'Approved']
-  const at = row.state === 'in_progress' ? 0 : 1
-  return (
-    <div className="cycle" aria-label="Approval cycle">
-      <ol>{steps.map((s, i) => <li key={s} className={i < at ? 'done' : i === at ? 'now' : ''}><i>{i < at ? '✓' : i + 1}</i>{s}</li>)}</ol>
-      {row.rework_count > 0 && <span className="rework" title="Times this was sent back for rework">↺ Sent back {row.rework_count}×</span>}
-    </div>
-  )
-}
-
 /** Is it this person's move on this stage? One definition, used by the banner and by the cards. */
 function turnOf(project, row, me, st, can) {
   const sup = me.role_key === 'super_admin'
@@ -31,30 +19,26 @@ function turnOf(project, row, me, st, can) {
   return ''
 }
 
-function YourTurn({ project, active }) {
+function YourTurn({ project, active, onPick }) {
   const me = useMe()
   const can = useCan()
   const stages = useStages()
   const mine = active.map((r) => ({ r, t: turnOf(project, r, me, stageOf(stages, r.key), can) })).filter((x) => x.t)
   if (!active.length) return null
-  if (!mine.length) {
-    return (
-      <div className="yourturn quiet" role="status">
-        <span><b>Nothing needs you on this project right now.</b>
-          {active.map((r) => <p key={r.key}>{stageOf(stages, r.key).name}: {r.handoff?.with?.action === 'approve' ? 'waiting for approval from' : 'work is with'} {withText(r.handoff?.with)}.</p>)}</span>
-      </div>
-    )
-  }
-  const verb = { submit: 'submit your work', finish: 'finish the open items, then submit', decide: 'approve or send it back' }
+  if (!mine.length) return <p className="yourturn quiet" role="status"><b>Nothing needs you on this project right now.</b></p>
+  const verb = { submit: 'submit', finish: 'finish and submit', decide: 'approve or send back' }
   return (
     <div className="yourturn" role="status">
-      <span><b>It is your turn on {mine.length === 1 ? 'this step' : `${mine.length} steps`}</b>
-        {mine.map(({ r, t }) => <p key={r.key}>{stageOf(stages, r.key).name}: {verb[t]}.</p>)}</span>
+      <b>Your turn</b>
+      <ul>
+        {mine.map(({ r, t }) => (
+          <li key={r.key}><button className="link" onClick={() => onPick?.(r.key)}>{stageOf(stages, r.key).name}</button><span> · {verb[t]}</span></li>
+        ))}
+      </ul>
     </div>
   )
 }
 
-/** "Rajiv Kapoor (Director)" or, when nobody holds the role, the role's plain name. */
 export function withText(h) {
   if (!h) return ''
   const p = h.people || []
@@ -129,38 +113,22 @@ function StageCard({ project, row, onChange, goTab, locked, fold, inTab }) {
       <div className={`handoff ${row.state}`}>
         <p className="handoff-line">
           {awaiting ? <>Waiting for approval from <b>{approvers}</b></> : <>Work is with <b>{owners}</b></>}
-          <small>{since}</small>
+          <small>{awaiting && h.submitted ? `Submitted by ${h.submitted.by}, ${fmtDateTime(h.submitted.at)}${h.submitted.note ? `: “${h.submitted.note}”` : ''}` : since}</small>
         </p>
-        {awaiting && h.submitted && <p className="handoff-sub">Submitted by <b>{h.submitted.by}</b> on {fmtDateTime(h.submitted.at)}{h.submitted.note ? <> with the message “{h.submitted.note}”</> : ' with no message'}.</p>}
-        <p className="handoff-why">{awaiting ? 'Every step needs a second person to approve it before the next one opens.'
-          : h.sent_back && !h.sent_back.resolved ? 'It was sent back, so the team is fixing it.' : 'This step is open. The team does the work, then submits it for approval.'}</p>
       </div>
 
       {h.sent_back && !h.sent_back.resolved && (
         <div className="sentback" role="note">
-          <b>Sent back by {h.sent_back.by} on {fmtDateTime(h.sent_back.at)}</b>
-          <p>Reason: “{h.sent_back.note || 'No reason was written.'}”</p>
-          <small>Fix this, then submit again. It goes back to the same approver.</small>
+          <b>Sent back by {h.sent_back.by}, {fmtDateTime(h.sent_back.at)}</b>
+          <p>“{h.sent_back.note || 'No reason was written.'}”</p>
         </div>
       )}
-      {h.sent_back?.resolved && (
-        <p className="sentback-old">Earlier it was sent back by {h.sent_back.by}: “{h.sent_back.note}”. That was fixed and resubmitted.</p>
-      )}
 
-      <Cycle row={row} />
-
-      <div className="whatnext">
-        <b>What happens next</b>
-        <ul>
-          {awaiting
-            ? <><li><b>Approve</b>: {afterApprove}.</li><li><b>Send back</b>: it returns to {owners} with the reason.</li></>
-            : <li><b>Submit</b>: it goes to {approvers} to approve.</li>}
-        </ul>
-      </div>
+      <p className="next-line">{awaiting ? <><b>Approve</b> → {afterApprove}. <b>Send back</b> → returns to {owners}.</> : <><b>Submit</b> → goes to {approvers} to approve.</>}</p>
       <p className={`youdo ${acting ? 'on' : ''}`}>{youdo}</p>
 
       {row.warnings?.length > 0 && (
-        <ul className="deps">{row.warnings.map((w) => <li key={w.text} className={`dep dep-${w.kind}`}><b>{w.kind === 'soft' ? 'Good to know' : 'Information pending'}</b> {w.text}</li>)}</ul>
+        <ul className="deps">{row.warnings.map((w) => <li key={w.text} className={`dep dep-${w.kind}`}>{w.text}</li>)}</ul>
       )}
 
       {blocked && (
@@ -319,19 +287,14 @@ function ProjectControls({ project, onChange }) {
   )
 }
 
-export default function ActionPanel({ project, onChange, goTab, skip }) {
+export default function ActionPanel({ project, onChange, goTab, skip, onPick }) {
   const live = project.status === 'active' || project.status === 'on_hold'
   const active = project.stages.filter((r) => ['in_progress', 'awaiting_approval'].includes(r.state))
   const shown = active.filter((r) => r.key !== skip)
   return (
     <>
-      {live && <YourTurn project={project} active={active} />}
-      {live && active.length > 1 && (
-        <p className="parallel-banner">
-          <b>{active.length} workstreams are running in parallel.</b> Each has its own status and approval cycle. The next milestone starts only when all required ones are approved.
-        </p>
-      )}
-      {live && shown.length > 0 && (
+      {project.status === 'active' && active.length > 1 && <YourTurn project={project} active={active} onPick={onPick} />}
+      {live && shown.length === 1 && (
         <div className={`stagecards ${shown.length > 1 ? 'multi' : ''}`}>
           {shown.map((row) => <StageCard key={row.key} project={project} row={row} onChange={onChange} goTab={goTab} fold={shown.length > 1} locked={project.status === 'on_hold'} />)}
         </div>

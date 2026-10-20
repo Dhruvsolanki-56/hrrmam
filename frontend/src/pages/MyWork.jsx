@@ -52,8 +52,8 @@ export default function MyWork() {
       ) : (
         <div key={`${x.type}${x.task.id}`} className="decide-wrap">
           <p className="decide-tag">{x.type === 'date_request'
-            ? <><b>Date request:</b> {x.request.requested_by.name} asks to move the due date to {fmtDateTime(x.request.proposed_due)}. Approve the new date or keep the original.</>
-            : <><b>Submitted for approval:</b> {x.task.assignee.name} says this task is done. Approve it or request changes.</>}</p>
+            ? <><b>Date request</b> · {x.request.requested_by.name} asks for {fmtDateTime(x.request.proposed_due)}</>
+            : <><b>Submitted</b> · {x.task.assignee.name} says it is done</>}</p>
           <TaskCard task={x.task} showProject onChanged={load} />
         </div>
       ))

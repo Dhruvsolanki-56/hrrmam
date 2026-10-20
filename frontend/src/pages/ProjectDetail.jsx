@@ -83,8 +83,7 @@ export default function ProjectDetail() {
             <span><b>{done} of {project.flow.stages.length}</b> steps done</span>
             <span className="journey-now" title={activeNames.join(', ')}>{activeNames.length > 2 ? `Now: ${activeNames.length} workstreams in progress` : activeNames.length ? `Now: ${activeNames.join(', ')}` : project.status === 'completed' ? 'Complete' : ''}</span>
           </div>
-          <StepBar project={project} selected={step} onPick={pick} />
-          <button className="link steps-toggle" aria-expanded={allSteps} onClick={() => setAllSteps(!allSteps)}>{allSteps ? "Hide the step names" : `Show all ${project.flow.stages.length} steps with their names`}</button>
+          <StepBar project={project} selected={step} onPick={pick} extra={<button className="link" aria-expanded={allSteps} onClick={() => setAllSteps(!allSteps)}>{allSteps ? "Hide the step names" : `Show all ${project.flow.stages.length} steps with their names`}</button>} />
           {allSteps && <div className="panel steps-all"><StageList project={project} selected={step} onPick={(k) => { setAllSteps(false); pick(k) }} /></div>}
         </div>
       </div>
@@ -118,13 +117,13 @@ export default function ProjectDetail() {
           {tab === 'overview' && (
             <>
               {step && <div id="step-panel"><StepPanel project={project} stageKey={step} onChange={setProject} goTab={goTab} onClose={unpick} /></div>}
-              <ActionPanel project={project} onChange={setProject} goTab={goTab} skip={step} />
+              <ActionPanel project={project} onChange={setProject} goTab={goTab} skip={step} onPick={pick} />
               <Lanes project={project} goTab={goTab} />
               <ReopenPanel project={project} onChange={setProject} />
-              <section className="panel">
-                <header><h3>Project journey</h3><span className="muted hide-m">{project.flow.stages.length} steps in {new Set(project.flow.stages.map((x) => x.phase)).size} phases · {project.workflow?.name}{project.workflow?.version ? ` v${project.workflow.version}` : ""}</span></header>
+              <details className="panel journey-fold">
+                <summary><h3>Project journey</h3><span className="muted hide-m">{project.flow.stages.length} steps in {new Set(project.flow.stages.map((x) => x.phase)).size} phases</span></summary>
                 <StageList project={project} selected={step} onPick={pick} />
-              </section>
+              </details>
             </>
           )}
           {tab === 'brief' && <BriefTab project={project} onChange={setProject} />}

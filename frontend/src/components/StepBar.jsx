@@ -2,7 +2,7 @@ import { STATE } from './bits'
 import { withText } from './ActionPanel'
 
 /** The progress bar, one clickable segment per step. Clicking a step opens its details (who has it, why, what next). */
-export default function StepBar({ project, selected, onPick }) {
+export default function StepBar({ project, selected, onPick, extra }) {
   const stages = project.flow.stages
   const done = stages.filter((s) => ['approved', 'bypassed'].includes(project.stage_states[s.key])).length
   return (
@@ -23,9 +23,9 @@ export default function StepBar({ project, selected, onPick }) {
           )
         })}
       </div>
-      <ul className="stepbar-key" aria-hidden="true">
-        <li><i className="done" />Done</li><li><i className="awaiting" />Waiting for approval</li><li><i className="current" />Work in progress</li><li><i className="todo" />Not started</li>
-        <li className="stepbar-hint">Click a step for details</li>
+      <ul className="stepbar-key">
+        <li aria-hidden="true"><i className="done" />Done</li><li aria-hidden="true"><i className="awaiting" />Waiting for approval</li><li aria-hidden="true"><i className="current" />Work in progress</li><li aria-hidden="true"><i className="todo" />Not started</li>
+        {extra && <li className="stepbar-hint">{extra}</li>}
       </ul>
     </div>
   )
