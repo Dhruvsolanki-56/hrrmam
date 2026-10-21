@@ -2,12 +2,20 @@ import { STATE } from './bits'
 import { withText } from './ActionPanel'
 
 /** The progress bar, one clickable segment per step. Clicking a step opens its details (who has it, why, what next). */
-export default function StepBar({ project, selected, onPick, extra }) {
+function Key() {
+  return (
+    <ul className="stepbar-key" aria-hidden="true">
+      <li><i className="done" />Done</li><li><i className="awaiting" />Waiting for approval</li><li><i className="current" />Work in progress</li><li><i className="todo" />Not started</li>
+    </ul>
+  )
+}
+
+export default function StepBar({ project, selected, onPick, extra, slim }) {
   const stages = project.flow.stages
   const done = stages.filter((s) => ['approved', 'bypassed'].includes(project.stage_states[s.key])).length
   return (
     <div className="stepbar-wrap">
-      <div className="stepbar" role="group" aria-label={`${done} of ${stages.length} steps done. Choose a step to see its details`}>
+      <div className={`stepbar ${slim ? 'slim' : ''}`} role="group" aria-label={`${done} of ${stages.length} steps done. Choose a step to see its details`}>
         {stages.map((s, i) => {
           const st = project.stage_states[s.key]
           const row = project.stages.find((r) => r.key === s.key)
@@ -23,10 +31,9 @@ export default function StepBar({ project, selected, onPick, extra }) {
           )
         })}
       </div>
-      <ul className="stepbar-key">
-        <li aria-hidden="true"><i className="done" />Done</li><li aria-hidden="true"><i className="awaiting" />Waiting for approval</li><li aria-hidden="true"><i className="current" />Work in progress</li><li aria-hidden="true"><i className="todo" />Not started</li>
-        {extra && <li className="stepbar-hint">{extra}</li>}
-      </ul>
+      {!slim && <Key />}
     </div>
   )
 }
+
+StepBar.Key = Key

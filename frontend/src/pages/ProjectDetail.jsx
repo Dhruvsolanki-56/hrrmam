@@ -80,11 +80,11 @@ export default function ProjectDetail() {
         {project.summary && <p className="summary">{project.summary}</p>}
         <div className="journey">
           <div className="journey-top">
-            <span><b>{done} of {project.flow.stages.length}</b> steps done</span>
-            <span className="journey-now" title={activeNames.join(', ')}>{activeNames.length > 2 ? `Now: ${activeNames.length} workstreams in progress` : activeNames.length ? `Now: ${activeNames.join(', ')}` : project.status === 'completed' ? 'Complete' : ''}</span>
+            <span><b>{done} of {project.flow.stages.length}</b> steps done{activeNames.length ? <> · <span className="journey-now" title={activeNames.join(', ')}>{activeNames.length > 2 ? `${activeNames.length} steps in progress` : `Now: ${activeNames.join(', ')}`}</span></> : project.status === 'completed' ? ' · Complete' : ''}</span>
+            <button className="link" aria-expanded={allSteps} onClick={() => setAllSteps(!allSteps)}>{allSteps ? 'Hide steps' : 'See all steps'}</button>
           </div>
-          <StepBar project={project} selected={step} onPick={pick} extra={<button className="link" aria-expanded={allSteps} onClick={() => setAllSteps(!allSteps)}>{allSteps ? "Hide the step names" : `Show all ${project.flow.stages.length} steps with their names`}</button>} />
-          {allSteps && <div className="panel steps-all"><StageList project={project} selected={step} onPick={(k) => { setAllSteps(false); pick(k) }} /></div>}
+          <StepBar project={project} selected={step} onPick={pick} slim />
+          {allSteps && <div className="panel steps-all"><StepBar.Key /><StageList project={project} selected={step} onPick={(k) => { setAllSteps(false); pick(k) }} /></div>}
         </div>
       </div>
 
@@ -120,10 +120,6 @@ export default function ProjectDetail() {
               <ActionPanel project={project} onChange={setProject} goTab={goTab} skip={step} onPick={pick} />
               <Lanes project={project} goTab={goTab} />
               <ReopenPanel project={project} onChange={setProject} />
-              <details className="panel journey-fold">
-                <summary><h3>Project journey</h3><span className="muted hide-m">{project.flow.stages.length} steps in {new Set(project.flow.stages.map((x) => x.phase)).size} phases</span></summary>
-                <StageList project={project} selected={step} onPick={pick} />
-              </details>
             </>
           )}
           {tab === 'brief' && <BriefTab project={project} onChange={setProject} />}
@@ -150,16 +146,21 @@ export default function ProjectDetail() {
             <dl className="p360">
               <div><dt>Project code</dt><dd>{project.code ? <span className="code">{project.code}</span> : 'Pending'}</dd></div>
               <div><dt>Product</dt><dd>{project.product || '–'}</dd></div>
-              <div><dt>Product route</dt><dd>{project.project_type === 'In-Licence' ? 'In-licence' : 'New development'}{project.category && <small> · {project.category}</small>}</dd></div>
               <div><dt>Client</dt><dd>{project.potential_client || '–'}</dd></div>
-              <div><dt>Opportunity</dt><dd className="num">{project.opportunity_value != null ? `AUD ${project.opportunity_value.toLocaleString('en-AU')}` : '–'}</dd></div>
-              <div><dt>Market</dt><dd>{project.market}</dd></div>
               <div><dt>Manager</dt><dd>{project.project_manager ? <Person user={project.project_manager} /> : '–'}</dd></div>
-              <div><dt>Submission</dt><dd>{project.submission_type || 'To be decided'}</dd></div>
               <div><dt>Target submit</dt><dd className="num">{fmtDay(project.target_submission)}</dd></div>
               <div><dt>Target launch</dt><dd className="num">{fmtDay(project.target_launch)}</dd></div>
-              <div><dt>Started</dt><dd className="num">{fmtDate(project.created_at)}{project.initiator && <small> · {project.initiator}</small>}</dd></div>
             </dl>
+            <details className="more props-more">
+              <summary>More details</summary>
+              <dl className="p360">
+                <div><dt>Product route</dt><dd>{project.project_type === 'In-Licence' ? 'In-licence' : 'New development'}{project.category && <small> · {project.category}</small>}</dd></div>
+                <div><dt>Opportunity</dt><dd className="num">{project.opportunity_value != null ? `AUD ${project.opportunity_value.toLocaleString('en-AU')}` : '–'}</dd></div>
+                <div><dt>Market</dt><dd>{project.market}</dd></div>
+                <div><dt>Submission</dt><dd>{project.submission_type || 'To be decided'}</dd></div>
+                <div><dt>Started</dt><dd className="num">{fmtDate(project.created_at)}{project.initiator && <small> · {project.initiator}</small>}</dd></div>
+              </dl>
+            </details>
           </div>
           <div className={`blocker ${project.critical_blocker ? 'on' : ''}`}>
             <Icon name="alert" size={16} />

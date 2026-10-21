@@ -1273,3 +1273,24 @@ a.metric:first-child:hover { background: #00363b; }
 .rv-note { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
 .task.mine > header { grid-template-columns: minmax(0, 1fr) auto; }
 .task.mine > header > .person { display: none; }
+
+/* one thing at a time: the step card */
+.now-who { margin: 6px 0 2px; font-size: 16px; color: var(--ink); }
+.now-who b { color: var(--neo-dark); font-weight: 600; }
+.now-sub { margin: 0 0 8px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.todo-box { margin: 10px 0 6px; padding: 12px 14px; border-radius: var(--r-lg); background: #fdf8ec; color: #5c3f00; font-size: 14px; }
+.todo-box b { font-weight: 600; }
+.todo-box ul { margin: 6px 0 4px; padding-left: 18px; }
+.act-hint { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); }
+.step-about { margin-top: 12px; }
+.step-about p { margin: 6px 0 0; font-size: 13px; color: var(--ink-2); }
+.you-chip { margin-right: 8px; padding: 2px 8px; border-radius: 999px; background: var(--neo-dark); color: #fff; font-size: 12px; font-weight: 500; }
+.stagecard .actions { margin-top: 12px; }
+
+.stepbar.slim { gap: 3px; }
+.stepbar.slim button { height: 10px; border-radius: 3px; }
+.stepbar.slim button span { display: none; }
+.steps-all .stepbar-key { margin-bottom: 8px; }
+.props-more { margin-top: 10px; }
+.journey { gap: 6px; }
+.journey-top { align-items: center; }

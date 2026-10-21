@@ -74,7 +74,6 @@ function StageCard({ project, row, onChange, goTab, locked, fold, inTab }) {
   const others = (list) => (list || []).filter((n) => !doer || !n.startsWith(`${doer} (`))
   const owners = withText({ people: h.owners, label: st.owner })
   const approvers = withText({ people: others(h.approvers), label: st.approver })
-  const steppingIn = row.state === 'in_progress' && !turn && !locked && (sup || can('manage_project'))
   const since = row.days_in_stage ? `In this step for ${row.days_in_stage} day${row.days_in_stage === 1 ? '' : 's'}` : 'Opened today'
   const afterApprove = dependents.length === 0 ? 'the project closes' : unlocks.length ? `${unlocks.map((s) => s.name).join(' and ')} opens` : `it then waits for ${[...new Set(waiting)].join(', ')}`
 
@@ -95,27 +94,13 @@ function StageCard({ project, row, onChange, goTab, locked, fold, inTab }) {
   const head = fold
     ? <summary><h2>{st.name}</h2><span>{mine && <span className="you">Your turn · </span>}<StateChip state={row.state} /></span>
       <small className="fold-who">{awaiting ? `Waiting for approval from ${approvers}` : `Work is with ${owners}`}</small></summary>
-    : <><header><span className="eyebrow">Phase {st.phase} of {Math.max(...stages.map((x) => x.phase))}</span><StateChip state={row.state} /></header><h2>{st.name}</h2></>
-  const youdo = {
-    submit: 'Your action: finish the work, then press Submit for approval.',
-    finish: 'Your action: finish the open items below, then submit.',
-    decide: 'Your action: read the work, then approve it or send it back with a reason.',
-  }[turn] || (locked ? 'The project is on hold, so nothing can be done until it is resumed.'
-    : awaiting && selfSubmitted ? 'Nothing for you to do. You submitted this, so someone else has to approve it.'
-      : steppingIn ? `Nothing is required from you. ${owners} will do the work. As a manager you can also submit it for them.`
-        : `Nothing for you to do. ${awaiting ? approvers : owners} will act.`)
-
+    : <><header><span className="eyebrow">Step {st.phase} of {Math.max(...stages.map((x) => x.phase))}</span><span>{mine && <span className="you-chip">Your turn</span>}<StateChip state={row.state} /></span></header><h2>{st.name}</h2></>
   return (
     <section className="panel callout stagecard" id={`step-${row.key}`}>
       <Wrap className={fold ? 'stagecard-fold' : undefined} {...(fold ? { open: mine || (awaiting && selfSubmitted) } : {})}>
       {head}
-      <p className="callout-desc">{st.description}</p>
-      <div className={`handoff ${row.state}`}>
-        <p className="handoff-line">
-          {awaiting ? <>Waiting for approval from <b>{approvers}</b></> : <>Work is with <b>{owners}</b></>}
-          <small>{awaiting && h.submitted ? `Submitted by ${h.submitted.by}, ${fmtDateTime(h.submitted.at)}${h.submitted.note ? `: “${h.submitted.note}”` : ''}` : since}</small>
-        </p>
-      </div>
+      <p className="now-who">{awaiting ? <>Waiting for approval from <b>{approvers}</b></> : <>Being worked on by <b>{owners}</b></>}</p>
+      {awaiting && h.submitted && <p className="now-sub">Submitted by {h.submitted.by}, {fmtDateTime(h.submitted.at)}{h.submitted.note ? <> · “{h.submitted.note}”</> : null}</p>}
 
       {h.sent_back && !h.sent_back.resolved && (
         <div className="sentback" role="note">
@@ -124,26 +109,19 @@ function StageCard({ project, row, onChange, goTab, locked, fold, inTab }) {
         </div>
       )}
 
-      <p className="next-line">{awaiting ? <><b>Approve</b> → {afterApprove}. <b>Send back</b> → returns to {owners}.</> : <><b>Submit</b> → goes to {approvers} to approve.</>}</p>
-      <p className={`youdo ${acting ? 'on' : ''}`}>{youdo}</p>
-
-      {row.warnings?.length > 0 && (
-        <ul className="deps">{row.warnings.map((w) => <li key={w.text} className={`dep dep-${w.kind}`}>{w.text}</li>)}</ul>
-      )}
-
-      {blocked && (
-        <details className="blockers" role="note" open={turn === 'finish'}>
-          <summary><b>{row.blockers.length} thing{row.blockers.length > 1 ? 's' : ''} to finish before this can be submitted</b></summary>
+      {blocked && !awaiting && (
+        <div className="todo-box" role="note">
+          <b>Before this can be submitted</b>
           <ul>{row.blockers.map((b) => <li key={b}>{b}</li>)}</ul>
           {!inTab && <button className="link" onClick={() => goTab(tabOf(st) || 'tasks')}>Open {tabOf(st) ? 'the workstream' : 'tasks'} →</button>}
-        </details>
+        </div>
       )}
 
       {(turn === 'decide' || showNote)
-        ? <label className="field">{turn === 'decide' ? 'Your reason (needed if you send it back)' : turn === 'submit' || turn === 'finish' ? 'Message for the approver (optional)' : 'Note'}
+        ? <label className="field">{turn === 'decide' ? 'Reason (needed if you send it back)' : 'Message for the approver (optional)'}
           <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)}
             placeholder={turn === 'decide' ? 'Say what is wrong, so the team knows what to fix…' : 'Anything the approver should know…'} disabled={locked} /></label>
-        : acting && <button className="link note-toggle" onClick={() => setShowNote(true)}>+ Add a message for the approver</button>}
+        : acting && !blocked && <button className="link note-toggle" onClick={() => setShowNote(true)}>+ Add a message for the approver</button>}
       {error && <p className="error">{error}</p>}
       <div className="actions">
         {row.state === 'in_progress' && canSubmit && (
@@ -152,12 +130,23 @@ function StageCard({ project, row, onChange, goTab, locked, fold, inTab }) {
         {awaiting && canDecide && (
           <>
             <button className="btn primary" disabled={disabled || blocked} onClick={() => go('approve')}>{dependents.length ? 'Approve' : 'Approve & close project'}</button>
-            <button className="btn line" disabled={disabled} onClick={() => go('send_back')}>Send back for rework</button>
+            <button className="btn line" disabled={disabled} onClick={() => go('send_back')}>Send back</button>
             {st.can_close && <button className="btn danger" disabled={disabled} onClick={() => go('reject')}>Reject project</button>}
           </>
         )}
         {st.optional && can('bypass_optional') && <button className="btn line" disabled={disabled} onClick={() => go('bypass')}>Not needed: bypass</button>}
       </div>
+      {((row.state === 'in_progress' && canSubmit) || (awaiting && canDecide)) && (
+        <p className="act-hint">{awaiting ? `Approving: ${afterApprove}. Sending back: returns it to ${owners}.` : `Submitting sends it to ${approvers} to approve.`}</p>
+      )}
+      {!acting && awaiting && selfSubmitted && <p className="act-hint">You submitted this, so someone else has to approve it.</p>}
+
+      <details className="more step-about">
+        <summary>About this step</summary>
+        <p>{st.description}</p>
+        {row.warnings?.map((w) => <p key={w.text} className="dep-note">{w.text}</p>)}
+        <p className="muted">{since}. When approved: {afterApprove}.</p>
+      </details>
       </Wrap>
     </section>
   )
