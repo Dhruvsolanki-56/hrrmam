@@ -1,0 +1,14 @@
+services:
+  neo:
+    build: .
+    ports:
+      - "8100:8000"          # host:container (8100 is one of the VPS ports)
+    environment:
+      SEED_DEMO_DATA: "true"  # demo projects on first start; set "false" for an empty database
+      DATABASE_URL: sqlite:////data/neohealth.db
+    volumes:
+      - neo_data:/data        # the database survives restarts and rebuilds
+    restart: unless-stopped
+
+volumes:
+  neo_data:
