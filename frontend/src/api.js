@@ -67,6 +67,7 @@ export const api = {
   createProject: (d) => post('/projects', d),
   updateProject: (id, d) => patch(`/projects/${id}`, d),
   act: (id, d) => post(`/projects/${id}/actions`, d),
+  assignStage: (id, key, d) => post(`/projects/${id}/stages/${key}/assign`, d),
   // tasks
   createTask: (pid, d) => post(`/projects/${pid}/tasks`, d),
   updateTask: (id, d) => patch(`/tasks/${id}`, d),

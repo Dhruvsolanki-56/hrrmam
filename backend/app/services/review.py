@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from .. import workflow
 from ..models import DossierValue, Project, ReferenceLimit, ReviewDecision, User
-from . import common, modules
+from . import common, modules, notify, people
 from .common import Forbidden, WorkflowError
 
 DONE = workflow.DOSSIER_DONE
@@ -136,7 +136,9 @@ def decide(db: Session, user: User, p: Project, key: str, decision: str, note: s
     f = found[key]
     what = f.get("parameter") or " ".join(x for x in (f.get("module"), f.get("section")) if x) or "finding"
     dos = p.flow.with_feature("dossier")
-    common.log(p, user, "dossier", "review_" + decision, f"{what}: {note}", dos.key if dos else "")
+    told = [u for u in [p.project_manager, *(people.stage_responsible(db, p, p.row(dos.key)) if dos else [])] if u and u.id != user.id]
+    common.log(p, user, "dossier", "review_" + decision, f"{what}: {note}", dos.key if dos else "", to=people.names(list({u.id: u for u in told}.values())))
+    notify.notify_users(db, told, "note", f"Review finding {decision}: {what}", f"Project: {p.name} · {user.name} {decision} it · “{note}”", p.id, exclude=user.id, link="tab=regulatory")
     db.commit()
     return d
 

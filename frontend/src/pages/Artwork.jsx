@@ -14,8 +14,8 @@ function DocRows({ docs, empty }) {
     <ul className="rows">
       {docs.map((d) => (
         <li key={d.id}>
-          <Link to={`/projects/${d.project_id}?tab=artwork`}>
-            <div><strong>{d.title}</strong><small>{d.project_name} · {d.kind} · V{d.current_version}</small></div>
+          <Link to={`/projects/${d.project_id}?tab=artwork&focus=doc-${d.id}`}>
+            <div><strong>{d.title}</strong><small>{d.project_name} · {d.kind} · V{d.current_version}{d.review?.with?.people?.length ? ` · with ${d.review.with.people.join(' or ')}` : ''}</small></div>
             <span className="row-end">{d.owner?.id !== me.id && <Person user={d.owner} />}<Icon name="arrow" size={14} /></span>
           </Link>
         </li>

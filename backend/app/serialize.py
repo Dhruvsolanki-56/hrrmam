@@ -1,11 +1,13 @@
 """Turns ORM rows into the JSON the frontend uses (one shape per thing, no per-endpoint duplication)."""
+import re
 from datetime import date, datetime
 
 from sqlalchemy import select
+from sqlalchemy.orm import object_session
 
 from . import workflow
 from .models import Agreement, DateRequest, Document, ManufacturerRequest, Project, RFICase, Task, User, aware
-from .services import engine, modules
+from .services import engine, modules, people
 
 
 def iso(v):
@@ -70,12 +72,16 @@ def task_out(t: Task, with_project: bool = False) -> dict:
                          "created_by": a.created_by, "created_at": iso(a.created_at)} for a in t.attachments],
         "created_at": iso(t.created_at), "updated_at": iso(t.updated_at),
     }
-    evs = [e for e in t.project.events if e.task_id == t.id and e.area == "task"]
+    all_evs = [e for e in t.project.events if e.task_id == t.id]
+    evs = [e for e in all_evs if e.area == "task"]
     sub = next((e for e in reversed(evs) if e.action == "submit"), None)
     chg = next((e for e in reversed(evs) if e.action == "request_changes"), None)
     plain = lambda e: {**_ev(e), "note": (e.note or "").removeprefix(f"{t.title}: ").removeprefix(t.title)}
     d["submitted"] = plain(sub) if sub and t.state in ("submitted", "resubmitted") else None
     d["last_changes"] = plain(chg) if chg and t.state == "changes_requested" else None
+    strip = lambda e: (e.note or "").removeprefix(f"{t.title}: ").removeprefix(t.title)
+    d["notes"] = [{"id": e.id, "by": e.actor, "at": iso(e.created_at), "note": strip(e)} for e in evs if e.action == "note"]
+    d["history"] = [{"id": e.id, "action": e.action, "by": e.actor, "at": iso(e.created_at), "note": strip(e), "to": e.to_user, "area": e.area} for e in all_evs]
     if with_project:
         d["project_name"], d["project_code"] = t.project.name, t.project.code
     return d
@@ -90,7 +96,12 @@ def clarification_out(c) -> dict:
 
 
 def reopen_out(r) -> dict:
-    return {"id": r.id, "kind": r.kind, "ref": r.ref, "label": r.label, "reason": r.reason, "status": r.status,
+    db = object_session(r)
+    pending = r.status == "pending"
+    deciders = people.deciders_for_reopen(db, r.requested_by_id) if pending and db else []
+    since = aware(r.created_at)
+    return {"waiting_days": (datetime.now(since.tzinfo) - since).days if pending else None, "deciders": people.tags(deciders),
+            "next": f"{people.names(deciders)} must approve or decline it." if deciders else "", "id": r.id, "kind": r.kind, "ref": r.ref, "label": r.label, "reason": r.reason, "status": r.status,
             "requested_by": user_brief(r.requested_by), "decided_by": user_brief(r.decided_by),
             "decision_note": r.decision_note, "created_at": iso(r.created_at), "decided_at": iso(r.decided_at)}
 
@@ -102,6 +113,56 @@ def date_request_out(r: DateRequest) -> dict:
             "decided_at": iso(r.decided_at)}
 
 
+_VER = re.compile(r"^\s*\(V(\d+)\)\s*:?\s*")
+
+
+def _strip(note: str, title: str) -> str:
+    """Audit notes start with the record's title (and for documents its version); the card already shows both."""
+    n = note or ""
+    if title and n.startswith(title):
+        n = n[len(title):]
+    n = _VER.sub("", n).lstrip(": ").strip()
+    return "" if n in ("created", "added") else n
+
+
+def _row(e, title: str) -> dict:
+    after = (e.note or "")[len(title):] if title and (e.note or "").startswith(title) else ""
+    m = _VER.match(after)
+    return {"id": e.id, "action": e.action, "by": e.actor, "at": iso(e.created_at), "note": _strip(e.note, title), "to": e.to_user, "area": e.area,
+            "version": int(m.group(1)) if m else None}
+
+
+def _who(users, since, action: str) -> dict:
+    return {"action": action, "people": people.tags(users), "ids": [u.id for u in users], "since": iso(since)}
+
+
+def entry_review(kind: str, obj, title: str) -> dict:
+    """Everything a person needs to see on an agreement / dossier item / manufacturer request: who sent it, who has it now,
+    why, what they must do next, and, if it was sent back, who sent it back and why."""
+    p = obj.project
+    db = object_session(p)
+    cfg = modules.ENTRY[kind]
+    st = p.flow.with_feature(cfg["feature"])
+    evs = people.trail(p, kind, obj.id, cfg["area"], title)
+    sub, back, ok = people.last(evs, "submit"), people.last(evs, "reject"), people.last(evs, "approve")
+    out = {"history": [_row(e, title) for e in evs], "submitted": None, "with": None, "changes": None, "decided": None, "next": ""}
+    sender = people.submitter(db, evs)
+    if obj.status == cfg["review"]:
+        appr = people.entry_approvers(db, p, kind, exclude_id=sender.id if sender else None)
+        out["submitted"] = _row(sub, title) if sub else None
+        out["with"] = _who(appr, sub.created_at if sub else None, "approve")
+        out["next"] = f"{people.names(appr) or 'An approver'} must approve it or request changes."
+    elif obj.status == "changes_requested":
+        fix = people.fixers(db, p, st.key if st else "", evs, getattr(obj, "owner", None))
+        if back:
+            out["changes"] = {**_row(back, title), "fixer": people.names(fix)}
+        out["with"] = _who(fix, back.created_at if back else None, "fix")
+        out["next"] = f"{people.names(fix) or 'The owner'} must fix it and submit it again."
+    elif obj.status in (cfg["approved"], *cfg["also_approved"]) or getattr(obj, "status", "") == "signed":
+        out["decided"] = _row(ok, title) if ok else None
+    return out
+
+
 def agreement_out(a: Agreement, with_project: bool = False) -> dict:
     age = None if a.status == "signed" else (datetime.now(aware(a.created_at).tzinfo) - aware(a.created_at)).days
     d = {"id": a.id, "project_id": a.project_id, "kind": a.kind, "label": workflow.AGREEMENT_KINDS[a.kind],
@@ -110,9 +171,16 @@ def agreement_out(a: Agreement, with_project: bool = False) -> dict:
          "started_on": iso(aware(a.created_at).date()), "closed": a.status == "signed",
          "closed_in_days": (a.signed_date - aware(a.created_at).date()).days if a.status == "signed" and a.signed_date else None,
          "overdue": bool(a.due_date and a.status != "signed" and a.due_date < date.today())}
+    d["review"] = entry_review("agreement", a, workflow.AGREEMENT_KINDS[a.kind])
     if with_project:
         d["project_name"], d["project_code"] = a.project.name, a.project.code
     return d
+
+
+def dossier_out(i) -> dict:
+    title = modules._title("dossier_item", i)
+    return {"id": i.id, "module": i.module, "title": i.title, "status": i.status, "required": i.required, "link": i.link, "notes": i.notes,
+            "review": entry_review("dossier_item", i, title)}
 
 
 def mfr_out(m: ManufacturerRequest, with_project: bool = False) -> dict:
@@ -120,6 +188,7 @@ def mfr_out(m: ManufacturerRequest, with_project: bool = False) -> dict:
          "manufacturer": m.manufacturer, "needed_for": m.needed_for, "status": m.status, "required": m.required, "requested_on": iso(m.requested_on),
          "due_date": iso(m.due_date), "received_on": iso(m.received_on), "link": m.link, "notes": m.notes,
          "owner": user_brief(m.owner), "overdue": bool(m.due_date and m.status in ("requested",) and m.due_date < date.today())}
+    d["review"] = entry_review("mfr", m, workflow.MFR_KINDS[m.kind])
     if with_project:
         d["project_name"], d["project_code"] = m.project.name, m.project.code
     return d
@@ -148,14 +217,62 @@ def document_out(d: Document, with_project: bool = False) -> dict:
            "current_version": cur.version_no if cur else 0, "link": cur.link if cur else "", "updated_at": iso(d.updated_at),
            "versions": [{"id": v.id, "version_no": v.version_no, "link": v.link, "note": v.note, "created_by": v.created_by,
                          "created_at": iso(v.created_at)} for v in d.versions]}
+    out["review"] = doc_review(d, labels)
     if with_project:
         out["project_name"], out["project_code"] = d.project.name, d.project.code
     return out
 
 
+def doc_review(d: Document, labels: dict) -> dict:
+    p = d.project
+    db = object_session(p)
+    evs = modules.doc_trail(d)
+    sub, back, ok = people.last(evs, "submit"), people.last(evs, "return"), people.last(evs, "approve", "unlock")
+    cur = d.versions[-1].version_no if d.versions else 0
+    out = {"history": [_row(e, d.title) for e in evs], "step": labels.get(d.status, d.status), "submitted": _row(sub, d.title) if sub else None,
+           "with": None, "changes": None, "next": ""}
+    if d.status in d.flow[1:-1]:
+        who = people.holders(db, modules.review_roles(d))
+        sender = people.submitter(db, evs)
+        who = [u for u in who if not sender or u.id != sender.id] or who
+        since = people.last(evs, "submit", "approve")
+        out["with"] = _who(who, since.created_at if since else None, "review")
+        out["next"] = f"{people.names(who) or 'A reviewer'} must review {d.title} V{cur} and approve it or return it."
+    elif d.status == "returned":
+        fix = people.fixers(db, p, d.stage_key, evs, d.owner)
+        if back:
+            out["changes"] = {**_row(back, d.title), "fixer": people.names(fix)}
+        out["with"] = _who(fix, back.created_at if back else None, "fix")
+        out["next"] = f"{people.names(fix) or 'The owner'} must upload the corrected version and send it back for review."
+    elif d.status == "draft":
+        mine = [d.owner] if d.owner else people.stage_responsible(db, p, p.row(d.stage_key)) if d.stage_key and p.flow.has(d.stage_key) else []
+        out["with"] = _who(mine, None, "work")
+        out["next"] = f"{people.names(mine) or 'The owner'} must finish it and send it for review."
+    elif ok and d.status in ("approved", "locked"):
+        out["decided"] = _row(ok, d.title)
+    return out
+
+
+_TAB = {"agreement": "legal", "dossier_item": "regulatory", "mfr": "manufacturer", "reopen": "overview", "rfi": "rfi"}
+
+
+def event_link(e) -> str:
+    """Query string that opens the exact record this audit row is about."""
+    if e.task_id:
+        return f"tab=tasks&focus=task-{e.task_id}"
+    if e.ref_kind == "document":
+        return f"tab={'artwork' if e.area == 'artwork' else 'documents'}&focus=doc-{e.ref_id}"
+    if e.ref_kind in _TAB and e.ref_id:
+        return f"tab={_TAB[e.ref_kind]}&focus={e.ref_kind}-{e.ref_id}"
+    if e.area == "stage" and e.stage_key:
+        return f"step={e.stage_key}"
+    return "tab=overview"
+
+
 def event_out(e, with_project: bool = False) -> dict:
     d = {"id": e.id, "project_id": e.project_id, "area": e.area, "action": e.action, "note": e.note, "actor": e.actor,
-         "stage_key": e.stage_key, "task_id": e.task_id, "to_stage": e.to_stage, "created_at": iso(e.created_at)}
+         "stage_key": e.stage_key, "task_id": e.task_id, "to_stage": e.to_stage, "created_at": iso(e.created_at),
+         "to": e.to_user, "ref_kind": e.ref_kind, "ref_id": e.ref_id, "link": event_link(e)}
     if with_project:
         d["project_name"], d["project_code"] = e.project.name, e.project.code
     flow = e.project.flow
@@ -163,16 +280,8 @@ def event_out(e, with_project: bool = False) -> dict:
     return d
 
 
-def _holders(db, roles) -> list[str]:
-    """Names of the active people in these roles, e.g. 'Rajiv Kapoor, Director'. Shown so nobody has to guess who has a request."""
-    if not roles:
-        return []
-    us = db.scalars(select(User).where(User.active.is_(True), User.role_key.in_(list(roles))).order_by(User.id)).all()
-    return [f"{u.name} ({u.role.name.split(' (')[0]})" for u in us]
-
-
 def _ev(e) -> dict:
-    return {"by": e.actor, "at": iso(e.created_at), "note": e.note or ""}
+    return {"by": e.actor, "at": iso(e.created_at), "note": e.note or "", "to": e.to_user}
 
 
 def handoff(p: Project, r, db) -> dict:
@@ -180,15 +289,22 @@ def handoff(p: Project, r, db) -> dict:
     st = p.flow.stage(r.stage_key)
     evs = [e for e in p.events if e.stage_key == r.stage_key and e.area == "stage"]
     last = lambda *acts: next((e for e in reversed(evs) if e.action in acts), None)
-    sub, back, ok = last("submit"), last("send_back"), last("approve", "bypass")
-    out = {"submitted": None, "sent_back": None, "decided": None, "with": None, "owners": [], "approvers": []}
+    sub, back, ok, started = last("submit"), last("send_back"), last("approve", "bypass"), last("started")
+    out = {"submitted": None, "sent_back": None, "decided": None, "with": None, "owners": [], "approvers": [], "oversight": [],
+           "lead": None, "approver": None, "since": None, "started": _ev(started) if started else None}
+    resp, over = people.stage_responsible(db, p, r), people.stage_oversight(db, p, r)
+    named = lambda uid: (lambda u: {"id": u.id, "name": u.name} if u else None)(db.get(User, uid) if uid else None)
+    out["lead"], out["approver"] = named(r.lead_id), named(r.approver_id)
     if r.state in ("in_progress", "awaiting_approval"):
-        out["owners"], out["approvers"] = _holders(db, st.owner_roles), _holders(db, st.approver_roles)
+        out["owners"], out["oversight"] = people.tags(resp), people.tags(over)
+        out["approvers"] = people.tags(people.stage_approvers(db, p, r, exclude_id=sub.actor_id if r.state == "awaiting_approval" and sub else None))
     if r.state == "awaiting_approval":
-        out["with"] = {"action": "approve", "label": st.approver, "people": _holders(db, st.approver_roles)}
+        out["with"] = {"action": "approve", "label": st.approver, "people": out["approvers"], "also": []}
         out["submitted"] = _ev(sub) if sub else None
+        out["since"] = iso(r.submitted_at or (sub.created_at if sub else None))
     elif r.state == "in_progress":
-        out["with"] = {"action": "work", "label": st.owner, "people": _holders(db, st.owner_roles)}
+        out["with"] = {"action": "work", "label": st.owner, "people": out["owners"], "also": out["oversight"]}
+        out["since"] = iso(r.started_at)
     if back and r.state in ("in_progress", "awaiting_approval"):
         out["sent_back"] = {**_ev(back), "resolved": bool(sub and sub.id > back.id)}
     if ok and r.state in ("approved", "bypassed", "locked"):
@@ -209,7 +325,8 @@ def stage_rows(p: Project) -> list[dict]:
                     "tasks_total": len(tasks), "tasks_done": sum(1 for t in tasks if t.state in workflow.TASK_DONE),
                     "blockers": engine.blockers(p, r.stage_key) if active else [],
                     "warnings": engine.warnings(p, r.stage_key) if active else [],
-                    "handoff": handoff(p, r, db)})
+                    "handoff": handoff(p, r, db),
+                    "checks": engine.readiness(p) if p.flow.stage(r.stage_key).milestone else []})
     return out
 
 
@@ -224,8 +341,7 @@ def project_detail(p: Project) -> dict:
         "stages": stage_rows(p),
         "tasks": [task_out(t) for t in p.tasks],
         "agreements": [agreement_out(a) for a in p.agreements],
-        "dossier_items": [{"id": i.id, "module": i.module, "title": i.title, "status": i.status, "required": i.required,
-                           "link": i.link, "notes": i.notes} for i in p.dossier_items],
+        "dossier_items": [dossier_out(i) for i in p.dossier_items],
         "submissions": [{"id": s.id, "kind": s.kind, "reference": s.reference, "platform": s.platform,
                          "submitted_on": iso(s.submitted_on), "submitted_by": s.submitted_by, "notes": s.notes, "status": s.status,
                          "acknowledgement_ref": s.acknowledgement_ref, "acknowledged_on": iso(s.acknowledged_on)} for s in p.submissions],

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from .. import workflow
 from ..models import (Agreement, Document, DocumentVersion, DossierItem, ManufacturerRequest, Project, RFICase,
                       RFIQuestion, Submission, User)
-from . import common, notify, tasks
+from . import common, notify, people, tasks
 from .common import Forbidden, WorkflowError
 
 
@@ -62,11 +62,11 @@ def _diff(obj, changes: dict, labels: dict | None = None) -> list[str]:
 # ---------------------------------------------------------------- the generic approval cycle for module entries
 # kind -> where it sits, its working states, the "under review" state and the approved state
 ENTRY = {
-    "agreement": dict(feature="agreements", area="legal", work=("not_started", "drafting", "changes_requested"),
+    "agreement": dict(feature="agreements", area="legal", tab="legal", work=("not_started", "drafting", "changes_requested"),
                       review="in_review", approved="sent_for_signature", also_approved=()),
-    "dossier_item": dict(feature="dossier", area="dossier", work=("missing", "draft", "changes_requested"),
+    "dossier_item": dict(feature="dossier", area="dossier", tab="regulatory", work=("missing", "draft", "changes_requested"),
                          review="awaiting_approval", approved="reviewed", also_approved=("ready",)),
-    "mfr": dict(feature="mfr", area="manufacturer", work=("requested", "received", "changes_requested"),
+    "mfr": dict(feature="mfr", area="manufacturer", tab="manufacturer", work=("requested", "received", "changes_requested"),
                 review="under_review", approved="accepted", also_approved=()),
 }
 
@@ -97,21 +97,30 @@ def _guard_status(p: Project, kind: str, obj, new: str):
             raise WorkflowError("This needs approval: submit it for approval and an approver decides.")
 
 
+def entry_link(kind: str, obj) -> str:
+    return f"tab={ENTRY[kind]['tab']}&focus={kind}-{obj.id}"
+
+
 @common.serial
 def entry_action(db: Session, user: User, kind: str, obj, action: str, note: str):
     p = obj.project
     cfg, rule = ENTRY[kind], _rule(p, kind)
     st = stage_for(p, cfg["feature"])
     note = note.strip()
+    title = _title(kind, obj)
+    evs = people.trail(p, kind, obj.id, cfg["area"], title)
+    link, to = entry_link(kind, obj), ""
     if action == "submit":
-        check_edit(user, p, st.key, _title(kind, obj))
+        check_edit(user, p, st.key, title)
         if obj.status not in cfg["work"]:
             raise WorkflowError("This entry is not waiting for work to be submitted.")
         if rule.get("approval", True):
             obj.status = cfg["review"]
-            notify.notify_roles(db, rule.get("roles", []), "approval", f"Approval needed: {_title(kind, obj)}",
-                                f"Project: {p.name} · {_title(kind, obj)} · Submitted by {user.name} · Action: approve or request changes",
-                                p.id, exclude=user.id)
+            approvers = people.entry_approvers(db, p, kind, exclude_id=user.id)
+            to = people.names(approvers) or "an approver"
+            notify.notify_users(db, approvers, "approval", f"Approval needed: {title}",
+                                f"Project: {p.name} · {title} · Submitted by {user.name} · Action: approve or request changes"
+                                + (f" · “{note}”" if note else ""), p.id, link=link)
         else:
             obj.status = cfg["approved"]
     elif action in ("approve", "reject"):
@@ -121,20 +130,36 @@ def entry_action(db: Session, user: User, kind: str, obj, action: str, note: str
         common.ensure_open(p)
         if obj.status != cfg["review"]:
             raise WorkflowError("This entry has not been submitted for approval.")
+        sent = people.last(evs, "submit")
+        sender = people.submitter(db, evs)
         if action == "approve":
-            title = _title(kind, obj)
-            sent = [e for e in p.events if e.area == cfg["area"] and e.action == "submit" and e.note.startswith(title)]
-            if sent and max(sent, key=lambda e: e.id).actor == user.name and user.role_key != "super_admin":
+            if sent and (sent.actor_id == user.id or sent.actor == user.name) and user.role_key != "super_admin":
                 raise Forbidden("Someone else has to approve work you submitted yourself.")
             obj.status = cfg["approved"]
             if kind == "mfr":
                 obj.received_on = obj.received_on or date.today()
+            to = sender.name if sender else ""
+            notify.notify_users(db, [sender], "approval", f"Approved: {title}", f"Project: {p.name} · {title} · Approved by {user.name}" + (f" · “{note}”" if note else ""),
+                                p.id, exclude=user.id, link=link)
         else:
             common.need_note(note, "Please say what needs to change.")
             obj.status = "changes_requested"
+            fix = people.fixers(db, p, st.key, evs, getattr(obj, "owner", None))
+            to = people.names(fix)
+            notify.notify_users(db, fix, "changes", f"Changes requested: {title}",
+                                f"Project: {p.name} · {title} · Sent back by {user.name} · Reason: {note} · Action: fix it and submit again", p.id,
+                                exclude=user.id, link=link)
+    elif action == "comment":
+        common.ensure_open(p)
+        if not (can_edit_stage(user, p, st.key) or common.role_ok(user, rule.get("roles", []))):
+            raise Forbidden(f"Your role ({user.role.name}) does not work on {title}.")
+        note = common.need_note(note, "Write the note first.")
+        holder = people.entry_approvers(db, p, kind, exclude_id=user.id) if obj.status == cfg["review"] else people.fixers(db, p, st.key, evs, getattr(obj, "owner", None))
+        to = people.names(holder)
+        notify.notify_users(db, holder, "note", f"Note on {title}", f"Project: {p.name} · {user.name}: {note}", p.id, exclude=user.id, link=link)
     else:
         raise WorkflowError("Unknown action.")
-    common.log(p, user, cfg["area"], action, f"{_title(kind, obj)}: {note}".strip(": "), st.key)
+    common.log(p, user, cfg["area"], action, f"{title}: {note}".strip(": "), st.key, ref=(kind, obj.id), to=to)
     db.commit()
     return obj
 
@@ -153,7 +178,9 @@ def create_agreement(db: Session, user: User, p: Project, data) -> Agreement:
     a = Agreement(kind=data.kind, counterparty=data.counterparty, owner_id=data.owner_id, due_date=data.due_date,
                   link=check_url(data.link), notes=data.notes, core=data.kind in workflow.CORE_AGREEMENTS, status="not_started")
     p.agreements.append(a)
-    common.log(p, user, "legal", "created", f"{workflow.AGREEMENT_KINDS[data.kind]} added" + (f" ({data.counterparty})" if data.counterparty else ""), st.key)
+    db.flush()
+    common.log(p, user, "legal", "created", f"{workflow.AGREEMENT_KINDS[data.kind]} added" + (f" ({data.counterparty})" if data.counterparty else ""), st.key,
+               ref=("agreement", a.id))
     db.commit()
     return a
 
@@ -178,7 +205,7 @@ def update_agreement(db: Session, user: User, a: Agreement, data) -> Agreement:
             _guard_status(p, "agreement", a, new)
     d = _diff(a, ch)
     if d:
-        common.log(p, user, "legal", "update", f"{workflow.AGREEMENT_KINDS[a.kind]}: " + "; ".join(d), st.key)
+        common.log(p, user, "legal", "update", f"{workflow.AGREEMENT_KINDS[a.kind]}: " + "; ".join(d), st.key, ref=("agreement", a.id))
     db.commit()
     return a
 
@@ -200,7 +227,8 @@ def create_dossier_item(db: Session, user: User, p: Project, data) -> DossierIte
             raise WorkflowError("M1–M5 modules are only used where the submission type requires them.")
     it = DossierItem(module=data.module or None, title=data.title.strip(), required=data.required, status="missing")
     p.dossier_items.append(it)
-    common.log(p, user, "dossier", "created", f"Checklist item added: {it.title}", st.key)
+    db.flush()
+    common.log(p, user, "dossier", "created", f"Checklist item added: {it.title}", st.key, ref=("dossier_item", it.id))
     db.commit()
     return it
 
@@ -216,7 +244,7 @@ def update_dossier_item(db: Session, user: User, it: DossierItem, data) -> Dossi
         _guard_status(p, "dossier_item", it, ch["status"])
     d = _diff(it, {k: v for k, v in ch.items() if v is not None})
     if d:
-        common.log(p, user, "dossier", "update", f"{_title('dossier_item', it)}: " + "; ".join(d), st.key)
+        common.log(p, user, "dossier", "update", f"{_title('dossier_item', it)}: " + "; ".join(d), st.key, ref=("dossier_item", it.id))
     db.commit()
     return it
 
@@ -260,7 +288,9 @@ def create_mfr(db: Session, user: User, p: Project, data) -> ManufacturerRequest
     m = ManufacturerRequest(kind=data.kind, manufacturer=data.manufacturer, needed_for=data.needed_for.strip(), due_date=data.due_date, required=data.required,
                             notes=data.notes, owner_id=data.owner_id or user.id)
     p.mfr_requests.append(m)
-    common.log(p, user, "manufacturer", "requested", f"{workflow.MFR_KINDS[data.kind]} requested from {data.manufacturer or 'the manufacturer'}", st.key)
+    db.flush()
+    common.log(p, user, "manufacturer", "requested", f"{workflow.MFR_KINDS[data.kind]} requested from {data.manufacturer or 'the manufacturer'}", st.key,
+               ref=("mfr", m.id))
     db.commit()
     return m
 
@@ -279,7 +309,7 @@ def update_mfr(db: Session, user: User, m: ManufacturerRequest, data) -> Manufac
             ch.setdefault("received_on", date.today())
     d = _diff(m, ch)
     if d:
-        common.log(p, user, "manufacturer", "update", f"{workflow.MFR_KINDS[m.kind]}: " + "; ".join(d), st.key)
+        common.log(p, user, "manufacturer", "update", f"{workflow.MFR_KINDS[m.kind]}: " + "; ".join(d), st.key, ref=("mfr", m.id))
     db.commit()
     return m
 
@@ -406,7 +436,8 @@ def create_document(db: Session, user: User, p: Project, data) -> Document:
                  owner_id=data.owner_id or user.id, status="draft", is_artwork=bool(data.artwork))
     d.versions.append(DocumentVersion(version_no=1, link=check_url(data.link), note=data.note, created_by=user.name))
     p.documents.append(d)
-    common.log(p, user, "artwork" if d.is_artwork else "document", "created", f"{d.title} (V1) created", key)
+    db.flush()
+    common.log(p, user, "artwork" if d.is_artwork else "document", "created", f"{d.title} (V1) created", key, ref=("document", d.id))
     db.commit()
     return d
 
@@ -432,7 +463,8 @@ def add_version(db: Session, user: User, d: Document, data) -> Document:
     n = max(v.version_no for v in d.versions) + 1
     d.versions.append(DocumentVersion(version_no=n, link=check_url(data.link), note=data.note.strip(), created_by=user.name))
     d.status = "draft"
-    common.log(p, user, "artwork" if d.is_artwork else "document", "version", f"{d.title}: V{n} added. {data.note.strip()}".strip(), d.stage_key)
+    common.log(p, user, "artwork" if d.is_artwork else "document", "version", f"{d.title}: V{n} added. {data.note.strip()}".strip(), d.stage_key,
+               ref=("document", d.id))
     db.commit()
     return d
 
@@ -447,6 +479,22 @@ def review_roles(d: Document) -> list[str]:
     return ["director", "project_manager"]
 
 
+def doc_link(d: Document) -> str:
+    tab = "artwork" if d.is_artwork else d.stage_key if d.stage_key == "quality" else "documents"
+    return f"tab={tab}&focus=doc-{d.id}"
+
+
+def doc_trail(d: Document):
+    return people.trail(d.project, "document", d.id, "artwork" if d.is_artwork else "document", d.title)
+
+
+def _doc_people(db: Session, d: Document, evs) -> list[User]:
+    """Who has the document now: the reviewer(s) of the current step, or whoever must correct it."""
+    if d.status in d.flow[1:-1]:
+        return list(people.holders(db, review_roles(d)))
+    return people.fixers(db, d.project, d.stage_key, evs, d.owner)
+
+
 @common.serial
 def document_action(db: Session, user: User, d: Document, action: str, note: str) -> Document:
     p = d.project
@@ -454,11 +502,20 @@ def document_action(db: Session, user: User, d: Document, action: str, note: str
     note = note.strip()
     flow = d.flow
     reviewing = d.status in flow[1:-1]
+    evs = doc_trail(d)
+    link, to = doc_link(d), ""
+    cur = max(v.version_no for v in d.versions)
+    what = f"{d.title} (V{cur})"
     if action == "submit":
         check_edit(user, p, d.stage_key, "this document")
         if d.status not in ("draft", "returned"):
             raise WorkflowError("Only a draft or returned document can be submitted for review.")
         d.status = flow[1]
+        reviewers = [u for u in _doc_people(db, d, evs) if u.id != user.id]
+        to = people.names(reviewers) or "a reviewer"
+        notify.notify_users(db, reviewers, "approval", f"Review needed: {d.title}",
+                            f"Project: {p.name} · {what} · Submitted by {user.name} · Action: review it and approve or return it" + (f" · “{note}”" if note else ""),
+                            p.id, link=link)
     elif action in ("approve", "return"):
         common.require(user, "approve" if action == "approve" else "request_changes")
         if not reviewing:
@@ -466,11 +523,38 @@ def document_action(db: Session, user: User, d: Document, action: str, note: str
         roles = review_roles(d)
         if not common.role_ok(user, roles):
             raise Forbidden("This review step is done by: " + ", ".join(r.replace("_", " ") for r in roles) + ".")
+        sent = people.last(evs, "submit")
+        sender = people.submitter(db, evs)
         if action == "approve":
+            if sent and (sent.actor_id == user.id or sent.actor == user.name) and user.role_key != "super_admin":
+                raise Forbidden("Someone else has to approve work you submitted yourself.")
             d.status = flow[flow.index(d.status) + 1]
+            if d.status in flow[1:-1]:  # on to the next review step
+                nxt = [u for u in people.holders(db, review_roles(d)) if u.id != user.id]
+                to = people.names(nxt)
+                notify.notify_users(db, nxt, "approval", f"Review needed: {d.title}", f"Project: {p.name} · {what} · Passed by {user.name} · Action: review it and approve or return it",
+                                    p.id, link=link)
+                notify.notify_users(db, [sender], "approval", f"Passed a review step: {d.title}", f"Project: {p.name} · {what} · Approved by {user.name} · now with {to}",
+                                    p.id, exclude=user.id, link=link)
+            else:
+                to = sender.name if sender else (d.owner.name if d.owner else "")
+                notify.notify_users(db, [sender, d.owner], "approval", f"Approved: {d.title}", f"Project: {p.name} · {what} · Approved by {user.name}" + (f" · “{note}”" if note else ""),
+                                    p.id, exclude=user.id, link=link)
         else:
             common.need_note(note, "Please say what needs to change.")
+            fix = people.fixers(db, p, d.stage_key, evs, d.owner)
             d.status = "returned"
+            to = people.names(fix)
+            notify.notify_users(db, fix, "changes", f"Returned for changes: {d.title}",
+                                f"Project: {p.name} · {what} · Returned by {user.name} · Reason: {note} · Action: upload the corrected version and send it back for review",
+                                p.id, exclude=user.id, link=link)
+    elif action == "comment":
+        if not (modules_can_comment(user, p, d)):
+            raise Forbidden(f"Your role ({user.role.name}) does not work on this document.")
+        note = common.need_note(note, "Write the note first.")
+        holder = _doc_people(db, d, evs)
+        to = people.names(holder)
+        notify.notify_users(db, holder, "note", f"Note on {d.title}", f"Project: {p.name} · {user.name}: {note}", p.id, exclude=user.id, link=link)
     elif action == "lock":
         common.require(user, "lock_unlock", "lock records")
         if d.status != "approved":
@@ -484,7 +568,11 @@ def document_action(db: Session, user: User, d: Document, action: str, note: str
         d.status = "approved"
     else:
         raise WorkflowError("Unknown action.")
-    cur = max(v.version_no for v in d.versions)
-    common.log(p, user, "artwork" if d.is_artwork else "document", action, f"{d.title} (V{cur}): {note}".strip(": "), d.stage_key)
+    common.log(p, user, "artwork" if d.is_artwork else "document", action, f"{d.title} (V{cur}): {note}".strip(": "), d.stage_key, ref=("document", d.id), to=to)
     db.commit()
     return d
+
+
+def modules_can_comment(user: User, p: Project, d: Document) -> bool:
+    return (can_edit_stage(user, p, d.stage_key) or user.id == d.owner_id
+            or (d.status in d.flow[1:-1] and common.role_ok(user, review_roles(d))))

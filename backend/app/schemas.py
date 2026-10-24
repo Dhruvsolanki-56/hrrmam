@@ -88,7 +88,7 @@ class TaskUpdate(BaseModel):
 
 class TaskActionIn(BaseModel):
     action: Literal["accept", "start", "submit", "approve", "request_changes", "lock", "unlock", "request_date",
-                    "approve_date", "reject_date", "reassign", "bypass"]
+                    "approve_date", "reject_date", "reassign", "bypass", "comment"]
     note: str = ""
     due_at: UTC | None = None
     assignee_id: int | None = None
@@ -265,7 +265,7 @@ class VersionIn(BaseModel):
 
 
 class DocumentActionIn(BaseModel):
-    action: Literal["submit", "approve", "return", "lock", "unlock"]
+    action: Literal["submit", "approve", "return", "lock", "unlock", "comment"]
     note: str = ""
 
 
@@ -300,7 +300,15 @@ class ReadIn(BaseModel):
 
 
 class EntryActionIn(BaseModel):
-    action: Literal["submit", "approve", "reject"]
+    action: Literal["submit", "approve", "reject", "comment"]
+    note: str = ""
+
+
+class StageAssignIn(BaseModel):
+    lead_id: int | None = None
+    approver_id: int | None = None
+    clear_lead: bool = False
+    clear_approver: bool = False
     note: str = ""
 
 

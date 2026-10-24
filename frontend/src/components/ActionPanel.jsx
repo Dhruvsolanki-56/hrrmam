@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { api } from '../api'
-import { stageOf, useCan, useMe, useStages } from '../context'
-import { StateChip, fmtDateTime, useDo } from './bits'
+import { stageOf, useAccess, useCan, useMe, useStages, useUsers } from '../context'
+import FormModal from './FormModal'
+import { StateChip, fmtDateTime, orList, toast, useDo } from './bits'
+import { MiniHistory } from './Timeline'
 
 const tabOf = (st) => (st.tab && st.tab !== 'tasks' ? st.tab : null)
 
@@ -43,7 +45,82 @@ export function withText(h) {
   if (!h) return ''
   const p = h.people || []
   if (!p.length) return h.label
-  return p.length > 2 ? `${p.slice(0, 2).join(', ')} and ${p.length - 2} more` : p.join(' or ')
+  return orList(p)
+}
+
+/** Everything the project knows about one step, oldest first: started, submitted, sent back, approved, assigned, notes and the work done inside it. */
+export function stepEvents(project, key) {
+  return (project.events || []).filter((e) => e.stage_key === key).map((e) => ({ ...e, by: e.actor, at: e.created_at }))
+}
+
+function PhaseHistory({ project, stageKey }) {
+  const rows = stepEvents(project, stageKey)
+  return (
+    <details className="more phase-hist">
+      <summary>History of this step ({rows.length})</summary>
+      <MiniHistory rows={rows} empty="Nothing has happened on this step yet." />
+    </details>
+  )
+}
+
+/** Who does the work, who approves, who oversees, and a way for a project manager to name them. */
+function Responsibility({ project, row, st, onChange }) {
+  const can = useCan()
+  const users = useUsers()
+  const [open, setOpen] = useState(false)
+  const h = row.handoff || {}
+  const live = ['in_progress', 'awaiting_approval'].includes(row.state)
+  const mayName = can('manage_project') && live && project.status === 'active'
+  const workers = users.filter((u) => u.active !== false && (st.owner_roles.includes(u.role_key) || u.role_key === 'super_admin'))
+  const approvers = users.filter((u) => u.active !== false && st.approver_roles.includes(u.role_key))
+  return (
+    <>
+      <dl className="who who-live">
+        <dt>Responsible for the work</dt><dd>{h.owners?.length ? orList(h.owners) : st.owner}{h.lead ? <small> · chosen by the project manager</small> : null}</dd>
+        <dt>Approves</dt><dd>{h.approvers?.length ? orList(h.approvers) : st.approver}{h.approver ? <small> · chosen by the project manager</small> : null}</dd>
+        {h.oversight?.length > 0 && <><dt>Project manager</dt><dd>{h.oversight.join(', ')}</dd></>}
+      </dl>
+      {mayName && <button className="link" onClick={() => setOpen(true)}>Choose who is responsible or who approves</button>}
+      {open && (
+        <FormModal title={`Who is responsible for ${st.name}?`} intro="Name one person for the work and/or one person to approve it. Everyone else on the project can still read it; they just will not be asked to act."
+          fields={[{ key: 'lead_id', label: 'Does the work', type: 'select', half: true, blank: 'Leave as the team', options: workers.map((u) => [u.id, `${u.name} · ${u.role}`]) },
+            { key: 'approver_id', label: 'Approves', type: 'select', half: true, blank: 'Leave as the approvers', options: approvers.map((u) => [u.id, `${u.name} · ${u.role}`]) },
+            { key: 'note', label: 'Why? (optional)', type: 'text' }]}
+          initial={{ lead_id: h.lead?.id || '', approver_id: h.approver?.id || '' }}
+          onSave={async (d) => {
+            const body = { note: d.note || '' }
+            if (d.lead_id) body.lead_id = Number(d.lead_id); else if (h.lead) body.clear_lead = true
+            if (d.approver_id) body.approver_id = Number(d.approver_id); else if (h.approver) body.clear_approver = true
+            const p = await api.assignStage(project.id, st.key, body)
+            onChange(p)
+            toast('Saved. The people you chose have been notified and it is now on their list.')
+          }}
+          onClose={() => setOpen(false)} submitLabel="Save" />
+      )}
+    </>
+  )
+}
+
+/** The Dossier Ready (milestone) step is a checkpoint over the whole project: list what it checks and what is missing. */
+function Checks({ row, goTab }) {
+  if (!row.checks?.length) return null
+  const open = row.checks.filter((c) => !c.ok).length
+  const h = row.handoff || {}
+  return (
+    <div className="checks">
+      <b>What this step checks{open ? ` (${open} not done yet)` : ' (everything is done)'}</b>
+      <p className="muted">This is a checkpoint, not paperwork: nothing new is uploaded here. {h.owners?.length ? `${orList(h.owners)} confirm` : 'Regulatory confirms'} the dossier is complete and {h.approvers?.length ? `${orList(h.approvers)} approve` : 'an RA reviewer or the Director approves'} it. Approving locks the dossier for external submission.</p>
+      <ul>
+        {row.checks.map((c) => (
+          <li key={c.label} className={c.ok ? 'ok' : ''}>
+            <span aria-hidden="true">{c.ok ? '✓' : '○'}</span>
+            <span>{c.label}<small>{c.detail}</small></span>
+            {!c.ok && c.tab && <button className="link" onClick={() => goTab(c.tab)}>Open</button>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 function StageCard({ project, row, onChange, goTab, locked, fold, inTab }) {
@@ -71,7 +148,8 @@ function StageCard({ project, row, onChange, goTab, locked, fold, inTab }) {
   const awaiting = row.state === 'awaiting_approval'
   // nobody approves their own work, so the person who did it is never named as its approver
   const doer = awaiting ? h.submitted?.by : ['submit', 'finish'].includes(turn) ? me.name : ''
-  const others = (list) => (list || []).filter((n) => !doer || !n.startsWith(`${doer} (`))
+  const skip = doer ? [doer] : row.state === 'in_progress' ? (h.owners || []).map((o) => o.split(' (')[0]) : []
+  const others = (list) => { const k = (list || []).filter((n) => !skip.some((d) => n.startsWith(`${d} (`))); return k.length ? k : list || [] }
   const owners = withText({ people: h.owners, label: st.owner })
   const approvers = withText({ people: others(h.approvers), label: st.approver })
   const since = row.days_in_stage ? `In this step for ${row.days_in_stage} day${row.days_in_stage === 1 ? '' : 's'}` : 'Opened today'
@@ -84,8 +162,17 @@ function StageCard({ project, row, onChange, goTab, locked, fold, inTab }) {
       return
     }
     run(async () => {
-      onChange(await api.act(project.id, { action, note, stage_key: row.key }))
+      const p = await api.act(project.id, { action, note, stage_key: row.key })
+      onChange(p)
       setNote(''); setShowNote(false)
+      const after = p.stages.find((r) => r.key === row.key)?.handoff || {}
+      const opened = stages.filter((s) => s.requires.includes(row.key) && p.stage_states[s.key] === 'in_progress').map((s) => s.name)
+      toast({
+        submit: `Submitted. It is now with ${orList(after.approvers || []) || st.approver} for approval. They have been notified.`,
+        approve: opened.length ? `Approved. ${opened.join(' and ')} ${opened.length > 1 ? 'have' : 'has'} started and the people responsible have been notified.` : p.status === 'completed' ? 'Approved. The project is complete.' : `Approved. ${h.submitted?.by || 'The person who did the work'} has been told.`,
+        send_back: `Sent back to ${orList(after.owners || []) || owners} with your reason. They have been notified.`,
+        reject: 'Project rejected. The project manager has been notified.', bypass: 'Marked as not needed. The next steps have been opened.',
+      }[action])
     })
   }
 
@@ -100,7 +187,9 @@ function StageCard({ project, row, onChange, goTab, locked, fold, inTab }) {
       <Wrap className={fold ? 'stagecard-fold' : undefined} {...(fold ? { open: mine || (awaiting && selfSubmitted) } : {})}>
       {head}
       <p className="now-who">{awaiting ? <>Waiting for approval from <b>{approvers}</b></> : <>Being worked on by <b>{owners}</b></>}</p>
-      {awaiting && h.submitted && <p className="now-sub">Submitted by {h.submitted.by}, {fmtDateTime(h.submitted.at)}{h.submitted.note ? <> · “{h.submitted.note}”</> : null}</p>}
+      {awaiting && h.submitted && <p className="now-sub">Submitted by {h.submitted.by} on {fmtDateTime(h.submitted.at)}{h.since ? ` · waiting since ${fmtDateTime(h.since)}` : ''}{h.submitted.note ? <> · “{h.submitted.note}”</> : null}</p>}
+      {!awaiting && h.since && <p className="now-sub">{h.started?.note ? `${h.started.note}. ` : ''}Since {fmtDateTime(h.since)}{row.days_in_stage ? ` (${row.days_in_stage} day${row.days_in_stage === 1 ? '' : 's'})` : ''}.</p>}
+      <Checks row={row} goTab={goTab} />
 
       {h.sent_back && !h.sent_back.resolved && (
         <div className="sentback" role="note">
@@ -109,9 +198,13 @@ function StageCard({ project, row, onChange, goTab, locked, fold, inTab }) {
         </div>
       )}
 
-      {blocked && !awaiting && (
+      {!acting && <p className="handoff-next"><span>Next action</span> {awaiting
+        ? <><b>{approvers}</b> must approve it or send it back.</>
+        : blocked ? <><b>{owners}</b> must finish what is listed below, then submit it for approval.</> : <><b>{owners}</b> must submit it for approval.</>}</p>}
+
+      {blocked && (
         <div className="todo-box" role="note">
-          <b>Before this can be submitted</b>
+          <b>{awaiting ? 'Approval is not possible yet. Still open:' : 'Before this can be submitted'}</b>
           <ul>{row.blockers.map((b) => <li key={b}>{b}</li>)}</ul>
           {!inTab && <button className="link" onClick={() => goTab(tabOf(st) || 'tasks')}>Open {tabOf(st) ? 'the workstream' : 'tasks'} →</button>}
         </div>
@@ -140,10 +233,17 @@ function StageCard({ project, row, onChange, goTab, locked, fold, inTab }) {
         <p className="act-hint">{awaiting ? `Approving: ${afterApprove}. Sending back: returns it to ${owners}.` : `Submitting sends it to ${approvers} to approve.`}</p>
       )}
       {!acting && awaiting && selfSubmitted && <p className="act-hint">You submitted this, so someone else has to approve it.</p>}
+      {!acting && awaiting && !selfSubmitted && !canDecide && <p className="act-hint">Only {approvers} can approve or send this back. You can follow it here.</p>}
+      {!acting && row.state === 'in_progress' && !canSubmit && <p className="act-hint">Only {owners} submit this step. You can follow it here.</p>}
+      {!acting && row.state === 'in_progress' && canSubmit && !(sup || st.owner_roles.includes(me.role_key)) && <p className="act-hint">{owners} do the work and submit it. You can step in as project manager.</p>}
+
+      <Responsibility project={project} row={row} st={st} onChange={onChange} />
+      <PhaseHistory project={project} stageKey={row.key} />
 
       <details className="more step-about">
         <summary>About this step</summary>
         <p>{st.description}</p>
+        {st.requires.length > 0 && <p className="muted">Started after: {st.requires.map((k) => `${waitsOn(k)} (${project.stage_states[k] === 'approved' ? 'approved' : project.stage_states[k] === 'bypassed' ? 'not needed' : 'not approved'})`).join(', ')}.</p>}
         {row.warnings?.map((w) => <p key={w.text} className="dep-note">{w.text}</p>)}
         <p className="muted">{since}. When approved: {afterApprove}.</p>
       </details>
@@ -179,10 +279,13 @@ function StepSummary({ project, stageKey, goTab, inTab }) {
         {row.state === 'locked' && <p className="handoff-line">Locked. It needs permission to unlock.</p>}
       </div>
       {row.rework_count > 0 && <p className="sentback-old">This step was sent back {row.rework_count} time{row.rework_count > 1 ? 's' : ''} before it was approved. The reasons are in the history.</p>}
+      <Checks row={row} goTab={goTab} />
       <dl className="who">
         <dt>Work by</dt><dd>{st.owner}</dd>
-        <dt>Approved by</dt><dd>{st.approver}</dd>
+        <dt>Approved by</dt><dd>{h.decided ? h.decided.by : st.approver}</dd>
+        {h.started && <><dt>Started</dt><dd>{fmtDateTime(h.started.at)}{h.started.note ? ` · ${h.started.note}` : ''}</dd></>}
       </dl>
+      <PhaseHistory project={project} stageKey={stageKey} />
       {tab && <button className="btn line" onClick={() => goTab(tab)}>Open the {tab === 'rfi' ? 'RFI' : tab} tab</button>}
     </section>
   )

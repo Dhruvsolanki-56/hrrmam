@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from .. import serialize as S
 from .. import workflow
 from ..models import (Agreement, DateRequest, Document, ManufacturerRequest, Project, ProjectEvent, RFICase, Task, User, aware)
-from . import engine, modules, workflows
+from . import engine, modules, people, workflows
 from .tasks import _can_decide
 
 ENTITY_FILTER = {"AU": {workflow.AU, workflow.JOINT}, "IN": {workflow.IN, workflow.JOINT, workflow.MP}}
@@ -58,13 +58,83 @@ def my_work(db: Session, user: User) -> dict:
         t = r.task
         if not t.project.closed and user.id == t.assigner_id:
             decide.append({"type": "date_request", "task": S.task_out(t, True), "request": S.date_request_out(r)})
+    items = _record_items(db, user)
+    decide += items["decide"]
+    counts = {k: len(v) for k, v in buckets.items()}
+    counts["returned_for_changes"] += len(items["returned"])
+    counts["submitted_for_approval"] += len(items["waiting"])
+    return {"buckets": {k: [S.task_out(t, True) for t in v] for k, v in buckets.items()},
+            "counts": counts, "needs_decision": decide,
+            "items": {"returned_for_changes": items["returned"], "submitted_for_approval": items["waiting"]}}
+
+
+def _item(typ: str, o, title: str, rv: dict, link: str, p: Project, **extra) -> dict:
+    return {"type": typ, "id": o.id, "title": title, "status": o.status, "project_id": p.id, "project_name": p.name, "project_code": p.code,
+            "link": link, "submitted": rv.get("submitted"), "with": rv.get("with"), "changes": rv.get("changes"), "next": rv.get("next", ""), **extra}
+
+
+def _record_items(db: Session, user: User) -> dict:
+    """Stages, agreements, dossier items, manufacturer data, documents and reopen requests that need me, were sent back to me,
+    or that I sent and am waiting on, so every state change lands in the right person's queue."""
+    out = {"decide": [], "returned": [], "waiting": []}
     for p in _live(db):
         for row in p.active_rows:
             st = p.flow.stage(row.stage_key)
-            if row.state == "awaiting_approval" and user.can("approve") and (user.role_key == "super_admin" or user.role_key in st.approver_roles):
-                decide.append({"type": "stage", **_stage_item(p, row.stage_key)})
-    return {"buckets": {k: [S.task_out(t, True) for t in v] for k, v in buckets.items()},
-            "counts": {k: len(v) for k, v in buckets.items()}, "needs_decision": decide}
+            evs = [e for e in p.events if e.stage_key == row.stage_key and e.area == "stage"]
+            sub = people.last(evs, "submit")
+            h = S.handoff(p, row, db)
+            base = {"type": "stage", "id": row.id, "title": st.name, "status": row.state, "project_id": p.id, "project_name": p.name, "project_code": p.code,
+                    "stage_key": row.stage_key, "stage_name": st.name, "approver": st.approver, "days_waiting": row.days_in_stage,
+                    "link": f"step={row.stage_key}", "submitted": h["submitted"], "with": h["with"], "changes": h["sent_back"], "next": ""}
+            if row.state == "awaiting_approval":
+                appr = people.stage_approvers(db, p, row, exclude_id=sub.actor_id if sub else None)
+                if user.can("approve") and (user.role_key == "super_admin" or user.id in {u.id for u in appr}):
+                    out["decide"].append({**base, "next": "Approve it or send it back."})
+                elif sub and sub.actor_id == user.id:
+                    out["waiting"].append({**base, "next": f"{people.names(appr)} must approve it."})
+            elif row.state == "in_progress" and h["sent_back"] and not h["sent_back"]["resolved"]:
+                if user.id in {u.id for u in people.stage_responsible(db, p, row)}:
+                    out["returned"].append({**base, "next": "Fix what was asked and submit it again."})
+        for kind, rows in (("agreement", p.agreements), ("dossier_item", p.dossier_items), ("mfr", p.mfr_requests)):
+            cfg = modules.ENTRY[kind]
+            for o in rows:
+                title = modules._title(kind, o)
+                rv = S.entry_review(kind, o, title)
+                w = rv["with"]
+                if not w:
+                    continue
+                it = _item("entry", o, title, rv, modules.entry_link(kind, o), p, kind=kind, tab=cfg["tab"])
+                if o.status == cfg["review"]:
+                    if user.id in w["ids"] and user.can("approve"):
+                        out["decide"].append(it)
+                    elif rv["submitted"] and rv["submitted"]["by"] == user.name:
+                        out["waiting"].append(it)
+                elif o.status == "changes_requested" and user.id in w["ids"]:
+                    out["returned"].append(it)
+        for d in p.documents:
+            rv = S.document_out(d)["review"]
+            w = rv["with"]
+            if not w:
+                continue
+            it = _item("document", d, d.title, rv, modules.doc_link(d), p, kind="document", artwork=d.is_artwork)
+            if d.status in d.flow[1:-1]:
+                if user.id in w["ids"] and user.can("approve"):
+                    out["decide"].append(it)
+                elif rv["submitted"] and rv["submitted"]["by"] == user.name:
+                    out["waiting"].append(it)
+            elif d.status == "returned" and user.id in w["ids"]:
+                out["returned"].append(it)
+        for r in p.reopen_requests:
+            if r.status != "pending":
+                continue
+            ro = S.reopen_out(r)
+            it = {"type": "reopen", "id": r.id, "title": r.label, "status": r.status, "project_id": p.id, "project_name": p.name, "project_code": p.code,
+                  "link": f"tab=overview&focus=reopen-{r.id}", "request": ro, "next": ro["next"]}
+            if user.can("lock_unlock") and user.id != r.requested_by_id:
+                out["decide"].append(it)
+            elif r.requested_by_id == user.id:
+                out["waiting"].append(it)
+    return out
 
 
 # ---------------------------------------------------------------- director portal

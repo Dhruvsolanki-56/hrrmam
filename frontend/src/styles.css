@@ -1294,3 +1294,59 @@ a.metric:first-child:hover { background: #00363b; }
 .props-more { margin-top: 10px; }
 .journey { gap: 6px; }
 .journey-top { align-items: center; }
+
+/* ---- ownership, history and confirmations (who has it, since when, what next) ---- */
+.toasts { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 90; display: grid; gap: 8px; width: min(560px, calc(100vw - 32px)); }
+.toast { margin: 0; padding: 12px 40px 12px 14px; background: var(--neo-dark); color: #fff; border-radius: var(--r-lg); font-size: 13.5px; line-height: 1.45; position: relative; box-shadow: 0 6px 20px rgba(0, 66, 72, .25); }
+.toast button { position: absolute; right: 8px; top: 6px; background: none; border: 0; color: #fff; font-size: 18px; cursor: pointer; opacity: .8; }
+.focus-flash { animation: focusflash 3s ease-out; }
+@keyframes focusflash { 0%, 55% { box-shadow: 0 0 0 3px var(--neo-green); background-color: var(--tint-green); } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+.rvblock { display: grid; gap: 6px; margin: 0 0 12px; }
+.rvblock p { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.rvblock span { color: var(--muted); font-size: 12.5px; margin-right: 6px; }
+.rv-with b { color: var(--neo-dark); }
+.rv-with small { color: var(--muted); margin-left: 6px; font-size: 12.5px; }
+.rv-next { padding: 8px 10px; background: var(--tint-green); border-radius: var(--r); }
+.rv-next span { font-weight: 600; color: var(--neo-dark); }
+.handoff-next { margin: 6px 0 0; font-size: 13.5px; }
+.handoff-next span { font-weight: 600; color: var(--neo-dark); margin-right: 6px; }
+.rv-hist, .entry-hist, .phase-hist { margin-top: 4px; }
+
+.minihist { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 0; }
+.minihist li { display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 10px; position: relative; padding: 0 0 12px; }
+.minihist li:not(:last-child)::before { content: ''; position: absolute; left: 4px; top: 14px; bottom: 0; width: 1px; background: var(--line); }
+.minihist .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--neo-green); margin-top: 5px; }
+.minihist b { font-size: 13px; font-weight: 600; }
+.minihist small { display: block; color: var(--muted); font-size: 12px; }
+.minihist p { margin: 2px 0 0; font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+
+.who-live { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 10px 0 4px; font-size: 13.5px; }
+.who-live dt { color: var(--muted); } .who-live dd { margin: 0; overflow-wrap: anywhere; } .who-live dd small { color: var(--muted); }
+
+.checks { margin: 8px 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--tint); }
+.checks > b { font-size: 13.5px; }
+.checks ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.checks li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-size: 13.5px; }
+.checks li.ok > span:first-child { color: var(--neo-green); font-weight: 700; }
+.checks li small { display: block; color: var(--muted); font-size: 12px; }
+
+.entry-with { display: block; margin-top: 4px; color: var(--ink-2); font-size: 12.5px; }
+.entry-with b { color: var(--neo-dark); }
+.reopen-who b { color: var(--neo-dark); }
+.access-note { margin: 0 0 12px; }
+.ev-open { display: inline-block; margin-top: 2px; font-size: 12.5px; color: var(--neo-green); }
+.ev-open:hover { text-decoration: underline; }
+.rec-line { display: block; overflow-wrap: anywhere; }
+.decide-row.rec-returned strong { color: #7a5200; }
+
+.t-notes { margin: 10px 0 4px; }
+.t-notes h4 { margin: 0 0 6px; }
+.t-notes ul { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 8px; }
+.t-notes li { padding: 8px 10px; background: var(--tint); border-radius: var(--r); }
+.t-notes li p { margin: 0; font-size: 13.5px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.t-notes li small { color: var(--muted); font-size: 12px; }
+.entry-actions > small, .entry-actions > .entry-hist, .entry-actions > .entry-why { flex-basis: 100%; }
+.entry-actions .sentback-inline { max-width: 340px; }
+.entry-hist summary { cursor: pointer; font-size: 12.5px; color: var(--neo-green); }
+.entry-hist .minihist { max-width: 340px; }

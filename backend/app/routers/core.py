@@ -174,7 +174,7 @@ def admin_log(user: User = Depends(current_user), db: Session = Depends(get_db))
 def notifications(user: User = Depends(current_user), db: Session = Depends(get_db)):
     notify.refresh_reminders(db)
     rows = db.scalars(select(Notification).where(Notification.user_id == user.id).order_by(Notification.id.desc()).limit(60))
-    return [{"id": n.id, "kind": n.kind, "title": n.title, "body": n.body, "project_id": n.project_id, "task_id": n.task_id,
+    return [{"id": n.id, "kind": n.kind, "title": n.title, "body": n.body, "project_id": n.project_id, "task_id": n.task_id, "link": n.link,
              "read": n.read, "created_at": S.iso(n.created_at)} for n in rows]
 
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMe, useUsers } from '../context'
 
 // ---------------------------------------------------------------- dates
@@ -218,4 +219,46 @@ export function Pager({ page, pages, total, size, onChange }) {
       </span>
     </nav>
   )
+}
+
+
+// ---------------------------------------------------------------- confirmations
+/** A short confirmation that says what happened and who it went to. Shown by <Toasts /> in the page layout. */
+export const toast = (message) => window.dispatchEvent(new CustomEvent('neo-toast', { detail: message }))
+
+export function Toasts() {
+  const [items, setItems] = useState([])
+  useEffect(() => {
+    const on = (e) => {
+      const id = Math.random()
+      setItems((x) => [...x.slice(-2), { id, text: e.detail }])
+      setTimeout(() => setItems((x) => x.filter((i) => i.id !== id)), 7000)
+    }
+    window.addEventListener('neo-toast', on)
+    return () => window.removeEventListener('neo-toast', on)
+  }, [])
+  if (!items.length) return null
+  return (
+    <div className="toasts" role="status" aria-live="polite">
+      {items.map((t) => <p key={t.id} className="toast">{t.text}<button type="button" aria-label="Dismiss" onClick={() => setItems((x) => x.filter((i) => i.id !== t.id))}>×</button></p>)}
+    </div>
+  )
+}
+
+/** The record named in the address (?focus=task-12), so a link opens that exact item, not the page it lives on. */
+export function useFocus() {
+  const [params] = useSearchParams()
+  return params.get('focus') || ''
+}
+
+/** "Rajiv Kapoor (Director)" or "Rajiv Kapoor (Director) or Anjali Desai (Regulatory)". */
+export const orList = (people = []) => (people.length <= 2 ? people.join(' or ') : `${people[0]}, ${people[1]} or ${people.length - 2} more`)
+
+/** Address of one record inside a project. `link` is a query string such as "tab=legal&focus=agreement-3" or "step=regulatory". */
+export const projectUrl = (projectId, link = '') => `/projects/${projectId}${link ? `?${link}` : ''}`
+
+/** What a person sees right after an action: who has the item now. */
+export function holderOf(review) {
+  const w = review?.with
+  return w?.people?.length ? orList(w.people) : ''
 }

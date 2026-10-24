@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { useCan, useMe, useStages } from '../context'
-import { fmtDate, label, useDo } from './bits'
+import { fmtDate, fmtDateTime, label, toast, useDo, useFocus } from './bits'
 import FormModal from './FormModal'
 
 /** "Request reopen" for approved or locked work: it is decided by someone with unlock permission, never silently edited. */
@@ -15,7 +15,7 @@ export function ReopenButton({ project, kind, refId, onChange, text = 'Request r
       {open && (
         <FormModal title="Request a reopen" intro="Approved work is locked. Say why it has to change; someone with permission to unlock records decides, and the decision is recorded."
           fields={[{ key: 'reason', label: 'Why does it have to be reopened?', type: 'textarea', required: true }]}
-          onSave={async (d) => onChange(await api.requestReopen(project.id, { kind, ref: String(refId), reason: d.reason }))}
+          onSave={async (d) => { const p = await api.requestReopen(project.id, { kind, ref: String(refId), reason: d.reason }); onChange(p); toast(`Request sent to ${p.reopen_requests[p.reopen_requests.length - 1]?.deciders?.join(' or ') || 'the people who can unlock records'}. They have been notified.`) }}
           onClose={() => setOpen(false)} submitLabel="Send request" />
       )}
     </>
@@ -25,15 +25,21 @@ export function ReopenButton({ project, kind, refId, onChange, text = 'Request r
 function Row({ r, project, onChange }) {
   const me = useMe()
   const can = useCan()
+  const focus = useFocus()
   const [note, setNote] = useState('')
   const { busy, error, run } = useDo()
   const may = r.status === 'pending' && can('lock_unlock') && (me.id !== r.requested_by.id || me.role_key === 'super_admin')
-  const go = (approve) => run(async () => { onChange(await api.decideReopen(r.id, { approve, note })); setNote('') })
+  const go = (approve) => run(async () => {
+    onChange(await api.decideReopen(r.id, { approve, note })); setNote('')
+    toast(approve ? `Reopen approved. ${r.requested_by.name} has been told and can now change it.` : `Reopen declined. ${r.requested_by.name} has been told why.`)
+  })
   return (
-    <li className={`reopen reopen-${r.status}`}>
+    <li id={`reopen-${r.id}`} className={`reopen reopen-${r.status} ${focus === `reopen-${r.id}` ? 'focus-flash' : ''}`}>
       <div><b>{label(r.kind)}: {r.label}</b>
-        <small>{r.requested_by.name} · {fmtDate(r.created_at)} · “{r.reason}”</small>
-        {r.status !== 'pending' && <small>{label(r.status)} by {r.decided_by?.name || '–'}{r.decision_note ? ` · “${r.decision_note}”` : ''}</small>}
+        <small>Requested by {r.requested_by.name} · {fmtDateTime(r.created_at)} · “{r.reason}”</small>
+        {r.status === 'pending' && <small className="reopen-who">Waiting for <b>{r.deciders?.length ? r.deciders.join(' or ') : 'someone who can unlock records'}</b>{r.waiting_days != null ? ` · ${r.waiting_days === 0 ? 'since today' : `${r.waiting_days} day${r.waiting_days === 1 ? '' : 's'}`}` : ''}</small>}
+        {r.status === 'pending' && !may && <small>{r.requested_by.id === me.id ? 'You asked for this. Until it is decided, nothing changes.' : 'Only people who can unlock records decide this. You can follow it here.'}</small>}
+        {r.status !== 'pending' && <small>{label(r.status)} by {r.decided_by?.name || '–'}{r.decided_at ? `, ${fmtDateTime(r.decided_at)}` : ''}{r.decision_note ? ` · “${r.decision_note}”` : ''}</small>}
       </div>
       {r.status === 'pending' ? (
         may ? (
@@ -43,7 +49,7 @@ function Row({ r, project, onChange }) {
             <button className="btn line sm" disabled={busy} onClick={() => go(false)}>Decline</button>
             {error && <small className="error">{error}</small>}
           </div>
-        ) : <span className="chip plain">Waiting for a decision</span>
+        ) : <span className="chip plain">With {r.deciders?.[0]?.split(' (')[0] || 'a decider'}{r.deciders?.length > 1 ? ` +${r.deciders.length - 1}` : ''}</span>
       ) : <span className={`dstate reopen-s-${r.status}`}>{label(r.status)}</span>}
     </li>
   )
@@ -70,7 +76,7 @@ export default function ReopenPanel({ project, onChange }) {
           fields={[{ key: 'ref', label: 'Stage', type: 'select', required: true, options: done.map((s) => [s.key, s.name]) },
             { key: 'reason', label: 'Why does it have to be reopened?', type: 'textarea', required: true }]}
           initial={{ ref: done[done.length - 1]?.key }}
-          onSave={async (d) => onChange(await api.requestReopen(project.id, { kind: 'stage', ref: d.ref, reason: d.reason }))}
+          onSave={async (d) => { const p = await api.requestReopen(project.id, { kind: 'stage', ref: d.ref, reason: d.reason }); onChange(p); toast(`Request sent to ${p.reopen_requests[p.reopen_requests.length - 1]?.deciders?.join(' or ') || 'the people who can unlock records'}. They have been notified.`) }}
           onClose={() => setAsking(false)} submitLabel="Send request" />
       )}
     </section>

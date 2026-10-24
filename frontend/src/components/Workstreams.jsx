@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { Link as RLink } from 'react-router-dom'
 import { api } from '../api'
-import { useCan, useConfig, useMe, useStages } from '../context'
+import { useAccess, useCan, useConfig, useMe, useStages } from '../context'
 import { withText } from './ActionPanel'
-import { Empty, Person, fmtDateTime, fmtDay, label, useDo } from './bits'
+import { Empty, Person, fmtDateTime, fmtDay, holderOf, label, toast, useDo, useFocus } from './bits'
+import { MiniHistory } from './Timeline'
 import FormModal from './FormModal'
 import ReviewAssistant from './ReviewAssistant'
 import Icon from './Icon'
@@ -16,6 +18,21 @@ function useReadOnly(project, feature) {
   const st = useStages().find((s) => (s.features || []).includes(feature))
   if (closedProject(project)) return true
   return !!st && !(me.role_key === 'super_admin' || can('manage_project') || st.owner_roles.includes(me.role_key) || st.approver_roles.includes(me.role_key))
+}
+
+
+/** Everyone on the project can read a workstream; only the roles that work on it can change it. Say so, with names. */
+function AccessNote({ project, feature }) {
+  const off = useReadOnly(project, feature)
+  const st = useStages().find((x) => (x.features || []).includes(feature))
+  const row = st && project.stages.find((r) => r.key === st.key)
+  if (!off || closedProject(project) || !st) return null
+  const h = row?.handoff || {}
+  return (
+    <p className="notice soft access-note">
+      You can read everything here, but only {st.owner}{h.owners?.length ? ` (${h.owners.join(', ')})` : ''} change it, and {st.approver}{h.approvers?.length ? ` (${h.approvers.join(', ')})` : ''} approve it.
+    </p>
+  )
 }
 
 /** Select that saves immediately; the server decides if the change is allowed. */
@@ -40,40 +57,64 @@ function EntryApproval({ kind, obj, project, onChange, disabled }) {
   const ui = ENTRY_UI[kind]
   const me = useMe()
   const can = useCan()
-  const title = ui.title ? ui.title(obj) : ''
-  const last = [...(project?.events || [])].reverse().find((e) => e.action === 'submit' && e.area === ui.area && e.note.startsWith(title))
-  const mayDecide = can('approve') && !(me.role_key !== 'super_admin' && last?.actor === me.name)
-  const feature = { agreement: 'agreements', dossier_item: 'dossier', mfr: 'mfr' }[kind]
-  const st = project?.flow.stages.find((x) => (x.features || []).includes(feature))
-  const row = st && project.stages.find((r) => r.key === st.key)
-  const approvers = st ? withText({ people: row?.handoff?.approvers, label: st.approver }) : 'an approver'
-  const asked = [...(project?.events || [])].reverse().find((e) => e.area === ui.area && ['reject', 'request_changes'].includes(e.action) && e.note.startsWith(title))
-  const reason = asked ? asked.note.slice(title.length).replace(/^: /, '') : ''
+  const rv = obj.review || {}
+  const w = rv.with
+  const sup = me.role_key === 'super_admin'
+  const mayDecide = obj.status === ui.review && can('approve') && (sup || (w?.ids || []).includes(me.id))
+  const who = w?.people?.length ? w.people.join(' or ') : 'an approver'
   const { busy, error, run } = useDo()
   const [asking, setAsking] = useState(false)
+  const [noting, setNoting] = useState(false)
   const [why, setWhy] = useState('')
+  const [localErr, setErr] = useState('')
   const go = (action, ask) => {
     if (ask && !asking) { setAsking(true); return }
-    if (ask && !why.trim()) { setErr('Write what needs to change. The person who did the work will see it.'); return }
-    run(async () => { onChange(await ui.act(obj.id, { action, note: ask ? why : '' })); setAsking(false); setWhy('') })
+    if (ask && !why.trim()) { setErr('Write what needs to change. The person who must fix it will see it.'); return }
+    run(async () => {
+      const p = await ui.act(obj.id, { action, note: ask || action === 'comment' ? why : '' })
+      onChange(p)
+      const list = { agreement: p.agreements, dossier_item: p.dossier_items, mfr: p.mfr_requests }[kind]
+      const after = list.find((x) => x.id === obj.id)
+      const to = holderOf(after?.review)
+      toast({ submit: `Sent to ${to || 'the approver'} for approval. They have been notified.`,
+        approve: `Approved.${rv.submitted?.by ? ` ${rv.submitted.by} has been told.` : ''}`,
+        reject: `Sent back${to ? ` to ${to}` : ''} with your reason. They have been notified.`,
+        comment: `Note sent${to ? ` to ${to}` : ''}.` }[action])
+      setAsking(false); setNoting(false); setWhy('')
+    })
   }
-  const [localErr, setErr] = useState('')
-  if (disabled) return null
+  if (disabled) return <span className="entry-actions"><EntryState rv={rv} status={obj.status} ui={ui} /></span>
   return (
     <span className="entry-actions">
-      {obj.status === 'changes_requested' && <small className="sentback-inline"><b>Changes requested{asked ? ` by ${asked.actor}` : ''}.</b> {reason && <>Reason: “{reason}”. </>}Fix it, then submit again.</small>}
-      {ui.work.includes(obj.status) && <button className="link" disabled={busy} title={`Sends it to ${approvers} to approve`} onClick={() => go('submit')}>Submit for approval</button>}
-      {obj.status === ui.review && !mayDecide && <small className="muted">Waiting for approval from {approvers}{last ? `. Submitted by ${last.actor}, ${fmtDateTime(last.created_at)}` : ''}</small>}
-      {obj.status === ui.review && mayDecide && (
+      <EntryState rv={rv} status={obj.status} ui={ui} />
+      {ui.work.includes(obj.status) && <button className="link" disabled={busy} title={`Sends it to ${who} to approve`} onClick={() => go('submit')}>Submit for approval{obj.status === 'changes_requested' ? ' again' : ''}</button>}
+      {mayDecide && (
         <>
           <button className="link" disabled={busy} onClick={() => go('approve')}>Approve</button>
           <button className="link danger" disabled={busy} onClick={() => go('reject', true)}>{asking ? 'Send back with this reason' : 'Request changes'}</button>
-          {asking && <textarea className="entry-why" rows={2} autoFocus value={why} onChange={(e) => { setWhy(e.target.value); setErr('') }} placeholder="What needs to change? (required)" aria-label="What needs to change" />}
         </>
       )}
+      {obj.status === ui.review && !mayDecide && <small className="muted">Only {who} can decide this. You can follow it here.</small>}
+      {(asking || noting) && <textarea className="entry-why" rows={2} autoFocus value={why} onChange={(e) => { setWhy(e.target.value); setErr('') }} placeholder={asking ? 'What needs to change? (required)' : 'Your note'} aria-label={asking ? 'What needs to change' : 'Your note'} />}
+      {noting && <button className="link" disabled={busy} onClick={() => go('comment')}>Send note{who && obj.status === ui.review ? ` to ${who}` : ''}</button>}
+      {!asking && !noting && obj.status !== 'signed' && <button className="link note-link" onClick={() => setNoting(true)}>+ Add a note</button>}
       {localErr && <small className="error" role="alert">{localErr}</small>}
       {error && <small className="error" role="alert">{error}</small>}
     </span>
+  )
+}
+
+/** Who has an entry and what they must do, in the cell where its status is shown. */
+function EntryState({ rv, status, ui }) {
+  const w = rv?.with
+  return (
+    <>
+      {status === 'changes_requested' && rv.changes && <small className="sentback-inline"><b>Changes requested by {rv.changes.by}, {fmtDateTime(rv.changes.at)}.</b> Reason: “{rv.changes.note || 'none written'}”. {rv.changes.fixer ? `${rv.changes.fixer} must fix it` : 'Fix it'}, then submit it again.</small>}
+      {status === ui.review && <small className="entry-with">Waiting for approval from <b>{w?.people?.length ? w.people.join(' or ') : 'an approver'}</b>{rv.submitted ? <> · submitted by {rv.submitted.by}, {fmtDateTime(rv.submitted.at)}</> : null}</small>}
+      {rv?.history?.length > 0 && (
+        <details className="more entry-hist"><summary>History ({rv.history.length})</summary><MiniHistory rows={rv.history} /></details>
+      )}
+    </>
   )
 }
 const opts = (list) => list.map((x) => [x, label(x)])
@@ -91,14 +132,14 @@ export function LegalTab({ project, onChange }) {
 
   const table = (rows) => (
     <div className="table-scroll"><table className="table compact">
-      <thead><tr><th>Agreement</th><th>Counterparty</th><th>Status</th><th>Owner</th><th>Due</th><th>Signed</th><th /></tr></thead>
+      <thead><tr><th>Agreement</th><th>Counterparty</th><th>Status and who has it</th><th>Responsible</th><th>Due</th><th>Signed</th><th /></tr></thead>
       <tbody>
         {rows.map((a) => (
-          <tr key={a.id} className={a.overdue ? 'row-late' : ''}>
+          <tr key={a.id} id={`agreement-${a.id}`} className={a.overdue ? 'row-late' : ''}>
             <td><strong>{a.label}</strong>{a.age_days > 0 && a.status !== 'not_started' && a.status !== 'signed' && <small className="sub">open {a.age_days} days</small>}</td>
             <td data-label="Counterparty">{a.counterparty || <span className="muted">–</span>}</td>
             <td data-label="Status"><QuickSelect value={a.status} options={opts(config.agreement_status)} disabled={off} label={`${a.label} status`} onSave={async (v) => onChange(await api.updateAgreement(a.id, { status: v }))} /><EntryApproval project={project} kind="agreement" obj={a} onChange={onChange} disabled={off} /></td>
-            <td data-label="Owner">{a.owner ? a.owner.name : <span className="muted">–</span>}</td>
+            <td data-label="Responsible">{a.owner ? <Person user={a.owner} /> : <span className="muted">Not assigned</span>}</td>
             <td data-label="Due" className={a.overdue ? 'late' : ''}>{fmtDay(a.due_date)}</td>
             <td data-label="Signed">{fmtDay(a.signed_date)}</td>
             <td><span className="row-end">{a.link && <Link href={a.link} />}<button className="link" disabled={off} onClick={() => setEdit(a)}>Edit</button></span></td>
@@ -118,6 +159,7 @@ export function LegalTab({ project, onChange }) {
 
   return (
     <>
+      <AccessNote project={project} feature="agreements" />
       <section className="panel">
         <header>
           <div><h3>Core agreements</h3><p className="muted">Supplier, Quality and PV run in parallel. Each is reviewed and approved before signature; the Legal workstream can only be submitted when all three are signed.</p></div>
@@ -166,6 +208,7 @@ export function RegulatoryTab({ project, onChange }) {
 
   return (
     <>
+      <AccessNote project={project} feature="dossier" />
       <section className="panel">
         <header><h3>Submission type</h3></header>
         <div className="row2">
@@ -192,7 +235,7 @@ export function RegulatoryTab({ project, onChange }) {
             <thead><tr><th>Module</th><th>Item</th><th>Status</th><th>File</th><th /></tr></thead>
             <tbody>
               {project.dossier_items.map((i) => (
-                <tr key={i.id}>
+                <tr key={i.id} id={`dossier_item-${i.id}`}>
                   <td data-label="Module">{i.module ? <span className="chip plain">{i.module}</span> : <span className="muted">–</span>}</td>
                   <td><strong>{i.title}</strong>{!i.required && <small className="sub">optional</small>}{i.notes && <small className="sub">{i.notes}</small>}</td>
                   <td data-label="Status"><QuickSelect value={i.status} options={opts(config.dossier_status)} disabled={off} label={`${i.title} status`} onSave={async (v) => onChange(await api.updateDossierItem(i.id, { status: v }))} /><EntryApproval project={project} kind="dossier_item" obj={i} onChange={onChange} disabled={off} /></td>
@@ -269,6 +312,7 @@ export function ManufacturerTab({ project, onChange }) {
   ]
   return (
     <>
+      <AccessNote project={project} feature="mfr" />
       <section className="panel">
         <header>
           <div><h3>Manufacturer / technical data</h3><p className="muted">COA, MSDS, specification, testing, stability and manufacturing data. {got}/{project.mfr_requests.length} accepted.</p></div>
@@ -281,7 +325,7 @@ export function ManufacturerTab({ project, onChange }) {
             <thead><tr><th>Data</th><th>Manufacturer</th><th>Needed for</th><th>Status</th><th>Needed by</th><th>Received</th><th>File</th><th /></tr></thead>
             <tbody>
               {project.mfr_requests.map((m) => (
-                <tr key={m.id} className={m.overdue ? 'row-late' : ''}>
+                <tr key={m.id} id={`mfr-${m.id}`} className={m.overdue ? 'row-late' : ''}>
                   <td><strong>{m.label}</strong>{!m.required && <small className="sub">optional</small>}{m.notes && <small className="sub">{m.notes}</small>}</td>
                   <td data-label="Manufacturer">{m.manufacturer || '–'}</td>
                   <td data-label="Needed for">{m.needed_for || '–'}</td>
@@ -312,7 +356,8 @@ export function ManufacturerTab({ project, onChange }) {
 function RfiCard({ rfi, project, onChange }) {
   const me = useMe()
   const can = useCan()
-  const [open, setOpen] = useState(rfi.status !== 'closed')
+  const focus = useFocus()
+  const [open, setOpen] = useState(rfi.status !== 'closed' || focus === `rfi-${rfi.id}`)
   const [note, setNote] = useState('')
   const [adding, setAdding] = useState(false)
   const [link, setLink] = useState(rfi.response_link)
@@ -323,7 +368,7 @@ function RfiCard({ rfi, project, onChange }) {
   const saveLink = () => run(async () => onChange(await api.updateRfi(rfi.id, { response_link: link })))
 
   return (
-    <article className={`rfi r-${rfi.status}`}>
+    <article className={`rfi r-${rfi.status}`} id={`rfi-${rfi.id}`}>
       <header onClick={() => setOpen(!open)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setOpen(!open)}>
         <div className="t-title"><strong>{rfi.reference || 'RFI'} · {rfi.authority}</strong><small>{rfi.summary || 'No summary'}</small></div>
         <span className={`age ${rfi.overdue ? 'age-over' : 'age-ok'}`}>{rfi.due_date ? `Due ${fmtDay(rfi.due_date)}` : 'No due date'}</span>
@@ -387,7 +432,7 @@ function RfiQuestion({ q, disabled, onChange }) {
       <div className="q-head">
         <b>Q{q.number}</b><span>{q.question}</span>
       </div>
-      {t && <div className="q-meta"><Person user={t.assignee} /><span className="muted">due {fmtDay(t.due_at)}</span><span className={`tstate tstate-${t.state}`}>{label(t.state)}</span>{t.overdue && <span className="age age-over">Overdue</span>}<a className="link q-task" href="?tab=tasks">{t.assignee.id === me.id ? 'Your task' : 'Open task'}</a></div>}
+      {t && <div className="q-meta"><Person user={t.assignee} /><span className="muted">due {fmtDay(t.due_at)}</span><span className={`tstate tstate-${t.state}`}>{label(t.state)}</span>{t.overdue && <span className="age age-over">Overdue</span>}<RLink className="link q-task" to={`?tab=tasks&focus=task-${t.id}`}>{t.assignee.id === me.id ? 'Your task' : 'Open task'}</RLink></div>}
       <textarea rows={2} value={response} disabled={disabled} onChange={(e) => setResponse(e.target.value)} placeholder="Response / evidence summary…" />
       <div className="inline">
         <input type="url" value={evidence} disabled={disabled} onChange={(e) => setEvidence(e.target.value)} placeholder="Link to evidence (https://…)" />

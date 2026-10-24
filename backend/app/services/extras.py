@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from .. import workflow
 from ..models import Clarification, Document, Project, ReopenRequest, Task, TaskAttachment, User
-from . import common, engine, modules, notify
+from . import common, engine, modules, notify, people
 from .common import Forbidden, WorkflowError
 
 
@@ -25,7 +25,11 @@ def add_attachment(db: Session, user: User, t: Task, name: str, link: str, note:
     name = (name or t.title).strip()[:200]
     n = 1 + sum(1 for a in t.attachments if a.name.lower() == name.lower())
     t.attachments.append(TaskAttachment(name=name, version_no=n, link=link, note=note.strip(), round=t.rework_count, created_by=user.name))
-    common.log(p, user, "task", "attachment", f"{t.title}: {name} V{n} attached", t.stage_key, t.id)
+    others = {t.assignee_id, t.assigner_id} - {None, user.id}
+    to = ", ".join(sorted({u.name for u in (t.assignee, t.assigner) if u and u.id != user.id}))
+    for uid in others:
+        notify.notify(db, uid, "note", "File attached to a task", notify.task_line(t, "Open the file") + f" · {user.name} attached {name} V{n}", p.id, t.id)
+    common.log(p, user, "task", "attachment", f"{t.title}: {name} V{n} attached", t.stage_key, t.id, to=to)
     db.commit()
     return t
 
@@ -145,10 +149,12 @@ def request_reopen(db: Session, user: User, p: Project, kind: str, ref: str, rea
     r = ReopenRequest(kind=kind, ref=ref, label=label, reason=reason, requested_by_id=user.id)
     r.requested_by = user
     p.reopen_requests.append(r)
-    common.log(p, user, "project", "reopen_requested", f"{label}: {reason}", ref if kind == "stage" else getattr(obj, "stage_key", ""))
-    for u in db.scalars(select(User).where(User.active)):
-        if u.id != user.id and u.can("lock_unlock"):
-            notify.notify(db, u.id, "approval", "Reopen requested", f"Project: {p.name} · {user.name} asks to reopen {label} · {reason}", p.id)
+    db.flush()
+    deciders = people.deciders_for_reopen(db, user.id)
+    common.log(p, user, "project", "reopen_requested", f"{label}: {reason}", ref if kind == "stage" else getattr(obj, "stage_key", ""),
+               ref=("reopen", r.id), to=people.names(deciders))
+    notify.notify_users(db, deciders, "approval", "Reopen requested", f"Project: {p.name} · {user.name} asks to reopen {label} · {reason} · Action: approve or decline",
+                        p.id, link=f"tab=overview&focus=reopen-{r.id}")
     db.commit()
     return r
 
@@ -171,12 +177,18 @@ def decide_reopen(db: Session, user: User, r: ReopenRequest, approve: bool, note
             t = db.get(Task, int(r.ref))
             t.state, t.rework_count = "changes_requested", t.rework_count + 1
             notify.notify(db, t.assignee_id, "changes", "Task reopened", notify.task_line(t, "Amend it, add a new version and resubmit"), p.id, t.id)
+            common.log(p, user, "task", "reopened", f"{t.title}: reopened for {r.requested_by.name}'s request", t.stage_key, t.id, to=t.assignee.name)
         elif r.kind == "document":
-            db.get(Document, int(r.ref)).status = "returned"
+            d = db.get(Document, int(r.ref))
+            d.status = "returned"
+            common.log(p, user, "artwork" if d.is_artwork else "document", "reopened", f"{d.title}: reopened. {r.reason}", d.stage_key,
+                       ref=("document", d.id), to=r.requested_by.name)
         else:
             from .. import schemas as sc
             engine.apply_action(db, user, p, sc.ActionIn(action="return", note=f"Reopen approved: {r.reason}", to_stage=r.ref))
-    notify.notify(db, r.requested_by_id, "approval", "Reopen " + ("approved" if approve else "declined"), f"Project: {p.name} · {r.label} · {note}".strip(" ·"), p.id)
-    common.log(p, user, "project", "reopen_" + ("approved" if approve else "rejected"), f"{r.label}: {note}".strip(": "))
+    notify.notify(db, r.requested_by_id, "approval", "Reopen " + ("approved" if approve else "declined"),
+                  f"Project: {p.name} · {r.label} · Decided by {user.name}" + (f" · {note}" if note else "") + (" · Action: make the changes" if approve else ""), p.id,
+                  link=f"tab=overview&focus=reopen-{r.id}")
+    common.log(p, user, "project", "reopen_" + ("approved" if approve else "rejected"), f"{r.label}: {note}".strip(": "), ref=("reopen", r.id), to=r.requested_by.name)
     db.commit()
     return r

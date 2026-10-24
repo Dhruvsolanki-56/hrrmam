@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useMe } from '../context'
-import { fmtDay, label } from './bits'
+import { fmtDay, label, toast } from './bits'
 import FormModal from './FormModal'
 import Icon from './Icon'
 
@@ -15,11 +15,11 @@ function Decision({ f, project, canDecide, onDone }) {
     <>
       <button className="link" onClick={() => setOpen(true)}>Record decision</button>
       {open && (
-        <FormModal title="Record your decision" intro="The assistant only points things out. You decide, and your note stays on the record."
-          fields={[{ key: 'decision', label: 'Decision', type: 'select', required: true, options: [['acknowledged', 'Acknowledged: will act on it'], ['dismissed', 'Dismissed: not an issue']] },
-            { key: 'note', label: 'Why?', type: 'textarea', required: true }]}
+        <FormModal title="Record your decision" intro={`Your decision and reason are saved on this finding with your name and the time. ${project.project_manager ? `${project.project_manager.name} (Project Manager) and the Regulatory team are told.` : 'The Regulatory team is told.'} It does not approve or reject the dossier.`}
+          fields={[{ key: 'decision', label: 'Your decision', type: 'select', required: true, options: [['acknowledged', 'Acknowledged: we will act on it'], ['dismissed', 'Dismissed: it is not an issue']] },
+            { key: 'note', label: 'Your reason (saved with your name)', type: 'textarea', required: true }]}
           initial={{ decision: 'acknowledged' }}
-          onSave={async (d) => onDone(await api.reviewDecision(project.id, { key: f.key, ...d }))} onClose={() => setOpen(false)} submitLabel="Record" />
+          onSave={async (d) => { onDone(await api.reviewDecision(project.id, { key: f.key, ...d })); toast('Decision recorded. The project manager and the Regulatory team have been told.') }} onClose={() => setOpen(false)} submitLabel="Save my decision" />
       )}
     </>
   )
@@ -83,7 +83,7 @@ export default function ReviewAssistant({ project }) {
       </ul>
 
       {adding && (
-        <FormModal title="Record a dossier value" intro="Read a number from the dossier and note where it is. It is compared with the controlled reference material."
+        <FormModal title="Record a dossier value" intro="Read a number from the dossier and note where it is. It is compared with the controlled reference material. Saving it does not send anything to anyone; it only adds the value to the checks below."
           fields={[{ key: 'parameter', label: 'Parameter', type: 'text', required: true, placeholder: 'e.g. Impurity X' },
             { key: 'value', label: 'Value', type: 'text', required: true, half: true, placeholder: 'e.g. 0.50' },
             { key: 'unit', label: 'Unit', type: 'text', half: true, placeholder: '%' },

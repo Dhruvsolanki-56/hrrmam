@@ -40,12 +40,12 @@ export default function Legal() {
               {items.map((r, i) => (
                 <tr key={r.id} className={`reg-row ${r.overdue ? 'row-late' : ''}`}>
                   <td data-label="Sr" className="num">{(page - 1) * 20 + i + 1}</td>
-                  <td className="proj-cell"><Link to={`/projects/${r.project_id}?tab=legal`} className="cell-main"><span><strong>{r.project_name}</strong><small>{r.project_code || 'Code pending'}</small></span></Link></td>
+                  <td className="proj-cell"><Link to={`/projects/${r.project_id}?tab=legal&focus=agreement-${r.id}`} className="cell-main"><span><strong>{r.project_name}</strong><small>{r.project_code || 'Code pending'}</small></span></Link></td>
                   <td data-label="Agreement">{r.label}{r.core && <small className="sub">Core</small>}</td>
                   <td data-label="Parties">{r.counterparty || '–'}</td>
                   <td data-label="Started">{fmtDay(r.started_on)}</td>
                   <td data-label="Owner">{r.owner?.name || '–'}</td>
-                  <td data-label="Status"><span className={`dstate ag-${r.status}`}>{label(r.status)}</span></td>
+                  <td data-label="Status"><span className={`dstate ag-${r.status}`}>{label(r.status)}</span>{r.review?.with?.people?.length > 0 && <small className="sub">{r.review.with.action === 'approve' ? 'Waiting for approval from' : 'With'} {r.review.with.people.join(' or ')}</small>}</td>
                   <td data-label="Due" className={r.overdue ? 'late' : ''}>{fmtDay(r.due_date)}</td>
                   <td data-label="Final sign">{fmtDay(r.signed_date)}</td>
                   <td data-label="Age">{r.closed ? <b>Closed</b> : r.age_days != null && r.status !== 'not_started' ? `${r.age_days} days` : '–'}</td>

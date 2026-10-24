@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import logo from '../assets/neohealth-logo.svg?raw'
 import { api } from '../api'
 import { useApp, useCan, useMe } from '../context'
-import { Avatar, fmtDateTime } from './bits'
+import { Avatar, Toasts, fmtDateTime, projectUrl } from './bits'
 import Icon from './Icon'
 import NewProjectModal from './NewProjectModal'
 
@@ -53,7 +53,7 @@ function Bell() {
           <ul>
             {(items || []).map((n) => (
               <li key={n.id} className={`n-${n.kind} ${n.read ? '' : 'unread'}`}>
-                <button onClick={() => { setOpen(false); n.project_id && nav(`/projects/${n.project_id}${n.task_id ? '?tab=tasks' : ''}`) }}>
+                <button onClick={() => { setOpen(false); n.project_id && nav(projectUrl(n.project_id, n.link || (n.task_id ? `tab=tasks&focus=task-${n.task_id}` : ''))) }}>
                   <strong>{n.title}</strong>
                   <span>{tidy(n.body)}</span>
                   <small>{fmtDateTime(n.created_at)}</small>
@@ -218,6 +218,7 @@ export default function Layout({ title, subtitle, back, backLabel = 'All project
       </main>
       </div>
 
+      <Toasts />
       {creating && <NewProjectModal onClose={() => setCreating(false)} onCreated={(p) => { setCreating(false); navigate(`/projects/${p.id}`) }} />}
     </div>
   )

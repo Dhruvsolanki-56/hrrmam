@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { stageOf, useCan, useMe, useStages } from '../context'
-import { DueChip, Person, TaskChip, UserSelect, fmtDateTime, fromInput, inDays, label, useDo } from './bits'
+import { DueChip, Person, TaskChip, UserSelect, fmtDateTime, fromInput, inDays, label, toast, useDo, useFocus } from './bits'
 import FormModal from './FormModal'
 import { ReopenButton } from './Reopen'
+import { MiniHistory } from './Timeline'
 
 /** One task with its whole cycle: accept -> work -> submit -> approve / changes requested, plus date negotiation. */
 export default function TaskCard({ task, onChanged, showProject, defaultOpen, project }) {
@@ -12,7 +13,10 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
   const can = useCan()
   const stages = useStages()
   const st = stageOf(stages, task.stage_key)
-  const [open, setOpen] = useState(!!defaultOpen)
+  const focus = useFocus()
+  const [open, setOpen] = useState(!!defaultOpen || focus === `task-${task.id}`)
+  const [posting, setPosting] = useState(false)
+  const [text, setText] = useState('')
   const [note, setNote] = useState('')
   const [proposed, setProposed] = useState(inDays(3))
   const [asking, setAsking] = useState(false)
@@ -41,19 +45,42 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
     locked: <>Approved and locked.</>,
   }[task.state] || label(task.state)
 
+  const others = [task.assignee, task.assigner].filter((u) => u && u.id !== me.id).map((u) => u.name).join(' and ')
+  const SAID = {
+    submit: `Sent to ${approverName} for approval. They have been notified.`,
+    approve: `Approved. ${task.assignee.name} has been told.`,
+    request_changes: `Sent back to ${task.assignee.name} with your reason. They have been notified.`,
+    request_date: `Request sent to ${task.assigner?.name || 'the assigner'}. The original date stands until they decide.`,
+    approve_date: `New date approved. ${task.assignee.name} has been told.`,
+    reject_date: `Original date kept. ${task.assignee.name} has been told why.`,
+    accept: `Accepted. ${task.assigner?.name || 'The assigner'} can see you have taken it on.`,
+    comment: `Note posted${others ? ` and sent to ${others}` : ''}.`,
+    reassign: 'Reassigned. The new owner has been notified.',
+  }
   const go = (action, extra = {}) => run(async () => {
-    const result = await api.taskAct(task.id, { action, note, ...extra })
-    setNote(''); setAsking(false)
+    const body = action === 'comment' ? text : note
+    if (action === 'comment' && !body.trim()) throw new Error('Write the note first.')
+    const result = await api.taskAct(task.id, { action, note: body, ...extra })
+    setNote(''); setText(''); setPosting(false); setAsking(false)
     onChanged?.(result)
+    if (SAID[action]) toast(SAID[action])
   })
+  const nextLine = {
+    assigned: <><b>{task.assignee.name}</b> must accept the task.</>,
+    accepted: <><b>{task.assignee.name}</b> must start the work.</>,
+    in_progress: <><b>{task.assignee.name}</b> must finish it and submit it for approval.</>,
+    submitted: <><b>{approverName}</b> must approve it or request changes.</>,
+    resubmitted: <><b>{approverName}</b> must approve it or request changes.</>,
+    changes_requested: <><b>{task.assignee.name}</b> must fix it and resubmit.</>,
+  }[task.state]
 
   return (
-    <article className={`task t-${task.state} ${task.overdue ? 'is-late' : ''} ${showProject && task.assignee.id === me.id ? 'mine' : ''}`}>
+    <article id={`task-${task.id}`} className={`task t-${task.state} ${task.overdue ? 'is-late' : ''} ${showProject && task.assignee.id === me.id ? 'mine' : ''}`}>
       <header onClick={() => setOpen(!open)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setOpen(!open)} aria-expanded={open}>
         <div className="t-title">
           <strong>{task.title}</strong>
           <small>
-            {showProject && <Link to={`/projects/${task.project_id}?tab=tasks`} onClick={(e) => e.stopPropagation()}>{task.project_name} · </Link>}
+            {showProject && <Link to={`/projects/${task.project_id}?tab=tasks&focus=task-${task.id}`} onClick={(e) => e.stopPropagation()}>{task.project_name} · </Link>}
             {st.name}{!task.required && ' · optional'}{task.rework_count > 0 && ` · ↺ ${task.rework_count}`}
           </small>
         </div>
@@ -70,6 +97,7 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
           <p className="muted">Assigned by {task.assigner?.name || '–'} · due {fmtDateTime(task.due_at)}</p>
           <div className={`handoff t-${task.state}`}>
             <p className="handoff-line">{holder}</p>
+            {nextLine && <p className="handoff-next"><span>Next action</span> {nextLine}</p>}
           </div>
           {task.last_changes && (
             <div className="sentback" role="note">
@@ -89,6 +117,7 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
               </ul>
             )}
             {task.open && (isAssignee || isAssigner || can('manage_project')) && <button className="link" onClick={() => setAttaching(true)}>+ Attach a file</button>}
+            {task.attachments?.length > 0 && <small className="muted">Everyone on this project can open these files.</small>}
             {task.state === 'changes_requested' && task.attachments?.length > 0 && isAssignee && <small className="muted">Attach the corrected file as a new version, then resubmit.</small>}
           </div>
 
@@ -130,13 +159,28 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
             )}
             {canDecide && <button className="btn primary" disabled={busy} onClick={() => go('approve')}>Approve</button>}
             {canDecide && <button className="btn line" disabled={busy} onClick={() => { if (!note.trim()) { setNoting(true); return } go('request_changes') }}>Request changes</button>}
-            {project && ['approved', 'locked'].includes(task.state) && !can('lock_unlock') && <ReopenButton project={project} kind="task" refId={task.id} onChange={onChanged} />}
-            {project && ['approved', 'locked'].includes(task.state) && can('lock_unlock') && <ReopenButton project={project} kind="task" refId={task.id} onChange={onChanged} text="Request reopen (amend)" />}
+            {project && ['approved', 'locked'].includes(task.state) && (isAssignee || isAssigner || can('manage_project')) && !can('lock_unlock') && <ReopenButton project={project} kind="task" refId={task.id} onChange={onChanged} />}
+            {project && ['approved', 'locked'].includes(task.state) && (isAssignee || isAssigner || can('manage_project')) && can('lock_unlock') && <ReopenButton project={project} kind="task" refId={task.id} onChange={onChanged} text="Request reopen (amend)" />}
             {task.state === 'approved' && can('lock_unlock') && <button className="btn line" disabled={busy} onClick={() => go('lock')}>Lock</button>}
             {task.state === 'locked' && can('lock_unlock') && <button className="btn line" disabled={busy} onClick={() => { if (!note.trim()) { setNoting(true); return } go('unlock') }}>Unlock</button>}
             {!task.required && task.open && can('bypass_optional') && <button className="btn line" disabled={busy} onClick={() => go('bypass')}>Bypass optional work</button>}
-            {!noting && !asking && task.state !== 'locked' && <button className="link note-link" onClick={() => setNoting(true)}>+ Add a note</button>}
           </div>
+
+          {(task.notes?.length > 0 || posting) && (
+            <div className="t-notes">
+              <h4>Notes</h4>
+              <ul>
+                {task.notes.map((n) => <li key={n.id}><p>{n.note}</p><small>{n.by} · {fmtDateTime(n.at)}</small></li>)}
+              </ul>
+              {posting && (
+                <label className="field">Your note{others ? ` (goes to ${others})` : ''}
+                  <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} autoFocus placeholder="Write it here. It is saved on this task with your name and the time." />
+                </label>
+              )}
+            </div>
+          )}
+          {posting && <div className="actions tight"><button className="btn primary sm" disabled={busy} onClick={() => go('comment')}>Post note</button><button className="btn ghost sm" onClick={() => { setPosting(false); setText('') }}>Cancel</button></div>}
+          {!posting && task.state !== 'locked' && <button className="link note-link" onClick={() => setPosting(true)}>+ Add a note</button>}
 
           {can('reassign') && task.open && (
             <details className="more">
@@ -148,6 +192,12 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
             </details>
           )}
 
+          {task.history?.length > 0 && (
+            <details className="more">
+              <summary>History of this task ({task.history.length})</summary>
+              <MiniHistory rows={task.history} />
+            </details>
+          )}
           {task.date_requests.filter((r) => r.status !== 'pending').length > 0 && (
             <details className="more">
               <summary>Date history</summary>
@@ -165,7 +215,7 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
           fields={[{ key: 'name', label: 'File name', type: 'text', placeholder: task.title }, { key: 'link', label: 'Link', type: 'url', required: true, placeholder: 'https://…' },
             { key: 'note', label: 'What is this version?', type: 'textarea' }]}
           initial={{ name: task.attachments?.[task.attachments.length - 1]?.name || '' }}
-          onSave={async (d) => onChanged?.(await api.addAttachment(task.id, d))} onClose={() => setAttaching(false)} submitLabel="Attach" />
+          onSave={async (d) => { onChanged?.(await api.addAttachment(task.id, d)); toast(`File attached to this task${others ? ` and ${others} ${others.includes(' and ') ? 'have' : 'has'} been notified` : ''}.`) }} onClose={() => setAttaching(false)} submitLabel="Attach" />
       )}
     </article>
   )

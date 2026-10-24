@@ -46,7 +46,7 @@ export default function Audit() {
                   <td data-label="Project"><Link to={`/projects/${e.project_id}?tab=activity`}><strong>{e.project_name}</strong></Link><small className="sub">{stageName(e.stage_key)}</small></td>
                   <td data-label="Area"><span className="chip plain">{label(e.area)}</span></td>
                   <td data-label="Action" className="nowrap">{actionLabel(e)}</td>
-                  <td data-label="Detail" className={`wrap ${e.note ? '' : 'no-note'}`}>{e.note || '–'}</td>
+                  <td data-label="Detail" className={`wrap ${e.note ? '' : 'no-note'}`}>{e.note || '–'}{e.to && <small className="sub">To {e.to}</small>}{e.link && <Link className="ev-open" to={`/projects/${e.project_id}?${e.link}`}>Open</Link>}</td>
                   <td data-label="By" className="nowrap">{e.actor}</td>
                 </tr>
               ))}

@@ -26,9 +26,9 @@ export default function Regulatory() {
           <ul className="rows">
             {d.ra_review_queue.map((x, i) => (
               <li key={i}>
-                {x.type === 'stage' && <Link to={`/projects/${x.project_id}`}><div><strong>{x.stage_name}</strong><small>{x.project_name} · stage awaiting approval</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
-                {x.type === 'artwork' && <Link to={`/projects/${x.document.project_id}?tab=artwork`}><div><strong>{x.document.title}</strong><small>{x.document.project_name} · {x.document.is_artwork ? 'artwork' : 'document'} V{x.document.current_version} · regulatory review</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
-                {x.type === 'manufacturer' && <Link to={`/projects/${x.request.project_id}?tab=manufacturer`}><div><strong>{x.request.label}</strong><small>{x.request.project_name} · {label(x.request.status)}</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
+                {x.type === 'stage' && <Link to={`/projects/${x.project_id}?step=${x.stage_key}`}><div><strong>{x.stage_name}</strong><small>{x.project_name} · stage awaiting approval</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
+                {x.type === 'artwork' && <Link to={`/projects/${x.document.project_id}?tab=${x.document.is_artwork ? 'artwork' : 'documents'}&focus=doc-${x.document.id}`}><div><strong>{x.document.title}</strong><small>{x.document.project_name} · {x.document.is_artwork ? 'artwork' : 'document'} V{x.document.current_version} · regulatory review</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
+                {x.type === 'manufacturer' && <Link to={`/projects/${x.request.project_id}?tab=manufacturer&focus=mfr-${x.request.id}`}><div><strong>{x.request.label}</strong><small>{x.request.project_name} · {label(x.request.status)}</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
               </li>
             ))}
           </ul>
@@ -57,7 +57,7 @@ export default function Regulatory() {
           {!d.missing_manufacturer_data.length && <Empty>Nothing outstanding.</Empty>}
           <ul className="rows">
             {d.missing_manufacturer_data.map((m) => (
-              <li key={m.id}><Link to={`/projects/${m.project_id}?tab=manufacturer`}>
+              <li key={m.id}><Link to={`/projects/${m.project_id}?tab=manufacturer&focus=mfr-${m.id}`}>
                 <div><strong>{m.label}</strong><small>{m.project_name} · {m.manufacturer || 'manufacturer'}</small></div>
                 <span className={`age ${m.overdue ? 'age-over' : 'age-ok'}`}>{m.due_date ? fmtDay(m.due_date) : label(m.status)}</span>
               </Link></li>
@@ -69,7 +69,7 @@ export default function Regulatory() {
           {!d.rfi_cases.length && <Empty>No open RFI cases.</Empty>}
           <ul className="rows">
             {d.rfi_cases.map((r) => (
-              <li key={r.id}><Link to={`/projects/${r.project_id}?tab=rfi`}>
+              <li key={r.id}><Link to={`/projects/${r.project_id}?tab=rfi&focus=rfi-${r.id}`}>
                 <div><strong>{r.reference || 'RFI'} · {r.authority}</strong><small>{r.project_name} · {label(r.status)} · {r.questions.length} questions</small></div>
                 <span className={`age ${r.overdue ? 'age-over' : 'age-ok'}`}>{fmtDay(r.due_date)}</span>
               </Link></li>
@@ -108,7 +108,7 @@ function MyTasks({ tasks }) {
     <>
       <ul className="rows">
         {items.map((t) => (
-          <li key={t.id}><Link to={`/projects/${t.project_id}?tab=tasks`}>
+          <li key={t.id}><Link to={`/projects/${t.project_id}?tab=tasks&focus=task-${t.id}`}>
             <div><strong>{t.title}</strong><small>{t.project_name} · {label(t.state)}</small></div>
             <span className={`age ${t.overdue ? 'age-over' : 'age-ok'}`}>{t.overdue ? 'Overdue · ' : ''}{fmtDate(t.due_at)}</span>
           </Link></li>

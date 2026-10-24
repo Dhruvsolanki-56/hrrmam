@@ -1,5 +1,5 @@
 import { useStages } from '../context'
-import { StateChip, label } from './bits'
+import { StateChip, label, orList } from './bits'
 
 const DOSSIER_DONE = ['reviewed', 'ready']
 const MFR_DONE = ['accepted']
@@ -69,13 +69,14 @@ export default function Lanes({ project, goTab }) {
         {lanes.map((s) => {
           const r = rowOf(s.key)
           const sum = summarise(project, s, r)
-          const owner = ownerOf(project, s.key)
+          const w = r.handoff?.with
+          const owner = w ? `${w.action === 'approve' ? 'Approval: ' : ''}${orList(w.people) || s.owner}` : ownerOf(project, s.key) || s.owner
           const late = project.tasks.filter((t) => t.stage_key === s.key && t.overdue).length
           const pct = sum.total ? (sum.done / sum.total) * 100 : ['approved', 'bypassed'].includes(r.state) ? 100 : 0
           return (
             <li key={s.key}>
               <button className={`lane lane-${r.state}`} onClick={() => goTab(s.tab || 'tasks')}>
-                <span className="lane-name"><b>{s.name}</b><small>{owner || s.owner}</small></span>
+                <span className="lane-name"><b>{s.name}</b><small>{owner}</small></span>
                 <span className="lane-state">
                   <span className="lane-top"><StateChip state={r.state} locked={r.locked} />{late > 0 && <span className="lane-late">{late} late</span>}{r.rework_count > 0 && <span className="lane-back">sent back {r.rework_count}×</span>}</span>
                   <small>{sum.text}{sum.more && <> · {sum.more}</>}</small>

@@ -4,11 +4,11 @@ Nothing here names a stage: the process comes from the project's workflow versio
 from datetime import date
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, object_session, selectinload
 
 from .. import workflow
 from ..models import Project, ProjectStage, User, aware
-from . import common, modules, notify, workflows
+from . import common, modules, notify, people, workflows
 from .common import Forbidden, WorkflowError
 
 SAT = workflow.SATISFIED
@@ -28,7 +28,7 @@ def get_project(db: Session, project_id: int) -> Project:
 
 
 # ---------------------------------------------------------------- stage bookkeeping
-def _activate(row: ProjectStage):
+def _activate(row: ProjectStage, user: User | None = None, why: str = ""):
     row.state = "in_progress"
     row.started_at = common.now()
     row.submitted_at = row.decided_at = None
@@ -39,16 +39,23 @@ def _activate(row: ProjectStage):
         modules.ensure_core_agreements(p)
     if "dossier" in feats:
         modules.ensure_dossier(p)
+    db = object_session(p)
+    if db is not None and why:
+        who = people.stage_responsible(db, p, row)
+        common.log(p, user, "stage", "started", why, row.stage_key, to=people.names(who))
+        notify.notify_users(db, who, "assigned", f"Your turn: {p.flow.stage(row.stage_key).name}",
+                            f"Project: {p.name} · {why} · Action: start the work", p.id, exclude=user.id if user else None, link=f"step={row.stage_key}")
 
 
-def _unlock(p: Project):
+def _unlock(p: Project, user: User | None = None):
     """Start every pending stage whose prerequisites are all approved (or bypassed)."""
     for row in p.stages:
         if row.state != "pending":
             continue
         reqs = p.flow.stage(row.stage_key).requires
         if reqs and all(p.row(r) and p.row(r).state in SAT for r in reqs):
-            _activate(row)
+            names = ", ".join(p.flow.stage(r).name for r in reqs)
+            _activate(row, user, f"Started because {names} {'is' if len(reqs) == 1 else 'are'} approved")
 
 
 def _sync(p: Project):
@@ -103,6 +110,10 @@ def health(p: Project) -> tuple[str, list[str]]:
         amber.append(f"{len(over)} stage(s) over target time")
     if any(t.state == "changes_requested" for t in p.tasks):
         amber.append("Changes requested on a task")
+    back = (sum(1 for d in p.documents if d.status == "returned") + sum(1 for a in p.agreements if a.status == "changes_requested")
+            + sum(1 for i in p.dossier_items if i.status == "changes_requested") + sum(1 for m in p.mfr_requests if m.status == "changes_requested"))
+    if back:
+        amber.append(f"{back} item{'s' if back != 1 else ''} returned for changes")
     if p.status == "on_hold":
         amber.append("On hold")
     return ("red" if red else "amber" if amber else "green"), red + amber
@@ -124,8 +135,9 @@ def create_project(db: Session, user: User, data) -> Project:
     for s in flow.stages:
         p.stages.append(ProjectStage(stage_key=s.key, state="pending"))
     db.add(p)
+    db.flush()
     for s in flow.starts:
-        _activate(p.row(s.key))
+        _activate(p.row(s.key), user, "Started when the project was created")
     common.log(p, user, "project", "created", f"Project created on workflow '{wf.name}' v{wf.version}")
     db.commit()
     return p
@@ -180,10 +192,40 @@ def update_project(db: Session, user: User, p: Project, data) -> Project:
 
 
 # ---------------------------------------------------------------- guards: what must be true before a stage is submitted / approved
+def readiness(p: Project) -> list[dict]:
+    """What the milestone (Dossier Ready) checks across the whole project, so the step is more than one button."""
+    flow = p.flow
+    out = []
+    ms = flow.milestone
+    for k in (ms.requires if ms else ()):
+        ok = p.row(k).state in SAT
+        out.append({"label": f"{flow.stage(k).name} approved", "ok": ok, "detail": "approved" if ok else "not approved yet", "stage": k})
+
+    def add(label, flags, noun, tab):
+        todo = [f for f in flags if not f]
+        out.append({"label": label, "ok": not todo, "tab": tab,
+                    "detail": (f"all {len(flags)} {noun}" if flags and not todo else f"{len(flags) - len(todo)} of {len(flags)} {noun}" if flags else "none required")})
+    feats = flow.features
+    if "dossier" in feats:
+        add("Dossier checklist", [i.status in workflow.DOSSIER_DONE for i in p.dossier_items if i.required], "required items ready", "regulatory")
+    if "agreements" in feats:
+        add("Core agreements signed", [a.status == "signed" for a in p.agreements if a.core], "agreements signed", "legal")
+    if "artwork" in feats and p.row(feats["artwork"]).state != "bypassed":
+        add("Required artwork approved", [d.status in ("approved", "locked") for d in p.documents if d.is_artwork and d.required], "artwork items approved", "artwork")
+    if "mfr" in feats and p.row(feats["mfr"]).state != "bypassed":
+        add("Manufacturer data accepted", [m.status in workflow.MFR_DONE for m in p.mfr_requests if m.required], "required items accepted", "manufacturer")
+    add("Other required documents approved", [d.status in ("approved", "locked") for d in p.documents if not d.is_artwork and d.required], "documents approved", "documents")
+    pend = [r for r in p.reopen_requests if r.status == "pending"]
+    out.append({"label": "No reopen request is waiting", "ok": not pend, "detail": "none waiting" if not pend else f"{len(pend)} waiting for a decision", "tab": "overview"})
+    return out
+
+
 def blockers(p: Project, key: str) -> list[str]:
     st = p.flow.stage(key)
     feats = st.features
     out = []
+    if st.milestone:
+        out += [f"{c['label']}: {c['detail']}" for c in readiness(p) if not c["ok"] and "stage" not in c]
     open_tasks = [t for t in p.tasks if t.stage_key == key and t.required and not t.bypassed and t.state not in workflow.TASK_DONE]
     if open_tasks:
         out.append(f"{len(open_tasks)} required task(s) are not approved yet")
@@ -250,7 +292,7 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
     note = a.note.strip()
     act = a.action
     flow = p.flow
-    ev_stage, to_stage = p.stage_key, None
+    ev_stage, to_stage, to = p.stage_key, None, ""
 
     # ---- project level ----
     if act == "reopen":
@@ -263,7 +305,7 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
                 r.locked = False
             for t in flow.terminals:
                 last = p.row(t.key)
-                _activate(last)
+                _activate(last, user, f"Reopened by {user.name}: {note}")
                 last.rework_count += 1
         p.status = "active"
     elif act in ("hold", "resume", "return"):
@@ -291,7 +333,7 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
             for key in flow.descendants(target.stage_key):
                 r = p.row(key)
                 r.state, r.started_at, r.submitted_at, r.decided_at = "pending", None, None, None
-            _activate(target)
+            _activate(target, user, f"Moved back by {user.name}: {note}")
             target.rework_count += 1
             to_stage = ev_stage = target.stage_key
     # ---- stage level (the approval cycle) ----
@@ -323,9 +365,11 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
                 if b:
                     raise WorkflowError("Cannot submit yet: " + "; ".join(b) + ".")
                 row.state, row.submitted_at = "awaiting_approval", common.now()
-                notify.notify_roles(db, st.approver_roles, "approval", f"Approval needed: {st.name}",
-                                    f"Project: {p.name} · Stage: {st.name} · Submitted by {user.name} · Action: approve or send back",
-                                    p.id, exclude=user.id)
+                approvers = people.stage_approvers(db, p, row, exclude_id=user.id)
+                to = people.names(approvers)
+                notify.notify_users(db, approvers, "approval", f"Approval needed: {st.name}",
+                                    f"Project: {p.name} · Stage: {st.name} · Submitted by {user.name}" + (f" · “{note}”" if note else "") + " · Action: approve or send back",
+                                    p.id, exclude=user.id, link=f"step={row.stage_key}")
             elif act in ("approve", "send_back", "reject"):
                 common.require(user, "approve" if act == "approve" else "request_changes")
                 if not common.role_ok(user, st.approver_roles):
@@ -341,20 +385,29 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
                     if b:
                         raise WorkflowError("Cannot approve yet: " + "; ".join(b) + ".")
                     row.state, row.decided_at = "approved", common.now()
+                    sender = people.submitter(db, [e for e in p.events if e.stage_key == row.stage_key and e.area == "stage"])
+                    to = sender.name if sender else ""
+                    notify.notify_users(db, [sender, p.project_manager], "approval", f"Approved: {st.name}",
+                                        f"Project: {p.name} · Stage: {st.name} · Approved by {user.name}" + (f" · “{note}”" if note else ""), p.id,
+                                        exclude=user.id, link=f"step={row.stage_key}")
                     if "issue_code" in st.features and not p.code:
                         p.code = _project_code(p)
-                    _unlock(p)
+                    _unlock(p, user)
                     if all(r.state in SAT for r in p.stages):
                         p.status = "completed"
                         for r in p.stages:
                             r.locked = True
                 elif act == "send_back":
                     common.need_note(note, "Please add a note explaining what needs to change.")
+                    evs = [e for e in p.events if e.stage_key == row.stage_key and e.area == "stage"]
+                    fix = people.fixers(db, p, row.stage_key, evs)
+                    to = people.names(fix)
                     row.state, row.submitted_at = "in_progress", None
                     row.started_at = common.now()
                     row.rework_count += 1
-                    notify.notify(db, p.project_manager_id, "changes", f"Sent back: {st.name}",
-                                  f"Project: {p.name} · Stage: {st.name} · Sent back by {user.name} · {note}", p.id)
+                    notify.notify_users(db, fix + [p.project_manager], "changes", f"Sent back: {st.name}",
+                                        f"Project: {p.name} · Stage: {st.name} · Sent back by {user.name} · Reason: {note} · Action: fix it and submit again",
+                                        p.id, exclude=user.id, link=f"step={row.stage_key}")
                 else:
                     if not st.can_close:
                         raise WorkflowError("The project cannot be rejected at this stage; send it back for rework instead.")
@@ -368,15 +421,64 @@ def apply_action(db: Session, user: User, p: Project, a) -> Project:
                     raise WorkflowError(f"{st.name} is required and cannot be bypassed.")
                 common.need_note(note, "Please add a note explaining why this work is not needed.")
                 row.state, row.decided_at = "bypassed", common.now()
-                _unlock(p)
+                _unlock(p, user)
                 if all(r.state in SAT for r in p.stages):
                     p.status = "completed"
             else:
                 raise WorkflowError("Unknown action.")
 
     _sync(p)
-    common.log(p, user, "stage", act, note, ev_stage, to_stage=to_stage)
+    common.log(p, user, "stage", act, note, ev_stage, to_stage=to_stage, to=to)
     db.commit()
     if act in ("approve", "bypass"):
         _reconcile(db, p)
+    return p
+
+
+# ---------------------------------------------------------------- who is responsible for a step
+@common.serial
+def assign_stage(db: Session, user: User, p: Project, key: str, data) -> Project:
+    """Name the person who does the work and/or the person who approves it, instead of "anyone in these roles"."""
+    common.require(user, "manage_project", "choose who is responsible for a step")
+    common.ensure_open(p)
+    if not p.flow.has(key):
+        raise WorkflowError("Unknown step.")
+    row, st = p.row(key), p.flow.stage(key)
+    if row.state in SAT:
+        raise WorkflowError(f"{st.name} is already approved. Move the project back to it before changing who is responsible.")
+    said, chosen = [], []
+
+    def pick(uid, roles, what):
+        u = db.get(User, uid)
+        if not u or not u.active:
+            raise WorkflowError("Choose an active person.")
+        if not common.role_ok(u, roles):
+            raise WorkflowError(f"{u.name} ({people.role_name(u)}) does not {what} {st.name}. Choose someone from: {st.owner if what == 'work on' else st.approver}.")
+        return u
+    if data.clear_lead:
+        row.lead_id = None
+        said.append("work: back to the team")
+    elif data.lead_id:
+        u = pick(data.lead_id, st.owner_roles, "work on")
+        row.lead_id = u.id
+        said.append(f"work: {people.tag(u)}")
+        chosen.append((u, "to do the work"))
+    if data.clear_approver:
+        row.approver_id = None
+        said.append("approval: back to the approvers")
+    elif data.approver_id:
+        u = pick(data.approver_id, st.approver_roles, "approve")
+        sent = [e for e in p.events if e.stage_key == key and e.area == "stage" and e.action == "submit"]
+        if row.state == "awaiting_approval" and sent and sent[-1].actor_id == u.id and u.role_key != "super_admin":
+            raise WorkflowError(f"{u.name} submitted this step, so someone else has to approve it.")
+        row.approver_id = u.id
+        said.append(f"approval: {people.tag(u)}")
+        chosen.append((u, "to approve it"))
+    if not said:
+        raise WorkflowError("Choose a person first.")
+    extra = f". {data.note.strip()}" if data.note.strip() else ""
+    common.log(p, user, "stage", "assign", "; ".join(said) + extra, key, to=", ".join(people.tag(u) for u, _ in chosen))
+    for u, why in chosen:
+        notify.notify(db, u.id, "assigned", f"You were chosen {why}: {st.name}", f"Project: {p.name} · Chosen by {user.name}", p.id, link=f"step={key}")
+    db.commit()
     return p

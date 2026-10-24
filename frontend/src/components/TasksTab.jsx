@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useCan, useStages } from '../context'
-import { Empty, Tabs } from './bits'
+import { Empty, Tabs, toast, useFocus } from './bits'
 import Icon from './Icon'
 import NewTaskModal from './NewTaskModal'
 import TaskCard from './TaskCard'
@@ -8,6 +8,7 @@ import TaskCard from './TaskCard'
 export default function TasksTab({ project, onChange }) {
   const stages = useStages()
   const can = useCan()
+  const focus = useFocus()
   const [stage, setStage] = useState('all')
   const [adding, setAdding] = useState(false)
   const withTasks = stages.filter((s) => project.tasks.some((t) => t.stage_key === s.key))
@@ -32,12 +33,12 @@ export default function TasksTab({ project, onChange }) {
         {open.map((t) => <TaskCard key={t.id} task={t} project={project} onChanged={onChange} />)}
       </div>
       {done.length > 0 && (
-        <details className="more" open={!open.length}>
+        <details className="more" open={!open.length || done.some((t) => `task-${t.id}` === focus)}>
           <summary>{done.length} finished task{done.length > 1 ? 's' : ''}</summary>
           <div className="tasklist">{done.map((t) => <TaskCard key={t.id} task={t} project={project} onChanged={onChange} />)}</div>
         </details>
       )}
-      {adding && <NewTaskModal project={project} stageKey={stage !== 'all' ? stage : undefined} onClose={() => setAdding(false)} onCreated={(p) => { setAdding(false); onChange(p) }} />}
+      {adding && <NewTaskModal project={project} stageKey={stage !== 'all' ? stage : undefined} onClose={() => setAdding(false)} onCreated={(p) => { setAdding(false); onChange(p); const t = [...p.tasks].sort((a, b) => b.id - a.id)[0]; if (t) toast(`Assigned to ${t.assignee.name} (${t.assignee.role}). They have been notified and it is on their My work list. They must accept it first.`) }} />}
     </section>
   )
 }

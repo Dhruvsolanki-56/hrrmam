@@ -60,6 +60,11 @@ def project_action(project_id: int, action: sc.ActionIn, user: User = Depends(cu
     return _out(engine.apply_action(db, user, _P(db, project_id), action))
 
 
+@router.post("/projects/{project_id}/stages/{stage_key}/assign")
+def assign_stage(project_id: int, stage_key: str, data: sc.StageAssignIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return _out(engine.assign_stage(db, user, _P(db, project_id), stage_key, data))
+
+
 # ---------------------------------------------------------------- tasks
 @router.post("/projects/{project_id}/tasks", status_code=201)
 def create_task(project_id: int, data: sc.TaskCreate, user: User = Depends(current_user), db: Session = Depends(get_db)):

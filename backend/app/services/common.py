@@ -56,9 +56,11 @@ def ensure_open(p: Project):
 
 
 def log(p: Project, user: User | None, area: str, action: str, note: str = "", stage_key: str = "",
-        task_id: int | None = None, to_stage: str | None = None):
+        task_id: int | None = None, to_stage: str | None = None, ref: tuple | None = None, to: str = ""):
+    """One audit row. `ref` is (kind, id) of the record it is about; `to` says who it was sent to / who must act next."""
     p.events.append(ProjectEvent(area=area, action=action, note=note, stage_key=stage_key or p.stage_key,
-                                 actor=user.name if user else "System", task_id=task_id, to_stage=to_stage))
+                                 actor=user.name if user else "System", actor_id=user.id if user else None, task_id=task_id,
+                                 to_stage=to_stage, ref_kind=ref[0] if ref else "", ref_id=ref[1] if ref else None, to_user=to))
 
 
 def get_setting(db: Session, key: str) -> str:

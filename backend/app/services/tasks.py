@@ -46,7 +46,7 @@ def create_task(db: Session, user: User, p: Project, stage_key: str, title: str,
     t.project, t.assignee, t.assigner = p, assignee, user
     db.add(t)
     db.flush()
-    common.log(p, user, "task", "assigned", f"{t.title} → {assignee.name}, due {_fmt(due_at)}", stage_key, t.id)
+    common.log(p, user, "task", "assigned", f"{t.title} → {assignee.name}, due {_fmt(due_at)}", stage_key, t.id, to=assignee.name)
     notify.notify(db, assignee.id, "assigned", "New task assigned", notify.task_line(t, "Accept it or request a different date"),
                   p.id, t.id)
     db.commit()
@@ -73,6 +73,7 @@ def apply_action(db: Session, user: User, t: Task, a) -> Task:
     common.ensure_open(p)
     state = t.state
     detail = note
+    to = ""
 
     if state == "locked" and act != "unlock":
         raise WorkflowError("This task is locked. Unlock it first (needs permission).")
@@ -104,6 +105,7 @@ def apply_action(db: Session, user: User, t: Task, a) -> Task:
             t.state = "approved"  # this workflow does not require approval of tasks
             detail = "Approval is not required for tasks in this workflow"
         else:
+            to = t.assigner.name if t.assigner else ""
             for uid in {t.assigner_id, p.project_manager_id} - {None, user.id}:
                 notify.notify(db, uid, "approval", "Task submitted for approval", notify.task_line(t, "Approve it or request changes"), p.id, t.id)
     elif act in ("approve", "request_changes"):
@@ -114,11 +116,13 @@ def apply_action(db: Session, user: User, t: Task, a) -> Task:
                             "(and never the assignee).")
         if act == "approve":
             t.state = "approved"
+            to = t.assignee.name
             notify.notify(db, t.assignee_id, "approval", "Task approved", notify.task_line(t, "None, it is approved"), p.id, t.id)
         else:
             detail = common.need_note(note, "Please say what needs to change.")
             t.state = "changes_requested"
             t.rework_count += 1
+            to = t.assignee.name
             notify.notify(db, t.assignee_id, "changes", "Changes requested", notify.task_line(t, "Make the changes and resubmit") + f" · {detail}", p.id, t.id)
     elif act == "lock":
         common.require(user, "lock_unlock", "lock records")
@@ -171,8 +175,17 @@ def apply_action(db: Session, user: User, t: Task, a) -> Task:
         if not user.can_assign_to(new.role_key):
             raise Forbidden(f"Your role ({user.role.name}) is not allowed to assign work to {new.role.name}.")
         detail = f"{t.assignee.name} → {new.name}. {note}".strip()
+        to = new.name
         t.assignee_id, t.assignee, t.state = new.id, new, "assigned"
         notify.notify(db, new.id, "assigned", "Task reassigned to you", notify.task_line(t, "Accept it or request a different date"), p.id, t.id)
+    elif act == "comment":
+        if not may_comment(user, t):
+            raise Forbidden("Only the people working on or deciding this task can add notes to it.")
+        detail = common.need_note(note, "Write the note first.")
+        others = {t.assignee_id, t.assigner_id} - {None, user.id}
+        to = ", ".join(sorted({u.name for u in (t.assignee, t.assigner) if u and u.id != user.id}))
+        for uid in others:
+            notify.notify(db, uid, "note", "New note on a task", notify.task_line(t, "Read the note") + f" · {user.name}: {detail}", p.id, t.id)
     elif act == "bypass":
         common.require(user, "bypass_optional")
         if t.required:
@@ -184,9 +197,16 @@ def apply_action(db: Session, user: User, t: Task, a) -> Task:
     else:
         raise WorkflowError("Unknown action.")
 
-    common.log(p, user, "task", act, f"{t.title}: {detail}" if detail else t.title, t.stage_key, t.id)
+    common.log(p, user, "task", "note" if act == "comment" else act, f"{t.title}: {detail}" if detail else t.title, t.stage_key, t.id, to=to)
     db.commit()
     return t
+
+
+def may_comment(user: User, t: Task) -> bool:
+    """Everyone who works on or decides the task may leave a note; the rest can read it."""
+    if user.role_key == "super_admin" or user.id in (t.assignee_id, t.assigner_id, t.project.project_manager_id) or user.can("manage_project"):
+        return True
+    return user.can("approve") and common.role_ok(user, t.project.flow.stage(t.stage_key).approver_roles)
 
 
 def update_task(db: Session, user: User, t: Task, data) -> Task:

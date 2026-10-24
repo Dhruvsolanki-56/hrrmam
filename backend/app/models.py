@@ -150,6 +150,8 @@ class ProjectStage(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lead_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)      # the person responsible for the work
+    approver_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)  # the person who approves it
 
     project: Mapped[Project] = relationship(back_populates="stages")
 
@@ -181,6 +183,10 @@ class ProjectEvent(Base):
     actor: Mapped[str] = mapped_column(String(120), default="")
     task_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     to_stage: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ref_kind: Mapped[str] = mapped_column(String(16), default="")  # agreement | dossier_item | mfr | document | reopen | rfi | stage ...
+    ref_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    to_user: Mapped[str] = mapped_column(String(240), default="")  # who it was sent to / who must act next, in words
     created_at: Mapped[datetime] = _ts()
 
     project: Mapped[Project] = relationship(back_populates="events")
@@ -364,6 +370,7 @@ class Notification(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True)
     task_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    link: Mapped[str] = mapped_column(String(200), default="")  # query string of the exact record, e.g. "tab=legal&focus=agreement-3"
     kind: Mapped[str] = mapped_column(String(24))  # reminder | overdue | escalation | assigned | approval | changes | date_request | date_decision
     title: Mapped[str] = mapped_column(String(200))
     body: Mapped[str] = mapped_column(Text, default="")

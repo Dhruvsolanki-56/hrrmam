@@ -12,22 +12,35 @@ def task_line(t: Task, action: str) -> str:
 
 
 def notify(db: Session, user_id: int | None, kind: str, title: str, body: str = "", project_id: int | None = None,
-           task_id: int | None = None, key: str | None = None):
+           task_id: int | None = None, key: str | None = None, link: str = ""):
+    """`link` is the query string of the exact record to open, e.g. "tab=legal&focus=agreement-3" or "step=regulatory"."""
     if not user_id:
         return
     if key:
         db.flush()
         if db.scalar(select(Notification.id).where(Notification.user_id == user_id, Notification.dedupe_key == key)):
             return
+    if task_id and not link:
+        link = f"tab=tasks&focus=task-{task_id}"
     db.add(Notification(user_id=user_id, kind=kind, title=title, body=body, project_id=project_id, task_id=task_id,
-                        dedupe_key=key))
+                        dedupe_key=key, link=link))
 
 
 def notify_roles(db: Session, roles, kind: str, title: str, body: str = "", project_id: int | None = None,
-                 exclude: int | None = None):
+                 exclude: int | None = None, link: str = ""):
     for u in db.scalars(select(User).where(User.active, User.role_key.in_(list(roles) + ["super_admin"]))):
         if u.id != exclude:
-            notify(db, u.id, kind, title, body, project_id)
+            notify(db, u.id, kind, title, body, project_id, link=link)
+
+
+def notify_users(db: Session, users, kind: str, title: str, body: str = "", project_id: int | None = None,
+                 exclude: int | None = None, link: str = ""):
+    """Tell these named people, once each."""
+    seen = set()
+    for u in users:
+        if u and u.id != exclude and u.id not in seen:
+            seen.add(u.id)
+            notify(db, u.id, kind, title, body, project_id, link=link)
 
 
 def refresh_reminders(db: Session):

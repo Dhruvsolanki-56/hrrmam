@@ -21,3 +21,17 @@ export function FlowScope({ stages, children }) {
   const app = useApp()
   return <AppContext.Provider value={{ ...app, stages }}>{children}</AppContext.Provider>
 }
+
+/** What this person may do on a step (the server enforces the same rules): `work` = change it, `approve` = decide it. */
+export function useAccess() {
+  const me = useMe()
+  const can = useCan()
+  return (st) => {
+    const sup = me?.role_key === 'super_admin'
+    if (!st) return { work: sup || can('manage_project'), approve: sup || can('approve') }
+    return {
+      work: sup || can('manage_project') || st.owner_roles.includes(me.role_key) || st.approver_roles.includes(me.role_key),
+      approve: sup || st.approver_roles.includes(me.role_key),
+    }
+  }
+}

@@ -36,6 +36,26 @@ export default function ProjectDetail() {
 
   useEffect(() => { api.project(id).then(setProject).catch((e) => setError(e.message)) }, [id])
   const step = params.get('step')
+  const focus = params.get('focus')
+  useEffect(() => {
+    if (!step || !project) return undefined
+    const t = setTimeout(() => document.getElementById('step-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)
+    return () => clearTimeout(t)
+  }, [!!project]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!focus || !project) return undefined
+    let tries = 0
+    const find = () => {
+      const el = document.getElementById(focus)
+      if (el) {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        el.classList.add('focus-flash')
+        setTimeout(() => el.classList.remove('focus-flash'), 3200)
+      } else if (tries++ < 8) { timer = setTimeout(find, 200) }
+    }
+    let timer = setTimeout(find, 250)
+    return () => clearTimeout(timer)
+  }, [focus, tab, !!project]) // eslint-disable-line react-hooks/exhaustive-deps
   const pick = (k) => {
     const n = new URLSearchParams(params); n.set('tab', 'overview'); n.set('step', k); setParams(n, { replace: true })
     setTimeout(() => document.getElementById('step-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)

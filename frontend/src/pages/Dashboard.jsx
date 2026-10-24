@@ -42,8 +42,8 @@ export default function Dashboard() {
   const c = d.counts
   // Stage and artwork approvals only: each task is approved by the person who assigned it (see My work)
   const decisions = [
-    ...d.pending_approvals.map((x) => ({ key: `s${x.project_id}${x.stage_key}`, k: 'stage', to: `/projects/${x.project_id}`, title: x.stage_name, sub: x.project_name })),
-    ...d.doc_approvals.map((x) => ({ key: `d${x.id}`, k: 'artwork', to: `/projects/${x.project_id}?tab=artwork`, title: x.title, sub: x.project_name })),
+    ...d.pending_approvals.map((x) => ({ key: `s${x.project_id}${x.stage_key}`, k: 'stage', to: `/projects/${x.project_id}?step=${x.stage_key}`, title: x.stage_name, sub: x.project_name })),
+    ...d.doc_approvals.map((x) => ({ key: `d${x.id}`, k: 'artwork', to: `/projects/${x.project_id}?tab=${x.is_artwork ? 'artwork' : 'documents'}&focus=doc-${x.id}`, title: x.title, sub: x.project_name })),
   ]
 
   // live projects per phase group (a project in parallel stages counts once per group)
@@ -56,9 +56,9 @@ export default function Dashboard() {
   const gmax = Math.max(1, ...groups.map((g) => g.n))
 
   const upcoming = [
-    ...d.rfi_deadlines.filter((r) => r.due_date).map((r) => ({ key: `rfi${r.id}`, day: r.due_date, title: `${r.reference || 'RFI'} response`, sub: r.project_name, to: `/projects/${r.project_id}?tab=rfi`, late: r.overdue })),
-    ...d.unsigned_agreements.filter((a) => a.due_date && a.overdue).map((a) => ({ key: `ag${a.id}`, day: a.due_date, title: a.label, sub: a.project_name, to: `/projects/${a.project_id}?tab=legal`, late: true })),
-    ...live.filter((p) => p.target_submission && !['approved', 'bypassed'].includes(p.stage_states?.submission)).map((p) => ({ key: `ts${p.id}`, day: p.target_submission, title: 'Target submission', sub: p.name, to: `/projects/${p.id}`, late: p.target_submission < new Date().toISOString().slice(0, 10) })),
+    ...d.rfi_deadlines.filter((r) => r.due_date).map((r) => ({ key: `rfi${r.id}`, day: r.due_date, title: `${r.reference || 'RFI'} response`, sub: r.project_name, to: `/projects/${r.project_id}?tab=rfi&focus=rfi-${r.id}`, late: r.overdue })),
+    ...d.unsigned_agreements.filter((a) => a.due_date && a.overdue).map((a) => ({ key: `ag${a.id}`, day: a.due_date, title: a.label, sub: a.project_name, to: `/projects/${a.project_id}?tab=legal&focus=agreement-${a.id}`, late: true })),
+    ...live.filter((p) => p.target_submission && !['approved', 'bypassed'].includes(p.stage_states?.submission)).map((p) => ({ key: `ts${p.id}`, day: p.target_submission, title: 'Target submission', sub: p.name, to: `/projects/${p.id}?step=submission`, late: p.target_submission < new Date().toISOString().slice(0, 10) })),
   ].sort((a, b) => a.day.localeCompare(b.day)).slice(0, 6)
 
   const pct = (n) => `${(n / Math.max(1, c.green + c.amber + c.red)) * 100}%`
