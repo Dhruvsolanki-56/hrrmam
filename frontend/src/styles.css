@@ -855,6 +855,7 @@ details.controls > summary .muted { margin-left: auto; }
   .table td.proj-cell { grid-column: 1 / -1; }
   .table td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 3px; }
   .table td.progress-cell { grid-column: 1 / -1; width: auto; }
+  .table tr:not(.reg-row):not(.row-link):not(.audit-row) td[data-label="Status"], .table tr:not(.reg-row):not(.row-link):not(.audit-row) td[data-label="Status and who has it"] { grid-column: 1 / -1; }
   .table.compact { min-width: 0; }
   .table td.wrap { min-width: 0; }
   .cell-main { min-width: 0; }
@@ -1350,3 +1351,7 @@ a.metric:first-child:hover { background: #00363b; }
 .entry-actions .sentback-inline { max-width: 340px; }
 .entry-hist summary { cursor: pointer; font-size: 12.5px; color: var(--neo-green); }
 .entry-hist .minihist { max-width: 340px; }
+
+@media (max-width: 760px) {
+  .task.mine > header { grid-template-columns: minmax(0, 1fr); }
+}

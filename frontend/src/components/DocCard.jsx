@@ -92,7 +92,7 @@ function Doc({ doc, onChange, project }) {
             <label className="field">
               {mayReview ? `Your decision note${rv.submitted?.by ? ` (goes to ${rv.submitted.by}; needed to return it)` : ''}`
                 : noting ? `Note${noteTo ? ` for ${noteTo}` : ''}`
-                  : `Message for the reviewer${doc.review?.next ? '' : ''} (optional)`}
+                  : `Message for ${noteTo || 'the reviewer'} (optional)`}
               <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short comment for the record…" />
             </label>
           )}
