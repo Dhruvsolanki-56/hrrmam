@@ -183,6 +183,8 @@ try:
     check('returned: who, why, who must fix, in the item', d_of(r)['status'] == 'returned' and rv['changes']['by'] == 'Anjali Desai' and 'below 25' in rv['changes']['note'] and rv['changes']['fixer'] == 'Neha Kulkarni (Artwork)', rv)
     check('the task-side view agrees: it is in Neha\'s "returned to me" queue with the reason', any(x['type'] == 'document' and x['id'] == d['id'] and 'below 25' in x['changes']['note'] for x in work('artwork')['items']['returned_for_changes']))
     check('Neha is notified', any('Returned for changes' in n['title'] and 'below 25' in n['body'] for n in notes('artwork')))
+    s, r = d_act('artwork', 'comment', 'Will upload V2 tomorrow morning')
+    check('Neha\'s note on a returned item reaches Anjali, who returned it', s == 200 and any('V2 tomorrow morning' in n['body'] for n in notes('regulatory')))
     check('the Artwork step shows the block: artwork is not approved', 'required document' not in ' '.join(row(r, 'artwork')['blockers']) or True)
     s, r = call('POST', f'/documents/{d["id"]}/versions', {'link': 'https://files.example/carton-v2', 'note': 'Storage fixed'}, uid=me('artwork'))
     check('Neha uploads V2', s == 201 and d_of(r)['current_version'] == 2)

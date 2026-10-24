@@ -83,6 +83,7 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
             {showProject && <Link to={`/projects/${task.project_id}?tab=tasks&focus=task-${task.id}`} onClick={(e) => e.stopPropagation()}>{task.project_name} · </Link>}
             {st.name}{!task.required && ' · optional'}{task.rework_count > 0 && ` · ↺ ${task.rework_count}`}
           </small>
+          {task.state === 'changes_requested' && task.last_changes && <small className="muted">Returned by {task.last_changes.by}: “{task.last_changes.note || 'no reason written'}”</small>}
         </div>
         <Person user={task.assignee} />
         <div className="t-end">
@@ -136,7 +137,7 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
           )}
 
           {(noting || asking) && (
-            <label className="field">{asking ? 'Why do you need a different date? (required)' : 'Note (kept in the record)'}
+            <label className="field">{asking ? 'Why do you need a different date? (required)' : canDecide ? `Reason for ${task.assignee.name} (required to request changes, kept in the record)` : 'Note (kept in the record)'}
               <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short comment for the record…" autoFocus />
             </label>
           )}

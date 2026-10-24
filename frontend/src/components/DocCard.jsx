@@ -20,13 +20,13 @@ function Flow({ doc }) {
 }
 
 /** What was just done and who has it now, in one sentence, so nobody has to look for where it went. */
-function confirmation(action, before, after) {
+function confirmation(action, before, after, noteTo) {
   const to = holderOf(after.review)
   const sender = before.review?.submitted?.by
   if (action === 'submit') return `Sent for ${after.review.step?.toLowerCase() || 'review'}${to ? ` to ${to}` : ''}. They have been notified.`
   if (action === 'approve') return to ? `Approved. It is now with ${to} for ${after.review.step?.toLowerCase() || 'the next review'}. They have been notified.` : `Approved.${sender ? ` ${sender} has been told.` : ''}`
   if (action === 'return') return `Returned for changes${to ? ` to ${to}` : ''}. They have been notified with your reason.`
-  if (action === 'comment') return `Note sent${to ? ` to ${to}` : ''}. It is saved with this item.`
+  if (action === 'comment') return `Note saved with this item${noteTo ? ` and sent to ${noteTo}` : ''}.`
   return ''
 }
 
@@ -52,16 +52,18 @@ function Doc({ doc, onChange, project }) {
   const latest = doc.versions[doc.versions.length - 1]
   const rv = doc.review || {}
   const who = holderOf(rv)
+  const you = (t) => !!t && t.includes(me.name)
+  const noteTo = who && !you(who) ? who : (rv.changes?.by && rv.changes.by !== me.name ? rv.changes.by : rv.submitted?.by && rv.submitted.by !== me.name ? rv.submitted.by : '')
   const go = (action) => run(async () => {
     if (['return'].includes(action) && !note.trim()) throw new Error('Write the reason first. The person who must fix it will see it.')
     if (action === 'comment' && !note.trim()) throw new Error('Write the note first.')
     const p = await api.docAct(doc.id, { action, note })
     const after = p.documents.find((d) => d.id === doc.id)
     onChange(p); setNote(''); setNoting(false)
-    const msg = after && confirmation(action, doc, after)
+    const msg = after && confirmation(action, doc, after, noteTo)
     if (msg) toast(msg)
   })
-  const sendLabel = doc.is_artwork ? `Send to ${doc.flow_labels?.[doc.flow[1]]?.toLowerCase() || 'review'}` : 'Submit for review'
+  const sendLabel = (doc.is_artwork ? `Send to ${doc.flow_labels?.[doc.flow[1]]?.toLowerCase() || 'review'}` : 'Submit for review') + (doc.status === 'returned' && rv.changes?.by ? ` (back to ${rv.changes.by})` : '')
   const sendTo = doc.status === 'draft' || doc.status === 'returned' ? '' : ''
   void sendTo
 
@@ -89,7 +91,7 @@ function Doc({ doc, onChange, project }) {
           {(mayReview || ['draft', 'returned'].includes(doc.status) && mayWork || noting) && (
             <label className="field">
               {mayReview ? `Your decision note${rv.submitted?.by ? ` (goes to ${rv.submitted.by}; needed to return it)` : ''}`
-                : noting ? `Note${who ? ` for ${who}` : ''}`
+                : noting ? `Note${noteTo ? ` for ${noteTo}` : ''}`
                   : `Message for the reviewer${doc.review?.next ? '' : ''} (optional)`}
               <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short comment for the record…" />
             </label>
@@ -104,7 +106,7 @@ function Doc({ doc, onChange, project }) {
             {doc.status === 'approved' && can('lock_unlock') && <button className="btn line" disabled={busy} onClick={() => go('lock')}>Lock</button>}
             {doc.status === 'locked' && can('lock_unlock') && <button className="btn line" disabled={busy} onClick={() => go('unlock')}>Unlock</button>}
             {!['locked'].includes(doc.status) && (mayWork || mayReview) && (
-              noting ? <button className="btn line" disabled={busy} onClick={() => go('comment')}>Send note{who ? ` to ${who}` : ''}</button>
+              noting ? <button className="btn line" disabled={busy} onClick={() => go('comment')}>Send note{noteTo ? ` to ${noteTo}` : ''}</button>
                 : <button className="link note-link" onClick={() => setNoting(true)}>+ Add a note</button>
             )}
           </div>

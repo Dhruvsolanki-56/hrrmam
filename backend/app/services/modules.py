@@ -155,6 +155,7 @@ def entry_action(db: Session, user: User, kind: str, obj, action: str, note: str
             raise Forbidden(f"Your role ({user.role.name}) does not work on {title}.")
         note = common.need_note(note, "Write the note first.")
         holder = people.entry_approvers(db, p, kind, exclude_id=user.id) if obj.status == cfg["review"] else people.fixers(db, p, st.key, evs, getattr(obj, "owner", None))
+        holder = [u for u in holder if u.id != user.id] or people.counterparty(db, evs, user)
         to = people.names(holder)
         notify.notify_users(db, holder, "note", f"Note on {title}", f"Project: {p.name} · {user.name}: {note}", p.id, exclude=user.id, link=link)
     else:
@@ -552,7 +553,7 @@ def document_action(db: Session, user: User, d: Document, action: str, note: str
         if not (modules_can_comment(user, p, d)):
             raise Forbidden(f"Your role ({user.role.name}) does not work on this document.")
         note = common.need_note(note, "Write the note first.")
-        holder = _doc_people(db, d, evs)
+        holder = [u for u in _doc_people(db, d, evs) if u.id != user.id] or people.counterparty(db, evs, user)
         to = people.names(holder)
         notify.notify_users(db, holder, "note", f"Note on {d.title}", f"Project: {p.name} · {user.name}: {note}", p.id, exclude=user.id, link=link)
     elif action == "lock":

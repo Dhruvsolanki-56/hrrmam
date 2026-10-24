@@ -23,13 +23,13 @@ def add_attachment(db: Session, user: User, t: Task, name: str, link: str, note:
     if not link:
         raise WorkflowError("Add a link to the file (SharePoint, Drive, ...).")
     name = (name or t.title).strip()[:200]
-    n = 1 + sum(1 for a in t.attachments if a.name.lower() == name.lower())
+    n = 1 + len(t.attachments)
     t.attachments.append(TaskAttachment(name=name, version_no=n, link=link, note=note.strip(), round=t.rework_count, created_by=user.name))
     others = {t.assignee_id, t.assigner_id} - {None, user.id}
     to = ", ".join(sorted({u.name for u in (t.assignee, t.assigner) if u and u.id != user.id}))
     for uid in others:
-        notify.notify(db, uid, "note", "File attached to a task", notify.task_line(t, "Open the file") + f" · {user.name} attached {name} V{n}", p.id, t.id)
-    common.log(p, user, "task", "attachment", f"{t.title}: {name} V{n} attached", t.stage_key, t.id, to=to)
+        notify.notify(db, uid, "note", "File attached to a task", notify.task_line(t, "Open the file") + f" · {user.name} attached {name} (file {n} on this task)", p.id, t.id)
+    common.log(p, user, "task", "attachment", f"{t.title}: {name} attached (file {n})", t.stage_key, t.id, to=to)
     db.commit()
     return t
 

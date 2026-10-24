@@ -137,3 +137,12 @@ def fixers(db: Session, p: Project, stage_key: str, evs: list[ProjectEvent], own
 def deciders_for_reopen(db: Session, requester_id: int | None) -> list[User]:
     """Everybody who may unlock records: they are the people who decide a reopen request."""
     return [u for u in db.scalars(select(User).where(User.active.is_(True)).order_by(User.id)) if u.can("lock_unlock") and u.id != requester_id]
+
+
+def counterparty(db: Session, evs: list[ProjectEvent], user: User) -> list[User]:
+    """Whoever last sent this record back (or approved it), so a note from the fixer reaches them."""
+    e = last(evs, "return", "reject", "approve")
+    if not e or e.actor_id in (None, user.id):
+        return []
+    u = _user(db, e.actor_id)
+    return [u] if u and u.active else []
