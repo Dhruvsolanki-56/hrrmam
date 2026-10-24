@@ -476,7 +476,7 @@ def review_roles(d: Document) -> list[str]:
         return list(d.steps[i]["roles"])
     if d.stage_key and d.project.flow.has(d.stage_key):
         return list(d.project.flow.stage(d.stage_key).approver_roles)
-    return ["director", "project_manager"]
+    return ["director"]
 
 
 def doc_link(d: Document) -> str:

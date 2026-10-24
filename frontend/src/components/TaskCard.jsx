@@ -170,7 +170,7 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
             <div className="t-notes">
               <h4>Notes</h4>
               <ul>
-                {task.notes.map((n) => <li key={n.id}><p>{n.note}</p><small>{n.by} · {fmtDateTime(n.at)}</small></li>)}
+                {(task.notes || []).map((n) => <li key={n.id}><p>{n.note}</p><small>{n.by} · {fmtDateTime(n.at)}</small></li>)}
               </ul>
               {posting && (
                 <label className="field">Your note{others ? ` (goes to ${others})` : ''}

@@ -45,7 +45,7 @@ function Doc({ doc, onChange, project }) {
   const reviewing = doc.flow.slice(1, -1).includes(doc.status)
   const sup = me.role_key === 'super_admin'
   const roles = doc.is_artwork ? (doc.review_roles?.length ? doc.review_roles : ['director'])
-    : (stages.find((s) => s.key === doc.stage_key)?.approver_roles || ['director', 'project_manager'])
+    : (stages.find((s) => s.key === doc.stage_key)?.approver_roles || ['director'])
   const mayReview = reviewing && (sup || roles.includes(me.role_key)) && can('approve') && doc.review?.submitted?.by !== me.name
   const stage = stages.find((s) => s.key === doc.stage_key)
   const mayWork = access(stage).work
