@@ -64,15 +64,15 @@ function Doc({ doc, onChange, project }) {
     if (msg) toast(msg)
   })
   const sendLabel = (doc.is_artwork ? `Send to ${doc.flow_labels?.[doc.flow[1]]?.toLowerCase() || 'review'}` : 'Submit for review') + (doc.status === 'returned' && rv.changes?.by ? ` (back to ${rv.changes.by})` : '')
-  const sendTo = doc.status === 'draft' || doc.status === 'returned' ? '' : ''
-  void sendTo
+  // one text box per card: it carries the decision note, the message sent with the work, or a note on its own
+  const boxShown = mayReview || (['draft', 'returned'].includes(doc.status) && mayWork)
 
   return (
     <article className={`doc d-${doc.status}`} id={`doc-${doc.id}`}>
       <header onClick={() => setOpen(!open)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setOpen(!open)} aria-expanded={open}>
         <div className="t-title">
           <strong>{doc.title}</strong>
-          <small>{doc.kind} · V{doc.current_version}{!doc.required && ' · optional'}{who && !['approved', 'locked'].includes(doc.status) ? ` · with ${who}` : ''}</small>
+          <small>{doc.kind} · V{doc.current_version}{!doc.required && ' · optional'}{who && !['approved', 'locked'].includes(doc.status) ? ` · with ${you(who) && !who.includes(' or ') ? 'you' : who}` : ''}</small>
         </div>
         <Person user={doc.owner} />
         <span className={`dstate dstate-${doc.status}`}>{doc.flow_labels?.[doc.status] || STATUS_LABEL[doc.status] || label(doc.status)}</span>
@@ -84,11 +84,11 @@ function Doc({ doc, onChange, project }) {
           {latest?.link && <p><a className="doc-link" href={latest.link} target="_blank" rel="noreferrer"><Icon name="link" size={14} />Open V{latest.version_no} in a new tab</a></p>}
           <ul className="versions">
             {[...doc.versions].reverse().map((v) => (
-              <li key={v.id}><b>V{v.version_no}</b><span>{v.note || 'No note'}</span><small>{v.created_by} · {fmtDate(v.created_at)}{v.link && <> · <a href={v.link} target="_blank" rel="noreferrer">open</a></>}</small></li>
+              <li key={v.id}><b>V{v.version_no}</b><span>{v.note || 'No note'}</span><small>{v.created_by} · {fmtDate(v.created_at)}{v.link && <> · <a href={v.link} target="_blank" rel="noreferrer">Open</a></>}</small></li>
             ))}
           </ul>
           {error && <p className="error">{error}</p>}
-          {(mayReview || ['draft', 'returned'].includes(doc.status) && mayWork || noting) && (
+          {(boxShown || noting) && (
             <label className="field">
               {mayReview ? `Your decision note${rv.submitted?.by ? ` (goes to ${rv.submitted.by}; needed to return it)` : ''}`
                 : noting ? `Note${noteTo ? ` for ${noteTo}` : ''}`
@@ -106,11 +106,11 @@ function Doc({ doc, onChange, project }) {
             {doc.status === 'approved' && can('lock_unlock') && <button className="btn line" disabled={busy} onClick={() => go('lock')}>Lock</button>}
             {doc.status === 'locked' && can('lock_unlock') && <button className="btn line" disabled={busy} onClick={() => go('unlock')}>Unlock</button>}
             {!['locked'].includes(doc.status) && (mayWork || mayReview) && (
-              noting ? <button className="btn line" disabled={busy} onClick={() => go('comment')}>Send note{noteTo ? ` to ${noteTo}` : ''}</button>
+              noting || boxShown ? <button className="btn line" disabled={busy} onClick={() => go('comment')}>{noting ? 'Send note' : 'Send as a note only'}{noteTo ? ` to ${noteTo}` : ''}</button>
                 : <button className="link note-link" onClick={() => setNoting(true)}>+ Add a note</button>
             )}
           </div>
-          {!mayWork && !mayReview && !reviewing && <p className="act-hint">You can view this item. Only {stage ? `${stage.owner}` : 'the project team'} change it.</p>}
+          {!mayWork && !mayReview && !reviewing && <p className="act-hint">You can view this item. Only {stage ? `${stage.owner}` : 'the project team'} can change it.</p>}
         </div>
       )}
       {version && (
@@ -132,7 +132,10 @@ export default function DocList({ project, onChange, stageKey, artwork, title })
   const [adding, setAdding] = useState(false)
   const docs = project.documents.filter((d) => (artwork ? d.is_artwork : stageKey ? d.stage_key === stageKey : !d.is_artwork))
   const closed = project.status === 'rejected' || project.status === 'completed'
-  const mayAdd = !closed && (can('manage_project') || me.role_key === 'super_admin' || (artwork ? ['artwork', 'regulatory'].includes(me.role_key) : true))
+  const lead = can('manage_project') || me.role_key === 'super_admin'
+  // people add documents only to the steps they work on, so nobody is offered a button for someone else's workstream
+  const workable = stages.filter((s) => access(s).work)
+  const mayAdd = !closed && (lead || (artwork ? ['artwork', 'regulatory'].includes(me.role_key) : stageKey ? access(stages.find((s) => s.key === stageKey)).work : workable.length > 0))
   const kinds = artwork ? Object.values(config.artwork_kinds) : config.doc_kinds
   const wsStage = stages.find((s) => (artwork ? (s.features || []).includes('artwork') : s.key === stageKey))
 
@@ -149,14 +152,14 @@ export default function DocList({ project, onChange, stageKey, artwork, title })
         <FormModal title={artwork ? 'New artwork item' : 'Add a document'} wide
           intro={artwork ? 'Starts as V1 (draft). Send it to regulatory review, then director approval.' : 'Starts as V1 (draft). Reviewers approve it; approved documents can be locked.'}
           fields={[
-            ...(artwork ? [] : [{ key: 'stage_key', label: 'Belongs to', type: 'select', half: true, blank: 'Whole project', options: stages.map((s) => [s.key, s.name]) }]),
+            ...(artwork ? [] : [{ key: 'stage_key', label: 'Belongs to', type: 'select', half: true, ...(lead ? { blank: 'Whole project' } : {}), options: (lead ? stages : workable).map((s) => [s.key, s.name]) }]),
             { key: 'kind', label: 'Kind', type: 'select', required: true, half: !artwork, options: kinds.map((k) => [k, k]) },
             { key: 'title', label: 'Title', type: 'text', required: true, placeholder: artwork ? 'e.g. 50 g tube carton' : 'e.g. Supplier agreement draft' },
             { key: 'link', label: 'Link to the file', type: 'url', placeholder: 'https://…', hint: '(SharePoint, Drive…)' },
             { key: 'note', label: 'Note', type: 'textarea' },
             { key: 'required', label: 'Required', hint: ' Must be approved before the workstream can be submitted.', type: 'checkbox' },
           ]}
-          initial={{ stage_key: stageKey || '', kind: kinds[0], required: true }}
+          initial={{ stage_key: stageKey || (lead ? '' : workable[0]?.key || ''), kind: kinds[0], required: true }}
           onSave={async (d) => { onChange(await api.createDocument(project.id, { ...d, artwork: !!artwork, stage_key: artwork ? 'artwork' : d.stage_key || stageKey || '' })); toast(`${d.title} was added as V1 (draft). It is with you until you send it for review.`) }}
           onClose={() => setAdding(false)} submitLabel="Add" />
       )}

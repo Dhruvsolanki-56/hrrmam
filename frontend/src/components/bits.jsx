@@ -17,7 +17,11 @@ export const toInput = (iso) => {
 export const fromInput = (v) => (v ? new Date(v).toISOString() : null)
 export const inDays = (n, hour = 17) => { const d = new Date(); d.setDate(d.getDate() + n); d.setHours(hour, 0, 0, 0); return toInput(d.toISOString()) }
 export const initials = (name = '') => name.split(/\s+/).filter((w) => /^[A-Za-z]/.test(w) && !/^Dr\.?$/i.test(w)).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
-export const label = (s = '') => (s === 'rfi' ? 'RFI' : s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()))
+export const label = (s = '') => (s === 'rfi' ? 'RFI' : s === 'stage' ? 'Step' : s === 'mfr' ? 'Manufacturer' : s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()))
+
+/** Workflow group names as a newcomer reads them. */
+const GROUP_LABEL = { 'Parallel workstreams': 'Preparation (teams work in parallel)', 'Dossier & regulatory': 'Dossier and submission' }
+export const groupLabel = (g = '') => GROUP_LABEL[g] || g
 
 // ---------------------------------------------------------------- statuses
 export const STATUS = {
@@ -48,8 +52,8 @@ export const STATE = {
 export const StateChip = ({ state, locked }) => <span className={`state state-${state}`}>{STATE[state]}{locked && <span className="gate">locked</span>}</span>
 
 export const TASK_STATE = {
-  assigned: 'Assigned', accepted: 'Accepted', in_progress: 'In progress', submitted: 'Submitted',
-  changes_requested: 'Changes requested', resubmitted: 'Resubmitted', approved: 'Approved', locked: 'Locked',
+  assigned: 'New', accepted: 'Not started', in_progress: 'In progress', submitted: 'Waiting for approval',
+  changes_requested: 'Changes requested', resubmitted: 'Waiting for approval', approved: 'Approved', locked: 'Locked',
 }
 export const TaskChip = ({ state }) => <span className={`tstate tstate-${state}`}>{TASK_STATE[state]}</span>
 
@@ -105,8 +109,8 @@ export function DueChip({ task }) {
 }
 
 // ---------------------------------------------------------------- small building blocks
-const tone = (name = '') => [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 4
-export const Avatar = ({ name, size }) => <span className={`avatar sm av-${tone(name)}`} style={size ? { width: size, height: size } : undefined}>{initials(name)}</span>
+// one calm colour for every person: colour carries no meaning here, so it should not vary
+export const Avatar = ({ name, size }) => <span className="avatar sm av-0" style={size ? { width: size, height: size } : undefined}>{initials(name)}</span>
 
 export function Person({ user, short }) {
   if (!user) return <span className="muted">Unassigned</span>
@@ -315,3 +319,15 @@ export function holderOf(review) {
   const w = review?.with
   return w?.people?.length ? orList(w.people) : ''
 }
+
+/** Server text names the person who must act ("Neha Kulkarni (Artwork) must upload …"). When the reader is that person,
+ *  say it to them instead: "Upload …". */
+export function toYou(text, me) {
+  const m = text && me && text.match(/^(.+?) must ([\s\S]+)$/)
+  if (!m || !m[1].includes(me.name)) return text
+  const others = m[1].split(/ or |, /).filter((x) => !x.startsWith(me.name) && !/^\d+ more$/.test(x))
+  return others.length ? `You (or ${others.join(' or ')}) must ${m[2]}` : m[2][0].toUpperCase() + m[2].slice(1)
+}
+
+/** True when the person named in a server sentence is the reader. */
+export const isMine = (text, me) => !!(text && me && text.match(/^(.+?) must /)?.[1].includes(me.name))

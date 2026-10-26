@@ -4,39 +4,59 @@ import { api } from '../api'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
 import TaskCard from '../components/TaskCard'
-import { Empty, fmtDate, fmtDay, label, usePaged } from '../components/bits'
+import { Empty, Skeleton, TASK_STATE, fmtDate, fmtDay, label, usePaged } from '../components/bits'
+import { plainType } from '../components/Workstreams'
+import { useMe } from '../context'
+
+const MFR_WORD = { requested: 'requested from the manufacturer', received: 'received, to be checked', under_review: 'being checked', changes_requested: 'sent back for changes', accepted: 'accepted' }
+
+/** Everything waiting for a regulatory reviewer, in one wording: what it is, which project, what kind of check. */
+function ReviewQueue({ rows }) {
+  const { items, pager } = usePaged(rows, 8)
+  if (!rows.length) return <Empty>Nothing is waiting for regulatory review.</Empty>
+  return (
+    <>
+      <ul className="rows">
+        {items.map((x, i) => (
+          <li key={i}>
+            {x.type === 'stage' && <Link to={`/projects/${x.project_id}?step=${x.stage_key}`}><div><strong>{x.stage_name}</strong><small>{x.project_name} · step waiting for approval</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
+            {x.type === 'artwork' && <Link to={`/projects/${x.document.project_id}?tab=${x.document.is_artwork ? 'artwork' : 'documents'}&focus=doc-${x.document.id}`}><div><strong>{x.document.title}</strong><small>{x.document.project_name} · {x.document.is_artwork ? 'artwork' : 'document'}, version {x.document.current_version} · waiting for review</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
+            {x.type === 'manufacturer' && <Link to={`/projects/${x.request.project_id}?tab=manufacturer&focus=mfr-${x.request.id}`}><div><strong>{x.request.label}</strong><small>{x.request.project_name} · manufacturer data, {MFR_WORD[x.request.status] || label(x.request.status)}</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
+          </li>
+        ))}
+      </ul>
+      {pager}
+    </>
+  )
+}
 
 export default function Regulatory() {
+  const me = useMe()
   const [d, setD] = useState(null)
   const [error, setError] = useState('')
   const load = useCallback(() => api.regulatory().then(setD).catch((e) => setError(e.message)), [])
   useEffect(() => { load() }, [load])
-  if (!d) return <Layout title="Regulatory portal" subtitle={error || 'Loading…'} />
+  if (!d) return <Layout title="Regulatory portal" subtitle={error || 'Loading…'}>{!error && <><Skeleton rows={4} /><Skeleton rows={3} /></>}</Layout>
+  // a person outside Regulatory with no tasks here does not need an empty "my tasks" box
+  const showMine = d.my_tasks.length > 0 || ['regulatory', 'super_admin'].includes(me.role_key)
 
   return (
     <Layout title="Regulatory portal" subtitle="Your tasks, dossier status, review queue, RFI cases and submission deadlines">
-      <section className="grid-2 even">
+      <section className={showMine ? 'grid-2 even' : ''}>
+        {showMine && (
+          <div className="panel">
+            <header><h3>My tasks in regulatory steps</h3><span className="muted">{d.my_tasks.length} open</span></header>
+            <MyTasks tasks={d.my_tasks} />
+          </div>
+        )}
         <div className="panel">
-          <header><h3>My regulatory tasks</h3><span className="muted">{d.my_tasks.length} open</span></header>
-          <MyTasks tasks={d.my_tasks} />
-        </div>
-        <div className="panel">
-          <header><h3>RA review queue</h3><span className="muted">{d.ra_review_queue.length} waiting</span></header>
-          {!d.ra_review_queue.length && <Empty>Nothing is waiting for regulatory review.</Empty>}
-          <ul className="rows">
-            {d.ra_review_queue.map((x, i) => (
-              <li key={i}>
-                {x.type === 'stage' && <Link to={`/projects/${x.project_id}?step=${x.stage_key}`}><div><strong>{x.stage_name}</strong><small>{x.project_name} · stage awaiting approval</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
-                {x.type === 'artwork' && <Link to={`/projects/${x.document.project_id}?tab=${x.document.is_artwork ? 'artwork' : 'documents'}&focus=doc-${x.document.id}`}><div><strong>{x.document.title}</strong><small>{x.document.project_name} · {x.document.is_artwork ? 'artwork' : 'document'} V{x.document.current_version} · regulatory review</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
-                {x.type === 'manufacturer' && <Link to={`/projects/${x.request.project_id}?tab=manufacturer&focus=mfr-${x.request.id}`}><div><strong>{x.request.label}</strong><small>{x.request.project_name} · {label(x.request.status)}</small></div><span className="go">Review<Icon name="arrow" size={14} /></span></Link>}
-              </li>
-            ))}
-          </ul>
+          <header><h3>Waiting for regulatory review</h3><span className="muted">{d.ra_review_queue.length} waiting</span></header>
+          <ReviewQueue rows={d.ra_review_queue} />
         </div>
       </section>
 
       <section className="panel">
-        <header><h3>Dossiers and module status</h3><span className="muted hide-m">M1–M5 appear only where the submission type needs them</span></header>
+        <header><h3>Dossiers in preparation</h3><span className="muted hide-m">M1–M5 are the parts of a dossier; only the parts a project needs are shown</span></header>
         {!d.dossiers.length && <Empty>No dossiers in preparation.</Empty>}
         <div className="dossier-grid">
           {d.dossiers.map((x) => (
@@ -45,7 +65,7 @@ export default function Regulatory() {
               <span className="meter"><i style={{ width: x.total ? `${(x.done / x.total) * 100}%` : 0 }} /></span>
               <small>{x.done}/{x.total} items ready{x.target_submission && ` · target ${fmtDay(x.target_submission)}`}</small>
               {x.modules.length > 0 && <span className="mods">{x.modules.map((m) => <i key={m.module} className={`mod mod-${m.status}`} title={`${m.module} ${m.title}: ${m.status}`}>{m.module}</i>)}</span>}
-              <small className="dossier-type">{x.submission_type || 'Submission type to be decided'}</small>
+              <small className="dossier-type">{x.submission_type ? plainType(x.submission_type) : 'Submission type to be decided'}</small>
             </Link>
           ))}
         </div>
@@ -65,12 +85,12 @@ export default function Regulatory() {
           </ul>
         </div>
         <div className="panel">
-          <header><h3>RFI cases</h3><span className="muted">{d.rfi_cases.length} open</span></header>
+          <header><h3>Questions from the regulator (RFIs)</h3><span className="muted">{d.rfi_cases.length} open</span></header>
           {!d.rfi_cases.length && <Empty>No open RFI cases.</Empty>}
           <ul className="rows">
             {d.rfi_cases.map((r) => (
               <li key={r.id}><Link to={`/projects/${r.project_id}?tab=rfi&focus=rfi-${r.id}`}>
-                <div><strong>{r.reference || 'RFI'} · {r.authority}</strong><small>{r.project_name} · {label(r.status)} · {r.questions.length} questions</small></div>
+                <div><strong>{r.reference || 'RFI'} · {r.authority}</strong><small>{r.project_name} · {label(r.status)} · {r.questions.length} question{r.questions.length === 1 ? '' : 's'}</small></div>
                 <span className={`age ${r.overdue ? 'age-over' : 'age-ok'}`}>{fmtDay(r.due_date)}</span>
               </Link></li>
             ))}
@@ -109,7 +129,7 @@ function MyTasks({ tasks }) {
       <ul className="rows">
         {items.map((t) => (
           <li key={t.id}><Link to={`/projects/${t.project_id}?tab=tasks&focus=task-${t.id}`}>
-            <div><strong>{t.title}</strong><small>{t.project_name} · {label(t.state)}</small></div>
+            <div><strong>{t.title}</strong><small>{t.project_name} · {TASK_STATE[t.state] || label(t.state)}</small></div>
             <span className={`age ${t.overdue ? 'age-over' : 'age-ok'}`}>{t.overdue ? 'Overdue · ' : ''}{fmtDate(t.due_at)}</span>
           </Link></li>
         ))}

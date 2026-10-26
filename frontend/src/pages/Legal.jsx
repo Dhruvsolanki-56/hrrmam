@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
-import { fmtDay, label, usePaged } from '../components/bits'
+import { Skeleton, fmtDay, label, usePaged } from '../components/bits'
 import { useConfig } from '../context'
 
 export default function Legal() {
@@ -35,24 +35,23 @@ export default function Legal() {
       <div className="panel table-panel">
         <div className="table-scroll">
           <table className="table">
-            <thead><tr><th>Sr</th><th>Project</th><th>Type</th><th>Parties</th><th>Started</th><th>Owner</th><th>Status</th><th>Due</th><th>Final sign</th><th>Age</th></tr></thead>
+            <thead><tr><th>#</th><th>Project</th><th>Agreement and other party</th><th>Started</th><th>Owner</th><th>Status</th><th>Due</th><th>Final sign</th></tr></thead>
             <tbody>
               {items.map((r, i) => (
                 <tr key={r.id} className={`reg-row ${r.overdue ? 'row-late' : ''}`}>
-                  <td data-label="Sr" className="num">{(page - 1) * 20 + i + 1}</td>
+                  <td data-label="#" className="num">{(page - 1) * 20 + i + 1}</td>
                   <td className="proj-cell"><Link to={`/projects/${r.project_id}?tab=legal&focus=agreement-${r.id}`} className="cell-main"><span><strong>{r.project_name}</strong><small>{r.project_code || 'Code pending'}</small></span></Link></td>
-                  <td data-label="Agreement">{r.label}{r.core && <small className="sub">Core</small>}</td>
-                  <td data-label="Parties">{r.counterparty || '–'}</td>
-                  <td data-label="Started">{fmtDay(r.started_on)}</td>
+                  <td data-label="Agreement" className="reg-type"><span>{r.label}</span><small className="sub">{r.counterparty || 'Other party not named yet'}{r.core ? ' · core' : ''}</small></td>
+                  <td data-label="Started" className="nowrap">{fmtDay(r.started_on)}<small className="sub">{r.closed ? 'Closed' : r.age_days != null && r.status !== 'not_started' ? `Open ${r.age_days} days` : 'Not started'}</small></td>
                   <td data-label="Owner">{r.owner?.name || '–'}</td>
                   <td data-label="Status"><span className={`dstate ag-${r.status}`}>{label(r.status)}</span>{r.review?.with?.people?.length > 0 && <small className="sub">{r.review.with.action === 'approve' ? 'Waiting for approval from' : 'With'} {r.review.with.people.join(' or ')}</small>}</td>
-                  <td data-label="Due" className={r.overdue ? 'late' : ''}>{fmtDay(r.due_date)}</td>
-                  <td data-label="Final sign">{fmtDay(r.signed_date)}</td>
-                  <td data-label="Age">{r.closed ? <b>Closed</b> : r.age_days != null && r.status !== 'not_started' ? `${r.age_days} days` : '–'}</td>
+                  <td data-label="Due" className={`nowrap ${r.overdue ? 'late' : ''}`}>{fmtDay(r.due_date)}</td>
+                  <td data-label="Final sign" className="nowrap">{fmtDay(r.signed_date)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {!rows && <Skeleton rows={6} card={false} />}
           {rows && !rows.length && <p className="empty">Nothing matches.</p>}
         </div>
         {pager}

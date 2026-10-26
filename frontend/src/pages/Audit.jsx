@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { actionLabel } from '../components/Timeline'
 import Layout from '../components/Layout'
-import { Tabs, fmtDateTime, label, usePaged } from '../components/bits'
+import { Skeleton, fmtDateTime, label, usePaged } from '../components/bits'
 import { useStages } from '../context'
 
 const AREAS = ['', 'stage', 'task', 'legal', 'dossier', 'artwork', 'manufacturer', 'rfi', 'document', 'project']
@@ -26,8 +26,10 @@ export default function Audit() {
   return (
     <Layout title="Audit trail" subtitle="Every change, deadline update, reassignment, return, approval, lock and reopen: who did it, when, and why">
       <div className="toolbar panel">
-        <Tabs value={area} onChange={setArea} tabs={AREAS.map((a) => ({ key: a, label: a ? label(a) : 'Everything' }))} />
         <div className="tools">
+          <select className="select" value={area} onChange={(e) => setArea(e.target.value)} aria-label="Filter by area">
+            {AREAS.map((a) => <option key={a} value={a}>{a ? label(a) : 'Every area'}</option>)}
+          </select>
           <select className="select" value={project} onChange={(e) => setProject(e.target.value)} aria-label="Filter by project">
             <option value="">All projects</option>
             {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -43,7 +45,7 @@ export default function Audit() {
               {items.map((e) => (
                 <tr key={e.id} className="audit-row">
                   <td className="nowrap muted" data-label="When">{fmtDateTime(e.created_at)}</td>
-                  <td data-label="Project"><Link to={`/projects/${e.project_id}?tab=activity`}><strong>{e.project_name}</strong></Link><small className="sub">{stageName(e.stage_key)}</small></td>
+                  <td data-label="Project" className="audit-proj"><Link to={`/projects/${e.project_id}?tab=activity`}><strong>{e.project_name}</strong></Link><small className="sub">{stageName(e.stage_key)}</small></td>
                   <td data-label="Area"><span className="chip plain">{label(e.area)}</span></td>
                   <td data-label="Action" className="nowrap">{actionLabel(e)}</td>
                   <td data-label="Detail" className={`wrap ${e.note ? '' : 'no-note'}`}>{e.note}{e.to && <small className="sub">To {e.to}</small>}{e.link && <Link className="ev-open" to={`/projects/${e.project_id}?${e.link}`}>Open</Link>}</td>
@@ -52,6 +54,7 @@ export default function Audit() {
               ))}
             </tbody>
           </table>
+          {!rows && <Skeleton rows={8} card={false} />}
           {rows && !rows.length && <p className="empty">No entries match.</p>}
         </div>
         {pager}

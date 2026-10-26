@@ -298,31 +298,31 @@ def _preset(parallel_after: str | None, name: str) -> dict:
             "task: who asked, what is missing, who answers, by when, and whether the answer was accepted.",
             ("opportunity",), sla_days=14, features=("clarifications",)),
         _st("commercial", "Feasibility & Commercial", 3, G2, AU, "Commercial team", "Director or Commercial lead", ("commercial", "project_manager"),
-            ("director", "commercial"), "Feasibility and FMEA, cost and financial review, risk adjustment and commercial approval.",
+            ("director", "commercial"), "Is it worth doing? Feasibility and risk analysis (FMEA), costs, finances and commercial approval.",
             com_req, workstream=parallel_after == "brief", can_close=True, sla_days=21, soft_requires=("manufacturer",)),
         _st("legal", "Legal / Agreements", lane or 4, G3, IN, "Legal team", "Legal lead or Director", ("legal", "project_manager"), ("legal", "director"),
-            "Supplier, Quality and PV agreements run in parallel, plus NDA / CDA / POA / notices.", chain["legal"], workstream=ws,
+            "Supplier, quality and drug-safety (PV) agreements run in parallel, plus confidentiality agreements, powers of attorney and notices.", chain["legal"], workstream=ws,
             sla_days=30, features=("agreements",)),
         _st("regulatory", "Regulatory / Dossier", lane or 4, G3, IN, "Regulatory team", "RA reviewer or Director", ("regulatory", "project_manager"),
-            ("regulatory", "director"), "Submission type, dossier structure and checklist, RA review.", chain["regulatory"], workstream=ws,
+            ("regulatory", "director"), "Choose how the product will be registered, then build and check the dossier (the registration file).", chain["regulatory"], workstream=ws,
             sla_days=45, features=("dossier",), info_requires=("manufacturer",)),
         _st("artwork", "Artwork / Packaging", lane or 4, G3, IN, "Artwork team", "Regulatory review, then Director", ("artwork", "project_manager"),
             ("regulatory", "director"), "Carton, label, leaflet / insert, shade card and revisions.", chain["artwork"], workstream=ws,
             optional=True, sla_days=30, features=("artwork",), soft_requires=("regulatory",)),
         _st("manufacturer", "Manufacturer / Technical data", lane or 4, G3, MP, "Technical coordinator", "RA reviewer or Technical lead",
             ("technical", "project_manager"), ("regulatory", "technical"),
-            "COA, MSDS, specification, testing, stability and manufacturing data from the manufacturer.", chain["manufacturer"], workstream=ws,
+            "Test certificates (COA), safety data sheets (MSDS), specifications, test results, stability and manufacturing data from the manufacturer.", chain["manufacturer"], workstream=ws,
             optional=True, sla_days=30, features=("mfr",)),
         _st("quality", "Quality / PV", lane or 4, G3, IN, "Quality & PV team", "Quality lead or Director", ("quality", "project_manager"),
-            ("quality", "director"), "Quality and pharmacovigilance controls: quality review, PV system checks and their own documents.",
+            ("quality", "director"), "Quality and drug-safety (pharmacovigilance) checks, with their own documents.",
             chain["quality"], workstream=ws, sla_days=30, soft_requires=("legal",), features=("quality",)),
         _st("dossier_ready", "Dossier Ready", 5 - later, G4, IN, "Regulatory team", "RA reviewer or Director", ("regulatory", "project_manager"),
-            ("regulatory", "director"), "Milestone lock. Complete only when the dossier, required artwork, required manufacturer data "
+            ("regulatory", "director"), "A checkpoint. It completes only when the dossier, required artwork, required manufacturer data "
             "and legal / commercial conditions are all approved.", join, milestone=True, sla_days=7),
         _st("submission", "Regulatory Submission", 6 - later, G4, IN, "Regulatory team", "RA reviewer", ("regulatory",), ("regulatory", "director"),
-            "RA review, then the external submission is recorded (platform configurable).", ("dossier_ready",), sla_days=14, features=("submission",)),
+            "Regulatory checks the dossier, then records the submission to the regulator.", ("dossier_ready",), sla_days=14, features=("submission",)),
         _st("rfi", "RFI / Changes", 7 - later, G4, IN, "Regulatory team", "RA reviewer", ("regulatory",), ("regulatory", "director"),
-            "Authority questions are assigned, evidence and responses tracked. Closes when no RFI is open.", ("submission",), sla_days=60,
+            "Questions from the regulator are assigned and answered. Closes when every question is answered.", ("submission",), sla_days=60,
             features=("rfi",)),
         _st("approval", "Regulatory Approval", 8 - later, G4, IN, "Regulatory team", "RA reviewer or Director", ("regulatory", "project_manager"),
             ("regulatory", "director"), "Regulatory approval / market authorisation received.", ("rfi",), can_close=True, sla_days=90),
@@ -415,7 +415,7 @@ DOSSIER_DONE = ("ready", "reviewed")
 ARTWORK_KINDS = {"carton": "Carton", "label": "Label", "leaflet": "Leaflet / insert", "print_proof": "Print proof", "shade_card": "Shade card"}
 DOC_KINDS = ["Brief", "Feasibility / FMEA", "Agreement", "Dossier", "Specification", "Report", "Correspondence", "Other"]
 
-MFR_KINDS = {"coa": "COA", "msds": "MSDS", "specification": "Finished product specification", "raw_spec": "Raw material specification", "testing": "Testing data",
+MFR_KINDS = {"coa": "Certificate of analysis (COA)", "msds": "Safety data sheet (MSDS)", "specification": "Finished product specification", "raw_spec": "Raw material specification", "testing": "Testing data",
              "stability": "Stability data", "manufacturing": "Manufacturing data", "other": "Other"}
 MFR_STATUS = ["requested", "received", "under_review", "changes_requested", "accepted"]
 MFR_DONE = ("accepted",)
@@ -427,6 +427,31 @@ HEALTH = ("green", "amber", "red")
 DEFAULT_SETTINGS = {
     "reminder_days": "7,3,1,0",             # reminders before the due date (0 = due today)
     "escalate_after_days": "1",             # overdue this many days -> escalate to the assigner and project manager
+    "submission_platform": "TGA Business Services portal",
+    "manufacturer_access": "Entered by the Neo technical team",
+}
+# step descriptions as first shipped -> plain words; published workflows stored in a database are updated too
+OLD_STEP_TEXT = [
+    ('Feasibility and FMEA, cost and financial review, risk adjustment and commercial approval.',
+     'Is it worth doing? Feasibility and risk analysis (FMEA), costs, finances and commercial approval.'),
+    ('Supplier, Quality and PV agreements run in parallel, plus NDA / CDA / POA / notices.',
+     'Supplier, quality and drug-safety (PV) agreements run in parallel, plus confidentiality agreements, powers of attorney and notices.'),
+    ('Submission type, dossier structure and checklist, RA review.',
+     'Choose how the product will be registered, then build and check the dossier (the registration file).'),
+    ('COA, MSDS, specification, testing, stability and manufacturing data from the manufacturer.',
+     'Test certificates (COA), safety data sheets (MSDS), specifications, test results, stability and manufacturing data from the manufacturer.'),
+    ('Quality and pharmacovigilance controls: quality review, PV system checks and their own documents.',
+     'Quality and drug-safety (pharmacovigilance) checks, with their own documents.'),
+    ('Milestone lock. Complete only when',
+     'A checkpoint. It completes only when'),
+    ('RA review, then the external submission is recorded (platform configurable).',
+     'Regulatory checks the dossier, then records the submission to the regulator.'),
+    ('Authority questions are assigned, evidence and responses tracked. Closes when no RFI is open.',
+     'Questions from the regulator are assigned and answered. Closes when every question is answered.'),
+]
+
+# wording shipped before the settings were confirmed; a database still holding it is moved to the plain version
+OLD_SETTINGS = {
     "submission_platform": "TGA external submission platform (to be confirmed)",
     "manufacturer_access": "Internal entry by Neo technical team (to be confirmed: account / secure upload / internal entry)",
 }

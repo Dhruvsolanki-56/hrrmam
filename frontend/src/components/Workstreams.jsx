@@ -3,13 +3,17 @@ import { Link as RLink } from 'react-router-dom'
 import { api } from '../api'
 import { useAccess, useCan, useConfig, useMe, useStages } from '../context'
 import { withText } from './ActionPanel'
-import { Empty, Person, fmtDateTime, fmtDay, holderOf, label, toast, useDo, useFocus } from './bits'
+import { Empty, Person, TASK_STATE, fmtDateTime, fmtDay, holderOf, label, toast, useDo, useFocus } from './bits'
 import { MiniHistory } from './Timeline'
 import FormModal from './FormModal'
 import ReviewAssistant from './ReviewAssistant'
 import Icon from './Icon'
 import { inDays, fromInput, toInput } from './bits'
 
+/** Regulators by their short name, said in full the way a newcomer needs it. */
+const AUTHORITY = { TGA: 'TGA (Australian regulator)', Medsafe: 'Medsafe (New Zealand regulator)', CDSCO: 'CDSCO (Indian regulator)' }
+/** Submission types in plain words; the stored value keeps the official code. */
+export const plainType = (t = '') => t.replace(' (AUST R)', '').replace('(AUST L)', '(lower risk)')
 const closedProject = (p) => p.status === 'rejected' || p.status === 'completed'
 /** Read-only when the project is closed, or when this person's role does not work on the workstream (the server enforces it too). */
 function useReadOnly(project, feature) {
@@ -30,7 +34,7 @@ function AccessNote({ project, feature }) {
   const h = row?.handoff || {}
   return (
     <p className="notice soft access-note">
-      You can read everything here, but only {st.owner}{h.owners?.length ? ` (${h.owners.join(', ')})` : ''} change it, and {st.approver}{h.approvers?.length ? ` (${h.approvers.join(', ')})` : ''} approve it.
+      You can read everything here. Only {h.owners?.length ? h.owners.join(' or ') : st.owner} can change it, and {h.approvers?.length ? h.approvers.join(' or ') : st.approver} approves it.
     </p>
   )
 }
@@ -212,16 +216,16 @@ export function RegulatoryTab({ project, onChange }) {
       <section className="panel">
         <header><h3>Submission type</h3></header>
         <div className="row2">
-          <label className="field">Submission type <small>(decides which M1–M5 modules are needed)</small>
+          <label className="field">Submission type <small>(decides which parts of the dossier are needed)</small>
             <select value={project.submission_type} onChange={(e) => setType(e.target.value)} disabled={off}>
               <option value="">To be decided</option>
-              {Object.keys(types).map((t) => <option key={t}>{t}</option>)}
+              {Object.keys(types).map((t) => <option key={t} value={t}>{plainType(t)}</option>)}
             </select>
           </label>
           <div className="field"><span>External platform</span><p className="static">{config.settings.submission_platform}</p></div>
         </div>
         {typeError && <p className="error">{typeError}</p>}
-        <p className="muted">M1–M5 apply only where the submission type requires them. The submission platform is configurable (Admin → Settings) until it is confirmed.</p>
+        <p className="muted">A dossier has up to five parts, M1 to M5 (M1 administrative, M2 summaries, M3 quality, M4 safety, M5 clinical). Only the parts this submission type needs are listed below.</p>
       </section>
 
       <section className="panel">
@@ -304,7 +308,7 @@ export function ManufacturerTab({ project, onChange }) {
   const got = project.mfr_requests.filter((m) => m.status === 'accepted').length
   const fields = [
     { key: 'manufacturer', label: 'Manufacturer', type: 'text', placeholder: 'e.g. Zenith Pharma Pvt Ltd' },
-    { key: 'needed_for', label: 'Needed for', type: 'text', placeholder: 'e.g. Module 3 (Quality)', hint: '(which part of the dossier this evidence supports)' },
+    { key: 'needed_for', label: 'Needed for', type: 'text', placeholder: 'e.g. Quality part of the dossier (M3)', hint: '(which part of the dossier this evidence supports)' },
     { key: 'due_date', label: 'Needed by', type: 'date', half: true },
     { key: 'owner_id', label: 'Owner', type: 'user', roles: ['technical', 'regulatory', 'project_manager'], half: true },
     { key: 'required', label: 'Required', hint: ' The workstream cannot be submitted until required data is accepted.', type: 'checkbox' },
@@ -315,10 +319,9 @@ export function ManufacturerTab({ project, onChange }) {
       <AccessNote project={project} feature="mfr" />
       <section className="panel">
         <header>
-          <div><h3>Manufacturer / technical data</h3><p className="muted">COA, MSDS, specification, testing, stability and manufacturing data. {got}/{project.mfr_requests.length} accepted.</p></div>
+          <div><h3>Manufacturer / technical data</h3><p className="muted">Certificates of analysis (COA), safety data sheets (MSDS), specifications, test results, stability and manufacturing data. {got} of {project.mfr_requests.length} accepted.</p></div>
           {!off && <button className="btn primary" onClick={() => setEdit('new')}><Icon name="plus" size={16} />Request data</button>}
         </header>
-        <p className="notice soft">Access model: {config.settings.manufacturer_access}</p>
         {!project.mfr_requests.length && <Empty>No data requested yet.</Empty>}
         {project.mfr_requests.length > 0 && (
           <div className="table-scroll"><table className="table compact">
@@ -370,7 +373,7 @@ function RfiCard({ rfi, project, onChange }) {
   return (
     <article className={`rfi r-${rfi.status}`} id={`rfi-${rfi.id}`}>
       <header onClick={() => setOpen(!open)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setOpen(!open)}>
-        <div className="t-title"><strong>{rfi.reference || 'RFI'} · {rfi.authority}</strong><small>{rfi.summary || 'No summary'}</small></div>
+        <div className="t-title"><strong>{rfi.reference || 'RFI'} · {AUTHORITY[rfi.authority] || rfi.authority}</strong><small>{rfi.summary || 'No summary'}</small></div>
         <span className={`age ${rfi.overdue ? 'age-over' : 'age-ok'}`}>{rfi.due_date ? `Due ${fmtDay(rfi.due_date)}` : 'No due date'}</span>
         <span className={`dstate rfi-${rfi.status}`}>{label(rfi.status)}</span>
       </header>
@@ -378,16 +381,18 @@ function RfiCard({ rfi, project, onChange }) {
         <div className="task-body">
           <ol className="rfi-q">
             {rfi.questions.map((q) => (
-              <RfiQuestion key={q.id} q={q} disabled={off || rfi.status === 'closed'} onChange={onChange} />
+              <RfiQuestion key={q.id} q={q} disabled={off || rfi.status === 'closed'} isRA={isRA} onChange={onChange} />
             ))}
           </ol>
           {!rfi.questions.length && <Empty>No questions yet. Add each question the authority asked and assign it: it becomes a task with a due date.</Empty>}
           {!off && rfi.status === 'open' && isRA && <button className="btn line" onClick={() => setAdding(true)}><Icon name="plus" size={16} />Add question</button>}
 
-          <label className="field">Response package link
-            <div className="inline"><input type="url" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://…" disabled={off || rfi.status === 'closed'} />
-              <button className="btn line" type="button" disabled={busy || link === rfi.response_link || off} onClick={saveLink}>Save</button></div>
-          </label>
+          {isRA && !off && rfi.status !== 'closed' ? (
+            <label className="field">Link to the full response <small>(the folder or file sent back to the regulator)</small>
+              <div className="inline"><input type="url" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://…" />
+                <button className="btn line" type="button" disabled={busy || link === rfi.response_link} onClick={saveLink}>Save</button></div>
+            </label>
+          ) : <p className="muted">Full response: {rfi.response_link ? <a href={rfi.response_link} target="_blank" rel="noreferrer">Open</a> : 'not added yet'}</p>}
           {rfi.status === 'closed' && <p className="closed-note">Closed {fmtDay(rfi.closed_on)}. {rfi.closure_note}</p>}
           {error && <p className="error">{error}</p>}
           {!off && isRA && (
@@ -420,8 +425,9 @@ function RfiCard({ rfi, project, onChange }) {
   )
 }
 
-function RfiQuestion({ q, disabled, onChange }) {
+function RfiQuestion({ q, disabled, isRA, onChange }) {
   const me = useMe()
+  const mine = isRA || me.role_key === 'super_admin' || q.task?.assignee.id === me.id
   const [response, setResponse] = useState(q.response)
   const [evidence, setEvidence] = useState(q.evidence_link)
   const { busy, error, run } = useDo()
@@ -432,12 +438,18 @@ function RfiQuestion({ q, disabled, onChange }) {
       <div className="q-head">
         <b>Q{q.number}</b><span>{q.question}</span>
       </div>
-      {t && <div className="q-meta"><Person user={t.assignee} /><span className="muted">due {fmtDay(t.due_at)}</span><span className={`tstate tstate-${t.state}`}>{label(t.state)}</span>{t.overdue && <span className="age age-over">Overdue</span>}<RLink className="link q-task" to={`?tab=tasks&focus=task-${t.id}`}>{t.assignee.id === me.id ? 'Your task' : 'Open task'}</RLink></div>}
-      <textarea rows={2} value={response} disabled={disabled} onChange={(e) => setResponse(e.target.value)} placeholder="Response / evidence summary…" />
-      <div className="inline">
-        <input type="url" value={evidence} disabled={disabled} onChange={(e) => setEvidence(e.target.value)} placeholder="Link to evidence (https://…)" />
-        <button className="btn line" disabled={disabled || busy || !dirty} onClick={() => run(async () => onChange(await api.updateQuestion(q.id, { response, evidence_link: evidence })))}>Save</button>
-      </div>
+      {t && <div className="q-meta"><Person user={t.assignee} /><span className="muted">due {fmtDay(t.due_at)}</span><span className={`tstate tstate-${t.state}`}>{TASK_STATE[t.state] || label(t.state)}</span>{t.overdue && <span className="age age-over">Overdue</span>}<RLink className="link q-task" to={`?tab=tasks&focus=task-${t.id}`}>{t.assignee.id === me.id ? 'Your task' : 'Open task'}</RLink></div>}
+      {mine && !disabled ? (
+        <>
+          <textarea rows={2} value={response} onChange={(e) => setResponse(e.target.value)} placeholder="Your answer, in a few lines…" aria-label={`Answer to Q${q.number}`} />
+          <div className="inline">
+            <input type="url" value={evidence} onChange={(e) => setEvidence(e.target.value)} placeholder="Link to the supporting file (https://…)" aria-label={`Supporting file for Q${q.number}`} />
+            <button className="btn line" disabled={busy || !dirty} onClick={() => run(async () => onChange(await api.updateQuestion(q.id, { response, evidence_link: evidence })))}>Save</button>
+          </div>
+        </>
+      ) : (
+        <p className="q-answer">{q.response || <span className="muted">No answer yet.</span>}{q.evidence_link && <> · <a href={q.evidence_link} target="_blank" rel="noreferrer">Supporting file</a></>}</p>
+      )}
       {error && <p className="error">{error}</p>}
     </li>
   )
@@ -453,7 +465,7 @@ export function RfiTab({ project, onChange }) {
   return (
     <section className="panel">
       <header>
-        <div><h3>RFI management</h3><p className="muted">Authority questions are assigned as tasks, evidence is linked, and the response package is tracked to closure. The RFI / Changes stage can only be submitted when every case is closed.</p></div>
+        <div><h3>Questions from the regulator (RFIs)</h3><p className="muted">Each question from the regulator becomes a task for one person. Their answers and files are collected here, then sent back as one response. This step can be submitted once every case is closed.</p></div>
         {!off && isRA && <button className="btn primary" disabled={!subDone} title={subDone ? '' : 'RFIs follow a recorded submission'} onClick={() => setCreating(true)}><Icon name="plus" size={16} />Open RFI case</button>}
       </header>
       {!project.rfis.length && <Empty>{subDone ? 'No RFI cases. If the authority raises questions, open a case here.' : 'RFIs can be opened once the Regulatory Submission stage is approved.'}</Empty>}

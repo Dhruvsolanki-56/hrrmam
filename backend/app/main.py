@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config, models  # noqa: F401  (importing models registers the tables)
 from .database import Base, SessionLocal, engine
-from .migrate import archive_legacy_db, ensure_columns
+from .migrate import archive_legacy_db, ensure_columns, refresh_settings
 from .routers import core, projects, workflows as workflows_router
 from .seed import seed_reference, seed_demo
 from .services import common, notify, workflows
@@ -45,6 +45,7 @@ def startup():
     archive_legacy_db(engine)
     Base.metadata.create_all(engine)
     ensure_columns(engine)
+    refresh_settings(engine)
     with SessionLocal() as db:
         seed_reference(db)
         workflows.load_registry(db)

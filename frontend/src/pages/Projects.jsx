@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
-import { AgeChip, HealthPill, Person, StageBar, StatusPill, fmtDay, usePaged } from '../components/bits'
+import { AgeChip, HealthPill, Person, StageBar, StatusPill, fmtDate, fmtDay, groupLabel, usePaged } from '../components/bits'
 import { useStages } from '../context'
 
 const FILTERS = [['all', 'All'], ['active', 'In progress'], ['on_hold', 'On hold'], ['rejected', 'Rejected'], ['completed', 'Completed']]
@@ -48,6 +48,7 @@ export default function Projects() {
     .sort((a, b) => (RANK_STATUS[a.status] ?? 9) - (RANK_STATUS[b.status] ?? 9) || (RANK_HEALTH[a.health] ?? 9) - (RANK_HEALTH[b.health] ?? 9))
 
   const extra = (p) => p.active_stages.length - 1
+  const finished = filter === 'completed'
   const { items: pageRows, pager } = usePaged(visible, 20, `${filter}|${health}|${stageKey}|${query}`)
 
   return (
@@ -72,9 +73,9 @@ export default function Projects() {
           <select className="select" value={health} onChange={(e) => setHealth(e.target.value)} aria-label="Filter by health">
             <option value="">Any health</option><option value="green">On track</option><option value="amber">At risk</option><option value="red">Critical</option>
           </select>
-          <select className="select" value={stageKey} onChange={(e) => setStageKey(e.target.value)} aria-label="Filter by phase">
-            <option value="">Any phase</option>
-            {stages.map((s) => <option key={s.key} value={s.key}>{s.phase}. {s.name}</option>)}
+          <select className="select" value={stageKey} onChange={(e) => setStageKey(e.target.value)} aria-label="Filter by step">
+            <option value="">Any step</option>
+            {stages.map((s) => <option key={s.key} value={s.key}>{s.name}</option>)}
           </select>
           <input className="search" placeholder="Filter by name, code, product" value={query} onChange={(e) => setParam('q', e.target.value)} aria-label="Filter projects" />
         </div>
@@ -84,7 +85,7 @@ export default function Projects() {
         <div className="panel table-panel">
           <div className="table-scroll">
             <table className="table">
-              <thead><tr><th>Project</th><th>Phase</th><th>Health</th><th>Progress</th><th>Manager</th><th>Target submission</th></tr></thead>
+              <thead><tr><th>Project</th><th>{finished ? 'Last step' : 'Current step'}</th>{!finished && <th>Health</th>}<th>Progress</th><th>Manager</th><th>{finished ? 'Finished' : 'Target submission'}</th></tr></thead>
               <tbody>
                 {pageRows.map((p) => {
                   const s = p.stage
@@ -93,23 +94,23 @@ export default function Projects() {
                       <td className="proj-cell">
                         <Link to={`/projects/${p.id}`} className="cell-main">
                           <strong>{p.name}</strong>
-                          <small><span className="code">{p.code || 'no code yet'}</span>· {p.project_type}{p.category ? ` · ${p.category}` : ''}</small>
+                          <small>{p.code && <span className="code">{p.code}</span>}{p.code && '· '}{p.project_type === 'In-Licence' ? 'In-licence' : 'New development'}{p.category ? ` · ${p.category}` : ''}</small>
                         </Link>
                       </td>
                       <td data-label="Phase">
                         <span className="stage-name">{s.name}</span>
                         <span className="sub">
                           {p.status !== 'active' ? <StatusPill status={p.status} /> : <AgeChip project={p} />}
-                          {extra(p) > 0 && ` · +${extra(p)} in parallel`}
+                          {extra(p) > 0 && ` · and ${extra(p)} more at the same time`}
                           {p.awaiting_approval.length > 0 && ' · awaiting approval'}
                         </span>
                       </td>
-                      <td data-label="Health"><HealthPill health={p.health} reasons={p.health_reasons} /></td>
+                      {!finished && <td data-label="Health"><HealthPill health={p.health} reasons={p.health_reasons} /></td>}
                       <td className="progress-cell" data-label="Progress">
                         <div className="progress"><StageBar project={p} /><small>{doneCount(p)}/{p.stage_order.length}</small></div>
                       </td>
                       <td data-label="Manager">{p.project_manager ? <Person user={p.project_manager} short /> : <span className="muted">–</span>}</td>
-                      <td className="nowrap num" data-label="Target">{fmtDay(p.target_submission)}</td>
+                      <td className="nowrap num" data-label={finished ? 'Finished' : 'Target'}>{finished ? fmtDate(p.updated_at) : fmtDay(p.target_submission)}</td>
                     </tr>
                   )
                 })}
@@ -126,13 +127,13 @@ export default function Projects() {
               : p.active_stages.some((k) => col.keys.includes(k)) && p.status !== 'rejected' && p.status !== 'completed')
             return (
               <section key={col.name} className="column">
-                <header><h3>{col.name}</h3><span className="count">{items.length}</span></header>
+                <header><h3>{col.closed ? col.name : groupLabel(col.name)}</h3><span className="count">{items.length}</span></header>
                 <div className="cards">
                   {items.map((p) => (
                     <Link key={p.id} to={`/projects/${p.id}`} className="card">
-                      <div className="card-top"><span className="code">{p.code || 'no code yet'}</span><HealthPill health={p.health} reasons={p.health_reasons} /></div>
+                      <div className="card-top"><span className="code">{p.code}</span>{!col.closed && <HealthPill health={p.health} reasons={p.health_reasons} />}</div>
                       <strong>{p.name}</strong>
-                      <span className="card-stage">{p.stage.name}{extra(p) > 0 && ` · +${extra(p)} parallel`}</span>
+                      <span className="card-stage">{p.stage.name}{extra(p) > 0 && ` and ${extra(p)} more`}</span>
                       <div className="progress"><StageBar project={p} /><small>{doneCount(p)}/{p.stage_order.length}</small></div>
                       <div className="card-foot">
                         {p.status !== 'active' ? <StatusPill status={p.status} /> : <AgeChip project={p} />}

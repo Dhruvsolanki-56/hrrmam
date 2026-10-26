@@ -42,3 +42,21 @@ def ensure_columns(engine):
             for name, ddl in cols.items():
                 if name not in existing:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
+def refresh_settings(engine):
+    """Replace setting values that are still the old placeholder wording (anything an admin typed is kept), and drop the
+    doubled word from RFI task titles written before rfi_name() ("RFI RFI-2026-115 · Q1" -> "RFI-2026-115 · Q1")."""
+    from sqlalchemy import text
+    from .workflow import DEFAULT_SETTINGS, OLD_SETTINGS, OLD_STEP_TEXT
+    if "settings" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        for k, old in OLD_SETTINGS.items():
+            conn.execute(text("UPDATE settings SET value = :new WHERE key = :k AND value = :old"), {"new": DEFAULT_SETTINGS[k], "k": k, "old": old})
+        if "workflow_defs" in set(inspect(engine).get_table_names()):
+            for old, new in OLD_STEP_TEXT:
+                conn.execute(text("UPDATE workflow_defs SET definition = REPLACE(definition, :old, :new) WHERE definition LIKE :like"),
+                             {"old": old, "new": new, "like": f"%{old}%"})
+        for table, col in (("tasks", "title"), ("notifications", "title"), ("notifications", "body"), ("project_events", "note")):
+            conn.execute(text(f"UPDATE {table} SET {col} = REPLACE({col}, 'RFI RFI-', 'RFI-') WHERE {col} LIKE '%RFI RFI-%'"))

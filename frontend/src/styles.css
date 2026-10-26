@@ -1581,7 +1581,7 @@ main.page > *:nth-child(n+5) { animation-delay: 160ms; }
 .proj-card .proj-title h1 { font-size: 28px; max-width: none; }
 .proj-card .meta { gap: 6px 16px; font-size: 14px; color: var(--muted); }
 .proj-card .meta .code { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
-.proj-card .summary { color: var(--ink-2); font-size: 15px; max-width: 80ch; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.proj-card .summary { color: var(--ink-2); font-size: 15px; max-width: 80ch; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .proj-card .journey { padding: 12px 0 4px; border-top: 1px solid var(--line); margin-top: 4px; gap: 10px; }
 .proj-card .journey-top { align-items: center; color: var(--muted); }
 .proj-card .journey-top b { color: var(--neo-dark); font-weight: 600; }
@@ -1631,3 +1631,68 @@ main.page > *:nth-child(n+5) { animation-delay: 160ms; }
   .tasks-tools .select { min-width: 0; width: 100%; }
 }
 .tasks-head > div:first-child { align-self: flex-start; text-align: left; }
+
+/* ---------------------------------------------------------------- audit fixes (26 Oct) */
+@media (max-width: 760px) { .mw-nav button.zero:not(.on) { display: none; } }
+.rv-next.mine { background: var(--tint-green); box-shadow: inset 0 0 0 1px #b9dcd9; }
+/* a linked record lands below the sticky top bar, not under it */
+[id^="doc-"], [id^="task-"], [id^="agreement-"], [id^="dossier_item-"], [id^="mfr-"], [id^="rfi-"], [id^="reopen-"] { scroll-margin-top: 88px; }
+/* task rows in My work get the same Open button as the other rows */
+.task > header .t-go { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 8px 16px; border-radius: var(--r); background: var(--neo-green); color: #fff; font-weight: 600; font-size: 14.5px; text-decoration: none; }
+.task > header .t-go:hover { background: var(--neo-dark); }
+.task > header:has(.t-go) { grid-template-columns: minmax(0, 1fr) 190px 300px auto; }
+.mw .task > header:has(.t-go) { grid-template-columns: minmax(0, 1fr) auto auto; }
+@media (max-width: 760px) { .task > header:has(.t-go), .mw .task > header:has(.t-go) { grid-template-columns: 1fr; } .task > header .t-go { justify-content: center; } }
+.handoff-next.mine { padding: 6px 10px; margin-top: 8px; border-radius: var(--r); background: #fff; box-shadow: inset 0 0 0 1px #b9dcd9; }
+.blocker-mini { margin: 0; padding: 8px 12px; border-radius: var(--r); background: #fbeaea; color: #8a1f1f; font-size: 14.5px; }
+.blocker-mini b { font-weight: 600; }
+.blocker-mini .link { margin-left: 6px; }
+.late-flag { color: var(--danger); font-weight: 500; }
+@media (max-width: 760px) {
+  .proj-card .summary { -webkit-line-clamp: 3; line-clamp: 3; }
+  /* every project tab visible on a phone: they wrap instead of hiding off the edge */
+  .proj-card .tabs { flex-wrap: wrap; overflow: visible; -webkit-mask-image: none; mask-image: none; padding-right: 0; row-gap: 2px; }
+  .proj-card .tab-sep { display: none; }
+}
+.req { margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--neo-green-text); text-transform: lowercase; }
+.modal-more { margin-top: 4px; }
+.modal-more > summary { font-weight: 600; color: var(--neo-dark); }
+.modal-more[open] > summary { margin-bottom: 10px; }
+.modal-more .row2, .modal-more label { margin-bottom: 12px; }
+.q-answer { margin: 6px 0 0; font-size: 15px; color: var(--ink-2); overflow-wrap: anywhere; }
+.metrics.metrics-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.metrics.metrics-4 .metric:first-child { border-left: 0; }
+@media (max-width: 760px) { .metrics.metrics-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.sh-skel i { background: linear-gradient(90deg, rgba(255,255,255,.22) 0, rgba(255,255,255,.4) 40%, rgba(255,255,255,.22) 80%) 0 0 / 640px 100%; }
+
+/* list rows show the whole title: a cut-off name makes people guess */
+.rows strong, .rows a > div small, .rows .row > div small { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.rows a > div, .rows .row > div { min-width: 0; }
+
+.reg-type span { white-space: nowrap; font-weight: 500; }
+.audit-proj { min-width: 220px; }
+
+.badge.num-badge { width: auto; min-width: 17px; height: 17px; padding: 0 4px; top: 2px; right: 0; border-radius: 999px; font-size: 10.5px; font-weight: 700; line-height: 17px; color: #fff; text-align: center; font-style: normal; }
+.n-group { margin: 10px 16px 4px; font-size: 12.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.n-times { font-style: normal; font-weight: 500; color: var(--muted); }
+.notifs header .link { font-size: 14px; }
+
+.off-tag { margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--tint); color: var(--muted); font-size: 12px; font-style: normal; font-weight: 500; }
+/* permission grid: readable sentence-case headings, not six lines of capitals */
+.table.matrix thead th { text-transform: none; letter-spacing: 0; font-size: 13.5px; font-weight: 600; color: var(--ink-2); white-space: normal; min-width: 92px; vertical-align: bottom; }
+.table.matrix tbody th { font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 14.5px; color: var(--ink); min-width: 260px; }
+.table.matrix tbody th { white-space: normal; max-width: 340px; }
+
+.login-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; color: var(--neo-bright); font-size: 15px; }
+.login-points li { padding-left: 22px; position: relative; }
+.login-points li::before { content: '\2713'; position: absolute; left: 0; color: #fff; font-weight: 600; }
+/* every person card the same height, with a clear arrow */
+.login-users li { display: grid; }
+.login-users button { height: 100%; }
+.login-users button::after { font-size: 20px; align-self: center; color: var(--neo-green); }
+.help-jump { display: flex; flex-wrap: wrap; gap: 8px; }
+.help-jump a { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--neo-dark); font-size: 14px; font-weight: 500; text-decoration: none; }
+.help-jump a:hover { border-color: var(--neo-green); }
+.help-card[id] { scroll-margin-top: 88px; }
+#step-panel, [id^="step-"] { scroll-margin-top: 88px; }
+.settings .field small { display: block; margin: 2px 0 4px; font-weight: 400; }

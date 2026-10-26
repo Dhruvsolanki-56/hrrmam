@@ -3,7 +3,7 @@ import { api } from '../api'
 import FormModal from '../components/FormModal'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
-import { Avatar, Tabs, fmtDateTime, label, useDo } from '../components/bits'
+import { Avatar, Modal, Skeleton, Tabs, fmtDateTime, label, useDo } from '../components/bits'
 import { useApp, useConfig } from '../context'
 
 function Users() {
@@ -15,6 +15,11 @@ function Users() {
   const load = useCallback(() => api.users(true).then(setUsers), [])
   useEffect(() => { load() }, [load])
   const save = (id, d) => run(async () => { await api.updateUser(id, d); await load(); refreshMe() })
+  // a role or an account switch changes what someone can do at once, so it is confirmed first
+  const [ask, setAsk] = useState(null)
+  const roleName = (k) => config.roles.find((r) => r.key === k)?.name || k
+  if (!users) return <Skeleton rows={6} />
+  const rows = [...users].sort((a, b) => Number(b.active) - Number(a.active))
   return (
     <section className="panel">
       <header><div><h3>Users</h3><p className="muted">Each person has one role. The role decides what they can do; the server enforces it.</p></div>
@@ -23,18 +28,23 @@ function Users() {
       <div className="table-scroll"><table className="table compact">
         <thead><tr><th>Person</th><th>Role</th><th>Country</th><th>Active</th></tr></thead>
         <tbody>
-          {(users || []).map((u) => (
+          {rows.map((u) => (
             <tr key={u.id} className={u.active ? '' : 'row-off'}>
-              <td className="u-person"><span className="person"><Avatar name={u.name} /><span><b>{u.name}</b><small>{u.email || 'no email'}</small></span></span></td>
-              <td data-label="Role"><select value={u.role_key} onChange={(e) => save(u.id, { role_key: e.target.value })} aria-label={`Role for ${u.name}`}>
+              <td className="u-person"><span className="person"><Avatar name={u.name} /><span><b>{u.name}{!u.active && <em className="off-tag">switched off</em>}</b><small>{u.email || 'no email'}</small></span></span></td>
+              <td data-label="Role"><select value={u.role_key} onChange={(e) => setAsk({ u, body: { role_key: e.target.value }, text: `Change the role of ${u.name} from ${roleName(u.role_key)} to ${roleName(e.target.value)}? What they can see and do changes straight away.`, yes: 'Yes, change the role' })} aria-label={`Role for ${u.name}`}>
                 {config.roles.map((r) => <option key={r.key} value={r.key}>{r.name}</option>)}</select></td>
               <td data-label="Country"><select value={u.country} onChange={(e) => save(u.id, { country: e.target.value })} aria-label={`Country for ${u.name}`}>
                 <option value="AU">Neo Health Australia</option><option value="IN">Neo India</option><option value="Partner">Manufacturing partner</option></select></td>
-              <td className="u-active"><label className="switch"><input type="checkbox" checked={u.active} onChange={(e) => save(u.id, { active: e.target.checked })} aria-label={`${u.name} active`} /><i /></label></td>
+              <td className="u-active"><label className="switch"><input type="checkbox" checked={u.active} onChange={(e) => (e.target.checked ? save(u.id, { active: true }) : setAsk({ u, body: { active: false }, text: `Switch off the account of ${u.name}? They cannot use the app until it is switched on again. Nothing they did is deleted.`, yes: 'Yes, switch it off' }))} aria-label={`${u.name} active`} /><i /></label></td>
             </tr>
           ))}
         </tbody>
       </table></div>
+      {ask && (
+        <Modal title="Please confirm" onClose={() => setAsk(null)} submitLabel={ask.yes} onSubmit={() => { save(ask.u.id, ask.body); setAsk(null) }}>
+          <p>{ask.text}</p>
+        </Modal>
+      )}
       {adding && (
         <FormModal title="Add user" fields={[
           { key: 'name', label: 'Name', type: 'text', required: true }, { key: 'email', label: 'Email', type: 'email' },
@@ -47,6 +57,8 @@ function Users() {
   )
 }
 
+/** "Client reviewer (view and comment on the process)" -> "Client reviewer": the long form is in the tooltip. */
+const short = (name = '') => name.split(' (')[0]
 const same = (x, y) => JSON.stringify([...x].sort()) === JSON.stringify([...y].sort())
 
 /** Every role and every permission in one grid: tick a box, press one Save. */
@@ -62,7 +74,7 @@ function Roles() {
     setDraft(Object.fromEntries(r.map((x) => [x.key, { p: new Set(x.permissions), a: new Set(x.assign_to) }])))
   }), [])
   useEffect(() => { load() }, [load])
-  if (!roles) return null
+  if (!roles) return <Skeleton rows={8} />
   const perms = Object.entries(config.permissions)
   const locked = (r) => r.key === 'super_admin'
   const dirty = roles.filter((r) => !locked(r) && (!same(draft[r.key].p, r.permissions) || !same(draft[r.key].a, r.assign_to)))
@@ -82,11 +94,11 @@ function Roles() {
       </header>
       {error && <p className="error">{error}</p>}
       <div className="table-scroll"><table className="table matrix">
-        <thead><tr><th>Permission</th>{roles.map((r) => <th key={r.key} title={`${r.users} active user${r.users === 1 ? '' : 's'}`}>{r.name}</th>)}</tr></thead>
+        <thead><tr><th>What they can do</th>{roles.map((r) => <th key={r.key} title={`${r.name} · ${r.users} active user${r.users === 1 ? '' : 's'}`}>{short(r.name)}</th>)}</tr></thead>
         <tbody>
           {perms.map(([k, desc]) => (
             <tr key={k}>
-              <th scope="row" title={desc}>{label(k)}</th>
+              <th scope="row">{desc}</th>
               {roles.map((r) => (
                 <td key={r.key}><input type="checkbox" aria-label={`${r.name}: ${label(k)}`} checked={locked(r) || draft[r.key].p.has(k)} disabled={locked(r)} onChange={() => flip(r.key, 'p', k)} /></td>
               ))}
@@ -97,11 +109,11 @@ function Roles() {
       <details className="more">
         <summary>Who can assign work to whom</summary>
         <div className="table-scroll"><table className="table matrix">
-          <thead><tr><th>Can assign to →</th><th>Anyone</th>{roles.map((r) => <th key={r.key}>{r.name}</th>)}</tr></thead>
+          <thead><tr><th>Can assign to →</th><th>Anyone</th>{roles.map((r) => <th key={r.key} title={r.name}>{short(r.name)}</th>)}</tr></thead>
           <tbody>
             {roles.map((r) => (
               <tr key={r.key}>
-                <th scope="row">{r.name}</th>
+                <th scope="row">{short(r.name)}</th>
                 <td><input type="checkbox" aria-label={`${r.name} can assign to anyone`} disabled={locked(r)} checked={locked(r) || draft[r.key].a.has('*')} onChange={() => flip(r.key, 'a', '*')} /></td>
                 {roles.map((t) => (
                   <td key={t.key}>{t.key === r.key ? <span className="muted">–</span>
@@ -121,19 +133,19 @@ function Settings() {
   const { busy, error, run } = useDo()
   const [saved, setSaved] = useState(false)
   useEffect(() => { api.settings().then(setV) }, [])
-  if (!v) return null
+  if (!v) return <Skeleton rows={4} />
   const set = (k) => (e) => { setV({ ...v, [k]: e.target.value }); setSaved(false) }
   return (
     <section className="panel">
       <header><h3>Settings</h3></header>
       <div className="settings">
-        <label className="field">Reminder days before a due date <small>comma-separated; 0 = due today (default 7,3,1,0)</small>
+        <label className="field">When to send reminders <small>days before a due date, separated by commas. 7,3,1,0 means a week before, 3 days before, the day before and on the day.</small>
           <input value={v.reminder_days} onChange={set('reminder_days')} /></label>
-        <label className="field">Escalate when overdue by (days) <small>notifies the assigner and project manager</small>
+        <label className="field">Tell the manager when a task is late by (days) <small>the person who assigned it and the project manager are told</small>
           <input value={v.escalate_after_days} onChange={set('escalate_after_days')} /></label>
-        <label className="field">External submission platform <small>configurable until confirmed</small>
+        <label className="field">Where submissions are made <small>shown on each project's Regulatory tab</small>
           <input value={v.submission_platform} onChange={set('submission_platform')} /></label>
-        <label className="field">Manufacturer access model <small>to be confirmed: account / secure upload / internal entry</small>
+        <label className="field">How manufacturer data reaches us <small>for example: entered by the Neo technical team</small>
           <input value={v.manufacturer_access} onChange={set('manufacturer_access')} /></label>
       </div>
       {error && <p className="error">{error}</p>}
@@ -145,6 +157,7 @@ function Settings() {
 function Log() {
   const [rows, setRows] = useState(null)
   useEffect(() => { api.adminLog().then(setRows) }, [])
+  if (!rows) return <Skeleton rows={5} />
   return (
     <section className="panel">
       <header><h3>Admin changes</h3><span className="muted">Users, roles, permissions and settings</span></header>

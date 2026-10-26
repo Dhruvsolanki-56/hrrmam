@@ -4,7 +4,7 @@ import { api } from '../api'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
 import TaskCard from '../components/TaskCard'
-import { Empty, Person, usePaged } from '../components/bits'
+import { Empty, Person, Skeleton, usePaged } from '../components/bits'
 import { useMe } from '../context'
 
 function DocRows({ docs, empty }) {
@@ -15,7 +15,7 @@ function DocRows({ docs, empty }) {
       {docs.map((d) => (
         <li key={d.id}>
           <Link to={`/projects/${d.project_id}?tab=artwork&focus=doc-${d.id}`}>
-            <div><strong>{d.title}</strong><small>{d.project_name} · {d.kind} · V{d.current_version}{d.review?.with?.people?.length ? ` · with ${d.review.with.people.join(' or ')}` : ''}</small></div>
+            <div><strong>{d.title}</strong><small>{d.project_name} · {d.kind} · version {d.current_version}{d.review?.with?.people?.length ? ` · with ${d.review.with.people.join(' or ')}` : ''}</small></div>
             <span className="row-end">{d.owner?.id !== me.id && <Person user={d.owner} />}<Icon name="arrow" size={14} /></span>
           </Link>
         </li>
@@ -25,11 +25,12 @@ function DocRows({ docs, empty }) {
 }
 
 export default function Artwork() {
+  const me = useMe()
   const [d, setD] = useState(null)
   const [error, setError] = useState('')
   const load = useCallback(() => api.artwork().then(setD).catch((e) => setError(e.message)), [])
   useEffect(() => { load() }, [load])
-  if (!d) return <Layout title="Artwork portal" subtitle={error || 'Loading…'} />
+  if (!d) return <Layout title="Artwork portal" subtitle={error || 'Loading…'}>{!error && <><Skeleton rows={3} /><Skeleton rows={4} /></>}</Layout>
 
   const sections = [
     ['New development', 'new_development', 'No new artwork in development.'],
@@ -38,11 +39,13 @@ export default function Artwork() {
   ]
   return (
     <Layout title="Artwork portal" subtitle="Carton, label, leaflet, print proof and shade card: where each one is in review">
-      <section className="panel">
-        <header><h3>My artwork tasks</h3><span className="muted">{d.my_tasks.length} open</span></header>
-        {!d.my_tasks.length && <Empty>No open artwork tasks assigned to you.</Empty>}
-        <div className="tasklist">{d.my_tasks.map((t) => <TaskCard key={t.id} task={t} showProject onChanged={load} />)}</div>
-      </section>
+      {(d.my_tasks.length > 0 || ['artwork', 'super_admin'].includes(me.role_key)) && (
+        <section className="panel">
+          <header><h3>My artwork tasks</h3><span className="muted">{d.my_tasks.length} open</span></header>
+          {!d.my_tasks.length && <Empty>No open artwork tasks assigned to you.</Empty>}
+          <div className="tasklist">{d.my_tasks.map((t) => <TaskCard key={t.id} task={t} showProject onChanged={load} />)}</div>
+        </section>
+      )}
       <section className="grid-2 even">
         {[...sections.slice(0, 2).map(([title, key, empty]) => [title, d[key], empty, key]),
           ...d.review_steps.map((s) => [`Awaiting ${s.label.toLowerCase()}`, s.items, `Nothing is waiting for ${s.label.toLowerCase()}.`, s.status]),

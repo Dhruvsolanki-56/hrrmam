@@ -65,7 +65,14 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
     onChanged?.(result)
     if (SAID[action]) toast(SAID[action])
   })
-  const nextLine = {
+  const mineToDo = me.id === task.assignee.id
+  const mineToDecide = canDecide
+  const nextLine = mineToDo ? {
+    assigned: 'Accept the task so the team knows you have it.',
+    accepted: 'Start the work.',
+    in_progress: 'Finish it and submit it for approval.',
+    changes_requested: 'Make the changes, attach the corrected file, then resubmit.',
+  }[task.state] : mineToDecide ? 'Approve it, or request changes with a reason.' : {
     assigned: <><b>{task.assignee.name}</b> must accept the task.</>,
     accepted: <><b>{task.assignee.name}</b> must start the work.</>,
     in_progress: <><b>{task.assignee.name}</b> must finish it and submit it for approval.</>,
@@ -73,6 +80,7 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
     resubmitted: <><b>{approverName}</b> must approve it or request changes.</>,
     changes_requested: <><b>{task.assignee.name}</b> must fix it and resubmit.</>,
   }[task.state]
+  const youAct = mineToDo || mineToDecide
 
   return (
     <article id={`task-${task.id}`} className={`task t-${task.state} ${task.overdue ? 'is-late' : ''} ${showProject && task.assignee.id === me.id ? 'mine' : ''}`}>
@@ -81,15 +89,16 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
           <strong>{task.title}</strong>
           <small>
             {showProject && <Link to={`/projects/${task.project_id}?tab=tasks&focus=task-${task.id}`} onClick={(e) => e.stopPropagation()}>{task.project_name} · </Link>}
-            {st.name}{!task.required && ' · optional'}{task.rework_count > 0 && ` · ↺ ${task.rework_count}`}
+            {st.name}{!task.required && ' · optional'}{task.rework_count > 0 && ` · sent back ${task.rework_count} time${task.rework_count > 1 ? 's' : ''}`}
           </small>
-          {task.state === 'changes_requested' && task.last_changes && <small className="muted">Returned by {task.last_changes.by}: “{task.last_changes.note || 'no reason written'}”</small>}
+          {task.state === 'changes_requested' && task.last_changes && !open && <small className="muted">Sent back by {task.last_changes.by}: “{task.last_changes.note || 'no reason written'}”</small>}
         </div>
         <Person user={task.assignee} />
         <div className="t-end">
           <DueChip task={task} />
           <TaskChip state={task.state} />
         </div>
+        {showProject && <Link className="go t-go" to={`/projects/${task.project_id}?tab=tasks&focus=task-${task.id}`} onClick={(e) => e.stopPropagation()}>Open<span aria-hidden="true"> →</span></Link>}
       </header>
 
       {open && (
@@ -97,14 +106,13 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
           {task.description && <p className="t-desc">{task.description}</p>}
           <p className="muted">Assigned by {task.assigner?.name || '–'} · due {fmtDateTime(task.due_at)}</p>
           <div className={`handoff t-${task.state}`}>
-            <p className="handoff-line">{holder}</p>
-            {nextLine && <p className="handoff-next"><span>Next action</span> {nextLine}</p>}
+            {!(task.state === 'changes_requested' && task.last_changes) && <p className="handoff-line">{holder}</p>}
+            {nextLine && <p className={`handoff-next ${youAct ? 'mine' : ''}`}><span>{youAct ? 'Your next step' : 'Next'}</span> {nextLine}</p>}
           </div>
           {task.last_changes && (
             <div className="sentback" role="note">
               <b>Changes requested by {task.last_changes.by} on {fmtDateTime(task.last_changes.at)}</b>
               <p>Reason: “{task.last_changes.note || 'No reason was written.'}”</p>
-              <small>Fix this, attach the corrected file, then resubmit.</small>
             </div>
           )}
 
@@ -113,7 +121,7 @@ export default function TaskCard({ task, onChanged, showProject, defaultOpen, pr
               <ul className="versions">
                 {[...task.attachments].reverse().map((a) => (
                   <li key={a.id}><b>V{a.version_no}</b><span>{a.name}{a.note ? ` · ${a.note}` : ''}</span>
-                    <small>{a.created_by} · {fmtDateTime(a.created_at)} · <a href={a.link} target="_blank" rel="noreferrer">open</a></small></li>
+                    <small>{a.created_by} · {fmtDateTime(a.created_at)} · <a href={a.link} target="_blank" rel="noreferrer">Open</a></small></li>
                 ))}
               </ul>
             )}

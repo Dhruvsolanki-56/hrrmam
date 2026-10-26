@@ -17,6 +17,12 @@ from .common import Forbidden, WorkflowError
 
 
 # ---------------------------------------------------------------- shared checks
+def rfi_name(r) -> str:
+    """'RFI-2026-115' stays as it is; a bare reference gets the word RFI in front, never twice."""
+    ref = r.reference or str(r.id)
+    return ref if ref.upper().startswith("RFI") else f"RFI {ref}"
+
+
 def check_url(url: str) -> str:
     url = (url or "").strip()
     if url and urlparse(url).scheme not in ("http", "https"):
@@ -354,7 +360,7 @@ def add_rfi_question(db: Session, user: User, r: RFICase, data) -> RFIQuestion:
     if r.status == "closed":
         raise WorkflowError("This RFI case is closed.")
     n = len(r.questions) + 1
-    t = tasks.create_task(db, user, p, st.key, f"RFI {r.reference or r.id} · Q{n}: {data.question.strip()[:90]}",
+    t = tasks.create_task(db, user, p, st.key, f"{rfi_name(r)} · Q{n}: {data.question.strip()[:90]}",
                           data.question.strip(), data.assignee_id, data.due_at)
     q = RFIQuestion(number=n, question=data.question.strip(), task_id=t.id)
     r.questions.append(q)

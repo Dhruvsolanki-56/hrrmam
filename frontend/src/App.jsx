@@ -91,6 +91,9 @@ export default function App() {
         <Route path="/legal" element={<Legal />} />
         <Route path="/audit" element={<Audit />} />
         <Route path="/admin" element={<AdminGate />} />
+        {/* addresses people type from the sidebar labels */}
+        <Route path="/board" element={<Navigate to="/projects?view=board" replace />} />
+        <Route path="/completed" element={<Navigate to="/projects?status=completed" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppContext.Provider>

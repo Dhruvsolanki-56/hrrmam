@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import Layout from '../components/Layout'
-import { HealthPill, Skeleton, Tabs, useCountUp } from '../components/bits'
+import { HealthPill, Skeleton, Tabs, groupLabel, useCountUp } from '../components/bits'
 import StartHere from '../components/StartHere'
-import { useStages } from '../context'
+import { useMe, useStages } from '../context'
 
 const parseDay = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d) }
 const shortDay = (s) => parseDay(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
@@ -17,15 +17,68 @@ function Num({ n }) {
   return <b>{useCountUp(n)}</b>
 }
 
+// the portfolio view is for the people who run the portfolio; everyone else gets their own work first
+const PORTFOLIO = ['super_admin', 'director', 'project_manager']
+
+/** Every project this person has something on, from their own work list. */
+function myProjectIds(w) {
+  const ids = new Set()
+  const add = (x) => { const id = x?.project_id ?? x?.task?.project_id; if (id) ids.add(id) }
+  ;(w.needs_decision || []).forEach(add)
+  Object.entries(w.items || {}).forEach(([k, l]) => k !== 'completed' && l.forEach(add))
+  Object.entries(w.buckets || {}).forEach(([k, l]) => k !== 'completed' && l.forEach(add))
+  return ids
+}
+
+/** Overview for a specialist: what is waiting for them, and the projects they are part of. Nothing else. */
+function PersonalOverview({ work, projects }) {
+  const c = work.counts || {}
+  const tiles = [
+    ['Waiting for my decision', work.needs_decision?.length || 0],
+    ['Sent back to me', c.returned_for_changes || 0],
+    ['Overdue', c.overdue || 0, 'alert'],
+    ['Due this week', (c.due_today || 0) + (c.due_this_week || 0)],
+  ]
+  const ids = myProjectIds(work)
+  const mine = projects.filter((p) => ids.has(p.id))
+  return (
+    <>
+      <div className="ph"><div><p className="ph-date">{today()}</p><h1>Overview</h1></div></div>
+      <section className="metrics metrics-4" aria-label="My work in numbers">
+        {tiles.map(([l, n, tone]) => <Link key={l} to="/my-work" className={`metric ${tone && n ? tone : ''}`}><span>{l}</span><Num n={n} /></Link>)}
+      </section>
+      <section className="dcard">
+        <header><h2>Projects I am working on <span className="count">{mine.length}</span></h2><Link to="/projects" className="link">All projects</Link></header>
+        {!mine.length && <p className="empty-note">You have nothing open on any project right now.</p>}
+        <ul className="drows">
+          {mine.map((p) => (
+            <li key={p.id}>
+              <Link to={`/projects/${p.id}`}>
+                <span className="dmain"><strong>{p.name}</strong><small>{p.stage?.name}{p.target_submission ? ` · target submission ${shortDay(p.target_submission)}` : ''}</small></span>
+                <span className="dside"><HealthPill health={p.health} /></span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </>
+  )
+}
+
 export default function Dashboard() {
   const stages = useStages()
+  const me = useMe()
+  const personal = !PORTFOLIO.includes(me.role_key)
+  const [work, setWork] = useState(null)
+  useEffect(() => { api.myWork().then(setWork).catch(() => {}) }, [])
   const [entity, setEntity] = useState('')
   const [d, setD] = useState(null)
   const [error, setError] = useState('')
   const load = useCallback(() => api.director(entity).then(setD).catch((e) => setError(e.message)), [entity])
   useEffect(() => { load() }, [load])
 
-  if (!d) return <Layout title="Overview" head={false}><StartHere />{error ? <p className="error">{error}</p> : <div className="skel-grid"><Skeleton rows={2} /><Skeleton rows={2} /><Skeleton rows={2} /></div>}</Layout>
+  if (!d || (personal && !work)) return <Layout title="Overview" head={false}><StartHere work={work} />{error ? <p className="error">{error}</p> : <div className="skel-grid"><Skeleton rows={2} /><Skeleton rows={2} /><Skeleton rows={2} /></div>}</Layout>
+  if (personal) return <Layout title="Overview" head={false}><StartHere work={work} /><PersonalOverview work={work} projects={d.projects} /></Layout>
 
   const c = d.counts
   // Stage and artwork approvals only: each task is approved by the person who assigned it (see My work)
@@ -53,7 +106,7 @@ export default function Dashboard() {
 
   return (
     <Layout title="Overview" head={false}>
-      <StartHere />
+      <StartHere work={work} />
       <div className="ph">
         <div>
           <p className="ph-date">{today()}</p>
@@ -132,11 +185,11 @@ export default function Dashboard() {
         </section>
 
         <section className="dcard">
-          <header><h2>By phase</h2><span className="count">{live.length} live</span></header>
+          <header><h2>Where projects are</h2><span className="count">{live.length} live</span></header>
           <ul className="dbars">
             {groups.map((g, i) => (
               <li key={g.name} className={g.n ? '' : 'zero'}>
-                <span><i className="dot-k" style={{ background: RAMP[i % RAMP.length] }} />{g.name}</span>
+                <span><i className="dot-k" style={{ background: RAMP[i % RAMP.length] }} />{groupLabel(g.name)}</span>
                 <b>{g.n}</b>
                 <i><em style={{ width: `${(g.n / gmax) * 100}%`, background: RAMP[i % RAMP.length] }} /></i>
               </li>

@@ -23,44 +23,63 @@ function useOutside(open, close) {
 
 const org = (c) => (c === 'IN' ? 'Neo India' : c === 'AU' ? 'Neo Health Australia' : 'Partner')
 
+/** The same reminder sent again and again shows once, with how many times it came. */
+function collapse(rows) {
+  const out = []
+  for (const n of rows) {
+    const prev = out[out.length - 1]
+    if (prev && prev.title === n.title && prev.body === n.body) { prev.times += 1; prev.read = prev.read && n.read; continue }
+    out.push({ ...n, times: 1 })
+  }
+  return out
+}
+
 function Bell() {
   const { me, refreshMe } = useApp()
   const nav = useNavigate()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState(null)
   const ref = useOutside(open, () => setOpen(false))
+  // loaded in the background, so the list is already there when the bell is clicked
+  useEffect(() => { api.notifications().then(setItems).catch(() => setItems([])) }, [me.unread])
 
-  const toggle = async () => {
-    const next = !open
-    setOpen(next)
-    if (next) {
-      const rows = await api.notifications().catch(() => [])
-      setItems(rows)
-      if (rows.some((n) => !n.read)) { await api.markRead({ all: true }).catch(() => {}); refreshMe() }
-    }
+  const readAll = async () => {
+    await api.markRead({ all: true }).catch(() => {})
+    setItems((x) => (x || []).map((n) => ({ ...n, read: true })))
+    refreshMe()
   }
+  const openOne = (n) => {
+    setOpen(false)
+    if (!n.read) api.markRead({ ids: [n.id] }).then(refreshMe).catch(() => {})
+    if (n.project_id) nav(projectUrl(n.project_id, n.link || (n.task_id ? `tab=tasks&focus=task-${n.task_id}` : '')))
+  }
+  const rows = collapse(items || [])
+  const fresh = rows.filter((n) => !n.read)
+  const earlier = rows.filter((n) => n.read)
+  const Item = ({ n }) => (
+    <li className={`n-${n.kind} ${n.read ? '' : 'unread'}`}>
+      <button onClick={() => openOne(n)}>
+        <strong>{n.title}{n.times > 1 && <em className="n-times"> ×{n.times}</em>}</strong>
+        <span>{tidy(n.body)}</span>
+        <small>{fmtDateTime(n.created_at)}</small>
+      </button>
+    </li>
+  )
   return (
     <div className="pop-wrap" ref={ref}>
-      <button className="icon-btn" onClick={toggle} aria-label={`Notifications${me.unread ? `, ${me.unread} unread` : ''}`} aria-expanded={open}>
+      <button className="icon-btn" onClick={() => setOpen(!open)} aria-label={`Notifications${me.unread ? `, ${me.unread} unread` : ''}`} aria-expanded={open}>
         <Icon name="bell" size={17} />
-        {me.unread > 0 && <b className="badge" aria-hidden="true" />}
+        {me.unread > 0 && <b className="badge num-badge" aria-hidden="true">{me.unread > 99 ? '99+' : me.unread}</b>}
       </button>
       {open && (
         <div className="popover notifs" role="dialog" aria-label="Notifications">
-          <header><h3>Notifications</h3>{items && <span className="muted">{items.length}</span>}</header>
+          <header><h3>Notifications</h3>{me.unread > 0 ? <button className="link" onClick={readAll}>Mark all as read</button> : <span className="muted">All read</span>}</header>
           {!items && <p className="muted pad">Loading…</p>}
           {items && !items.length && <p className="muted pad">You're all caught up.</p>}
-          <ul>
-            {(items || []).map((n) => (
-              <li key={n.id} className={`n-${n.kind} ${n.read ? '' : 'unread'}`}>
-                <button onClick={() => { setOpen(false); n.project_id && nav(projectUrl(n.project_id, n.link || (n.task_id ? `tab=tasks&focus=task-${n.task_id}` : ''))) }}>
-                  <strong>{n.title}</strong>
-                  <span>{tidy(n.body)}</span>
-                  <small>{fmtDateTime(n.created_at)}</small>
-                </button>
-              </li>
-            ))}
-          </ul>
+          {fresh.length > 0 && <p className="n-group">New · {me.unread}</p>}
+          <ul>{fresh.map((n) => <Item key={n.id} n={n} />)}</ul>
+          {earlier.length > 0 && <p className="n-group">Earlier</p>}
+          <ul>{earlier.map((n) => <Item key={n.id} n={n} />)}</ul>
         </div>
       )}
     </div>

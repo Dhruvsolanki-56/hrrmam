@@ -4,11 +4,11 @@ export const ROLE_GUIDE = {
   director: { title: 'Director', does: 'You give the final approval on steps, artwork and reopen requests, and you can clear critical blockers.', first: 'Open My work: everything waiting for your decision is at the top.' },
   project_manager: { title: 'Project Manager', does: 'You start projects, assign tasks, name who leads each step, and keep every project moving.', first: 'Open a project, then use "Choose who is responsible" to name the people for each step.' },
   commercial: { title: 'Commercial', does: 'You own the opportunity, the brief and the feasibility & commercial step.', first: 'Open My work to see the tasks assigned to you.' },
-  legal: { title: 'Legal', does: 'You prepare and track agreements: supplier, quality, PV, NDA, CDA, POA and notices.', first: 'Open the Legal tab of a project to see which agreements need you.' },
-  regulatory: { title: 'Regulatory', does: 'You build the dossier, review artwork against the rules and answer regulator questions (RFIs).', first: 'Open My work: dossier tasks and review requests are listed there.' },
+  legal: { title: 'Legal', does: 'You prepare and track the agreements: supplier, quality, drug-safety and confidentiality agreements, and legal notices.', first: 'Open the Legal tab of a project to see which agreements need you.' },
+  regulatory: { title: 'Regulatory', does: 'You build the registration file (the dossier), check artwork against the rules and answer questions from the regulator.', first: 'Open My work: dossier tasks and review requests are listed there.' },
   artwork: { title: 'Artwork', does: 'You prepare cartons, labels and leaflets, and send them for regulatory review and director approval.', first: 'Open My work: returned artwork and your tasks are listed first.' },
-  technical: { title: 'Technical / Manufacturer data', does: 'You collect and submit the manufacturer data: COA, MSDS, stability and batch data.', first: 'Open the Manufacturer tab of a project to see what is missing.' },
-  quality: { title: 'Quality / PV', does: 'You own quality agreements, risk assessment and the pharmacovigilance set-up.', first: 'Open My work to see the tasks assigned to you.' },
+  technical: { title: 'Technical / Manufacturer data', does: 'You collect the manufacturer’s data: test certificates, safety data sheets, stability and batch results.', first: 'Open the Manufacturer tab of a project to see what is missing.' },
+  quality: { title: 'Quality / PV', does: 'You own quality agreements, risk assessment and how side effects are reported (drug safety).', first: 'Open My work to see the tasks assigned to you.' },
   reviewer: { title: 'Viewer', does: 'You can read everything that is shared with you but cannot change anything.', first: 'Open any project to follow its progress.' },
 }
 
@@ -33,6 +33,15 @@ export const GLOSSARY = [
   ['Reopen request', 'Approved work is locked. To change it, ask for a reopen: a named person decides and the answer is recorded.'],
   ['RFI', 'Request for information: a question from the regulator that must be answered by a date.'],
   ['Locked', 'Approved and frozen. It cannot change unless a reopen is approved.'],
+  ['Dossier', 'The registration file sent to the regulator. It has up to five parts, M1 to M5: administrative, summaries, quality, safety and clinical.'],
+  ['TGA', 'Therapeutic Goods Administration, the Australian medicines regulator.'],
+  ['AUST R / AUST L', 'Australian registration types. AUST R is a registered medicine (full assessment); AUST L is a lower-risk listed medicine.'],
+  ['COA', 'Certificate of analysis: the manufacturer’s test results for a batch.'],
+  ['MSDS', 'Material safety data sheet: how to handle an ingredient or product safely.'],
+  ['PV', 'Pharmacovigilance, or drug safety: collecting and reporting side effects.'],
+  ['NDA / CDA', 'Non-disclosure or confidentiality agreement, signed before sharing private information.'],
+  ['POA', 'Power of attorney: lets one company act for another, for example with the regulator.'],
+  ['RA', 'Regulatory affairs: the Regulatory team.'],
 ]
 
 export const QA = [

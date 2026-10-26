@@ -2,7 +2,7 @@
 from datetime import date, timedelta
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from .. import serialize as S
 from .. import workflow
@@ -13,8 +13,15 @@ from .tasks import _can_decide
 ENTITY_FILTER = {"AU": {workflow.AU, workflow.JOINT}, "IN": {workflow.IN, workflow.JOINT, workflow.MP}}
 
 
-def _live(db: Session) -> list[Project]:
-    return [p for p in engine.list_projects(db) if not p.closed]
+def _live(db: Session, full: bool = False) -> list[Project]:
+    if not full:
+        return [p for p in engine.list_projects(db) if not p.closed]
+    # My work reads every record of every live project: load them in a few queries instead of one per project and kind
+    q = (select(Project).options(selectinload(Project.stages), selectinload(Project.tasks), selectinload(Project.events),
+                                 selectinload(Project.agreements), selectinload(Project.dossier_items), selectinload(Project.mfr_requests),
+                                 selectinload(Project.documents).selectinload(Document.versions), selectinload(Project.reopen_requests))
+         .order_by(Project.updated_at.desc(), Project.id.desc()))
+    return [p for p in db.scalars(q) if not p.closed]
 
 
 def _stage_item(p: Project, key: str) -> dict:
@@ -77,7 +84,7 @@ def _record_items(db: Session, user: User) -> dict:
     """Stages, agreements, dossier items, manufacturer data, documents and reopen requests that need me, were sent back to me,
     or that I sent and am waiting on, so every state change lands in the right person's queue."""
     out = {"decide": [], "returned": [], "waiting": []}
-    for p in _live(db):
+    for p in _live(db, full=True):
         for row in p.active_rows:
             st = p.flow.stage(row.stage_key)
             evs = [e for e in p.events if e.stage_key == row.stage_key and e.area == "stage"]
@@ -98,6 +105,8 @@ def _record_items(db: Session, user: User) -> dict:
         for kind, rows in (("agreement", p.agreements), ("dossier_item", p.dossier_items), ("mfr", p.mfr_requests)):
             cfg = modules.ENTRY[kind]
             for o in rows:
+                if o.status not in (cfg["review"], "changes_requested"):
+                    continue  # nobody has to act on it, so it is in no one's queue
                 title = modules._title(kind, o)
                 rv = S.entry_review(kind, o, title)
                 w = rv["with"]
@@ -112,6 +121,8 @@ def _record_items(db: Session, user: User) -> dict:
                 elif o.status == "changes_requested" and user.id in w["ids"]:
                     out["returned"].append(it)
         for d in p.documents:
+            if d.status not in d.flow[1:-1] and d.status != "returned":
+                continue
             rv = S.document_out(d)["review"]
             w = rv["with"]
             if not w:

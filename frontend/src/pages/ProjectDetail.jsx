@@ -42,7 +42,7 @@ export default function ProjectDetail() {
   const focus = params.get('focus')
   useEffect(() => {
     if (!step || !project) return undefined
-    const t = setTimeout(() => document.getElementById('step-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)
+    const t = setTimeout(() => document.getElementById('step-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
     return () => clearTimeout(t)
   }, [!!project]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -51,12 +51,12 @@ export default function ProjectDetail() {
     const find = () => {
       const el = document.getElementById(focus)
       if (el) {
-        el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        el.scrollIntoView({ block: 'start', behavior: 'smooth' })  // lands below the sticky bar (scroll-margin-top)
         el.classList.add('focus-flash')
         setTimeout(() => el.classList.remove('focus-flash'), 3200)
-      } else if (tries++ < 8) { timer = setTimeout(find, 200) }
+      } else if (tries++ < 20) { timer = setTimeout(find, 80) }
     }
-    let timer = setTimeout(find, 250)
+    let timer = setTimeout(find, 40)
     return () => clearTimeout(timer)
   }, [focus, tab, !!project]) // eslint-disable-line react-hooks/exhaustive-deps
   const pick = (k) => {
@@ -84,6 +84,7 @@ export default function ProjectDetail() {
 
   const done = Object.values(project.stage_states).filter((x) => x === 'approved' || x === 'bypassed').length
   const activeNames = project.stages.filter((r) => ['in_progress', 'awaiting_approval'].includes(r.state)).map((r) => project.flow.stages.find((s) => s.key === r.key)?.name).filter(Boolean)
+  const lateSubmit = project.status === 'active' && !project.submissions.length && project.target_submission && new Date(project.target_submission) < new Date()
   const editable = manage && project.status !== 'rejected' && project.status !== 'completed'
 
   return (
@@ -104,7 +105,7 @@ export default function ProjectDetail() {
         {project.summary && <p className="summary" title={project.summary}>{project.summary}</p>}
         <div className="journey">
           <div className="journey-top">
-            <span><b>{done} of {project.flow.stages.length} steps done</b>{activeNames.length ? <span className="journey-now" title={activeNames.join(', ')}> · {activeNames.length > 2 ? `${activeNames.length} in progress` : `now: ${activeNames.join(', ')}`}</span> : project.status === 'completed' ? ' · complete' : ''}</span>
+            <span><b>{done} of {project.flow.stages.length} steps done</b>{activeNames.length ? <span className="journey-now" title={activeNames.join(', ')}> · {activeNames.length > 2 ? `${activeNames.length} in progress` : `in progress: ${activeNames.join(', ')}`}</span> : project.status === 'completed' ? ' · complete' : ''}</span>
             <StepBar.Key compact />
             <button className="link" aria-expanded={allSteps} onClick={() => setAllSteps(!allSteps)}>{allSteps ? 'Hide steps' : 'See all steps'}</button>
           </div>
@@ -123,7 +124,10 @@ export default function ProjectDetail() {
 
       <div className="proj-grid">
         <div className="proj-main">
-          {project.critical_blocker && (
+          {project.critical_blocker && tab !== 'overview' && (
+            <p className="blocker-mini" role="note"><b>Critical blocker:</b> {project.critical_blocker} <button className="link" onClick={() => goTab('overview')}>Details</button></p>
+          )}
+          {project.critical_blocker && tab === 'overview' && (
             <div className="blocker-bar" role="alert">
               <div>
                 <b>Critical blocker: {project.critical_blocker}</b>
@@ -180,7 +184,7 @@ export default function ProjectDetail() {
               <div><dt>Product</dt><dd>{project.product || '–'}</dd></div>
               <div><dt>Client</dt><dd>{project.potential_client || '–'}</dd></div>
               <div><dt>Manager</dt><dd>{project.project_manager ? <Person user={project.project_manager} /> : '–'}</dd></div>
-              <div><dt>Target submit</dt><dd className="num">{fmtDay(project.target_submission)}</dd></div>
+              <div><dt>Target submit</dt><dd className="num">{fmtDay(project.target_submission)}{lateSubmit && <small className="late-flag"> · date has passed</small>}</dd></div>
               <div><dt>Target launch</dt><dd className="num">{fmtDay(project.target_launch)}</dd></div>
             </dl>
             <details className="more props-more">
@@ -210,7 +214,7 @@ export default function ProjectDetail() {
 
       {editing && <NewProjectModal project={project} onClose={() => setEditing(false)} onCreated={(p) => { setProject(p); setEditing(false) }} />}
       {blocker && (
-        <FormModal title="Critical blocker" intro="Anything that stops the project moving. It turns the project's health red and shows a banner on every tab. When it is fixed, use Mark as resolved."
+        <FormModal title="Critical blocker" intro="Anything that stops the project moving. It turns the project's health red and shows a banner on the Overview tab. When it is fixed, use Mark as resolved."
           fields={[{ key: 'critical_blocker', label: 'What is blocking the project?', type: 'textarea' }]} initial={project}
           onSave={async (d) => setProject(await api.updateProject(project.id, d))} onClose={() => setBlocker(false)} />
       )}

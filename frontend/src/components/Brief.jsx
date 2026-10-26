@@ -83,10 +83,12 @@ export default function BriefTab({ project, onChange }) {
           <div><dt>Market</dt><dd>{project.market}</dd></div>
           <div><dt>Product route</dt><dd>{project.project_type === 'In-Licence' ? 'In-licence' : 'New development'}</dd></div>
           <div><dt>Opportunity owner</dt><dd>{project.initiator || '–'}</dd></div>
+          <div><dt>Customer / client</dt><dd>{project.potential_client || '–'}</dd></div>
           <div><dt>Initial commercial opportunity</dt><dd className="num">{project.opportunity_value != null ? `AUD ${project.opportunity_value.toLocaleString('en-AU')}` : '–'}</dd></div>
-          <div><dt>Target launch</dt><dd className="num">{fmtDay(project.target_launch)}</dd></div>
           <div><dt>Target submission</dt><dd className="num">{fmtDay(project.target_submission)}</dd></div>
-          {BRIEF.map(([key, lab]) => <div key={key} className="wide"><dt>{lab}</dt><dd>{project[key] || <span className="muted">Not provided</span>}</dd></div>)}
+          <div><dt>Target launch</dt><dd className="num">{fmtDay(project.target_launch)}</dd></div>
+          {BRIEF.slice(1).map(([key, lab]) => <div key={key} className="wide"><dt>{lab}</dt><dd>{key === 'formulation' && project.formulation && project.formulation.trim() === (project.product || '').trim()
+            ? <span className="muted">Same as the product above</span> : project[key] || <span className="muted">Not provided</span>}</dd></div>)}
         </dl>
       </section>
 

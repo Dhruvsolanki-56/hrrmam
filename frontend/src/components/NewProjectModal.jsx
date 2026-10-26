@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../api'
 import { useConfig, useMe, useUsers } from '../context'
 import { Modal, useDo } from './bits'
+import { plainType } from './Workstreams'
 
 const CATEGORIES = ['Pain relief', 'Eye care', 'Respiratory', 'Nasal care', 'Gastro / IBS / bowel', 'Hydration', 'Nail care',
   'Skin care', 'Ear & throat care', 'Cold & flu', 'Vitamins', 'Sleep', 'Dermatology', 'Other']
@@ -32,10 +33,10 @@ export default function NewProjectModal({ onClose, onCreated, project }) {
   })
 
   return (
-    <Modal title={project ? 'Edit Project 360' : 'New project'} wide busy={busy} error={error} onClose={onClose} onSubmit={submit}
+    <Modal title={project ? 'Edit project details' : 'New project'} wide busy={busy} error={error} onClose={onClose} onSubmit={submit}
       submitLabel={project ? 'Save changes' : 'Create project'}
-      intro={project ? 'Every change is recorded in the audit trail with the old and new value.' : 'One project record is shared by Neo Health Australia and Neo India. It starts at Opportunity.'}>
-      <label>Project name
+      intro={project ? 'Every change is recorded in the audit trail with the old and new value.' : 'Only the name is needed now. Everything else can be filled in later. The project starts at the Opportunity step, where a Director decides whether to go ahead.'}>
+      <label>Project name <small className="req">required</small>
         <input value={form.name} onChange={set('name')} placeholder="e.g. Ibuprofen Gel 5%" required minLength={2} autoFocus />
       </label>
       <div className="row2">
@@ -56,6 +57,11 @@ export default function NewProjectModal({ onClose, onCreated, project }) {
           <select value={form.category} onChange={set('category')}>{cats.map((c) => <option key={c}>{c}</option>)}</select>
         </label>
       </div>
+      <label>Short summary
+        <textarea rows={2} value={form.summary} onChange={set('summary')} placeholder="What is the opportunity, in a sentence or two?" />
+      </label>
+      <details className="more modal-more" open={!!project}>
+        <summary>More details (optional)</summary>
       <div className="row2">
         <label>Potential client
           <input value={form.potential_client} onChange={set('potential_client')} placeholder="e.g. ABC Pharmacy" />
@@ -71,14 +77,14 @@ export default function NewProjectModal({ onClose, onCreated, project }) {
             {users.filter((u) => ['project_manager', 'director', 'super_admin'].includes(u.role_key)).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </label>
-        <label>Initiator
-          <input value={form.initiator} onChange={set('initiator')} placeholder="Who proposed it?" />
+        <label>Proposed by
+          <input value={form.initiator} onChange={set('initiator')} placeholder="Who suggested this product?" />
         </label>
       </div>
-      <label>Submission type <small className="muted">(decides which M1–M5 modules the dossier needs)</small>
+      <label>How it will be registered <small className="muted">(Regulatory can decide this later)</small>
         <select value={form.submission_type} onChange={set('submission_type')}>
           <option value="">To be decided</option>
-          {Object.keys(config.submission_types).map((t) => <option key={t}>{t}</option>)}
+          {Object.keys(config.submission_types).map((t) => <option key={t} value={t}>{plainType(t)}</option>)}
         </select>
       </label>
       <div className="row2">
@@ -89,9 +95,7 @@ export default function NewProjectModal({ onClose, onCreated, project }) {
           <input type="date" value={form.target_launch} onChange={set('target_launch')} />
         </label>
       </div>
-      <label>Short summary
-        <textarea rows={3} value={form.summary} onChange={set('summary')} placeholder="What is the opportunity?" />
-      </label>
+      </details>
     </Modal>
   )
 }

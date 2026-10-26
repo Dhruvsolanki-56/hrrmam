@@ -4,7 +4,8 @@ import { api } from '../api'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
 import TaskCard from '../components/TaskCard'
-import { Empty, Skeleton, fmtDateTime, orList, projectUrl, usePaged } from '../components/bits'
+import { useMe } from '../context'
+import { Empty, Skeleton, fmtDate, orList, projectUrl, toYou, usePaged } from '../components/bits'
 
 const BUCKETS = [
   ['needs_decision', 'Needs my decision'], ['returned_for_changes', 'Returned to me'], ['overdue', 'Overdue'], ['due_today', 'Due today'],
@@ -22,18 +23,19 @@ const HELP = {
   upcoming: 'More than a week away, or no due date.', completed: 'Your 50 most recent approved or locked tasks, including finished projects.',
 }
 
-const KIND_WORD = { agreement: 'agreement', dossier_item: 'dossier item', mfr: 'manufacturer data', document: 'document', stage: 'step' }
+const KIND_WORD = { agreement: 'Agreement', dossier_item: 'Dossier item', mfr: 'Manufacturer data', document: 'Document', stage: 'Step' }
 
 /** One agreement, dossier item, manufacturer request, document, step or reopen request, with who has it and what to do next. */
 function RecordRow({ x, mode }) {
-  const word = x.type === 'reopen' ? 'reopen request' : KIND_WORD[x.kind] || KIND_WORD[x.type] || 'item'
+  const me = useMe()
+  const word = x.type === 'reopen' ? 'Reopen request' : KIND_WORD[x.kind] || KIND_WORD[x.type] || 'Item'
   const head = { decide: x.type === 'reopen' ? 'Decide on the reopen of' : x.type === 'document' ? 'Review' : 'Approve', returned: 'Fix', waiting: 'Waiting on' }[mode]
   const lines = []
   if (x.type === 'reopen') lines.push(`Requested by ${x.request.requested_by.name}: “${x.request.reason}”`)
-  else if (mode === 'returned' && x.changes) lines.push(`Changes requested by ${x.changes.by}, ${fmtDateTime(x.changes.at)}: “${x.changes.note || 'no reason written'}”`)
-  else if (x.submitted) lines.push(`Submitted by ${x.submitted.by}, ${fmtDateTime(x.submitted.at)}`)
-  if (mode === 'waiting' && x.with?.people?.length) lines.push(`With ${orList(x.with.people)}${x.with.since ? ` since ${fmtDateTime(x.with.since)}` : ''}`)
-  if (x.next) lines.push(x.next)
+  else if (mode === 'returned' && x.changes) lines.push(`Changes requested by ${x.changes.by} on ${fmtDate(x.changes.at)}: “${x.changes.note || 'no reason written'}”`)
+  else if (x.submitted) lines.push(`Submitted by ${x.submitted.by} on ${fmtDate(x.submitted.at)}`)
+  if (mode === 'waiting' && x.with?.people?.length) lines.push(`With ${orList(x.with.people)}${x.with.since ? ` since ${fmtDate(x.with.since)}` : ''}`)
+  if (x.next) lines.push(toYou(x.next, me))
   return (
     <Link to={projectUrl(x.project_id, x.link)} className={`decide-row rec-${mode}`}>
       <div>
@@ -76,7 +78,7 @@ export default function MyWork() {
       return items.map((x, i) => x.task === undefined ? <RecordRow key={`${x.type}${x.id}${i}`} x={x} mode="decide" /> : (
         <div key={`${x.type}${x.task.id}`} className="decide-wrap">
           <p className="decide-tag">{x.type === 'date_request'
-            ? <><b>Date request</b> · {x.request.requested_by.name} asks for {fmtDateTime(x.request.proposed_due)}</>
+            ? <><b>Date request</b> · {x.request.requested_by.name} asks for {fmtDate(x.request.proposed_due)}</>
             : <><b>Submitted</b> · {x.task.assignee.name} says it is done</>}</p>
           <TaskCard task={x.task} showProject onChanged={load} />
         </div>

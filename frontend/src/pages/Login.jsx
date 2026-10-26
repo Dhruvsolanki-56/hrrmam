@@ -3,8 +3,6 @@ import { Avatar } from '../components/bits'
 import { guideFor } from '../roleGuide'
 
 const GROUPS = [['AU', 'Neo Health Australia'], ['IN', 'Neo India'], ['Partner', 'Partners & reviewers']]
-// the 15-phase journey, drawn as the brand motif: approved, in progress, still to come
-const JOURNEY = [...Array(15)].map((_, i) => (i < 6 ? 'done' : i < 9 ? 'now' : 'next'))
 
 /** DEMO sign-in: pick who you are. Real authentication (SSO / passwords) replaces this before production. */
 export default function Login({ users, onPick }) {
@@ -16,9 +14,11 @@ export default function Login({ users, onPick }) {
           <h1>Every product, from opportunity to dispatch.</h1>
           <p>One shared workspace for Neo Health Australia, Neo India and manufacturing partners.</p>
         </div>
-        <div className="login-journey" aria-hidden="true">
-          {JOURNEY.map((s, i) => <i key={i} className={s} />)}
-        </div>
+        <ul className="login-points">
+          <li>See what is waiting for you, most urgent first</li>
+          <li>Know who has every item, and why</li>
+          <li>Every decision is recorded</li>
+        </ul>
       </aside>
       <main className="login-in">
         <div>
