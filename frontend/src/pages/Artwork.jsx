@@ -4,7 +4,7 @@ import { api } from '../api'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
 import TaskCard from '../components/TaskCard'
-import { Empty, Person, Skeleton, usePaged } from '../components/bits'
+import { Empty, Person, Skeleton, Tabs, usePaged } from '../components/bits'
 import { useMe } from '../context'
 
 /** Who has the item now, said only when it is someone other than its owner (the owner is already shown on the right). */
@@ -30,16 +30,21 @@ function DocRows({ docs, empty }) {
 export default function Artwork() {
   const me = useMe()
   const [d, setD] = useState(null)
+  const [tab, setTab] = useState('')
   const [error, setError] = useState('')
   const load = useCallback(() => api.artwork().then(setD).catch((e) => setError(e.message)), [])
   useEffect(() => { load() }, [load])
   if (!d) return <Layout title="Artwork portal" subtitle={error || 'Loading…'}>{!error && <><Skeleton rows={3} /><Skeleton rows={4} /></>}</Layout>
 
-  const sections = [
-    ['New development', 'new_development', 'No new artwork in development.'],
-    ['Returned for changes', 'returned_for_changes', 'Nothing has been returned.'],
-    ['Print proof / shade card', 'print_proof_shade_card', 'No print proofs or shade cards in progress.'],
+  // the lists people act on come first; the library of finished artwork is always one click away
+  const lists = [
+    { key: 'returned_for_changes', label: 'Returned for changes', items: d.returned_for_changes, empty: 'Nothing has been returned.' },
+    ...d.review_steps.map((x) => ({ key: x.status, label: `Awaiting ${x.label.toLowerCase()}`, items: x.items, empty: `Nothing is waiting for ${x.label.toLowerCase()}.` })),
+    { key: 'new_development', label: 'In development', items: d.new_development, empty: 'No new artwork in development.' },
+    { key: 'print_proof_shade_card', label: 'Print proof / shade card', items: d.print_proof_shade_card, empty: 'No print proofs or shade cards in progress.' },
+    { key: 'library', label: 'Approved library', items: d.library || [], empty: 'No approved artwork yet.' },
   ]
+  const cur = lists.find((x) => x.key === tab) || lists.find((x) => x.items.length) || lists[0]
   return (
     <Layout title="Artwork portal" subtitle="Carton, label, leaflet, print proof and shade card: where each one is in review">
       {(d.my_tasks.length > 0 || ['artwork', 'super_admin'].includes(me.role_key)) && (
@@ -49,34 +54,24 @@ export default function Artwork() {
           <div className="tasklist">{d.my_tasks.map((t) => <TaskCard key={t.id} task={t} showProject onChanged={load} />)}</div>
         </section>
       )}
-      <section className="grid-2 even">
-        {[...sections.slice(0, 2).map(([title, key, empty]) => [title, d[key], empty, key]),
-          ...d.review_steps.map((s) => [`Awaiting ${s.label.toLowerCase()}`, s.items, `Nothing is waiting for ${s.label.toLowerCase()}.`, s.status]),
-          ...sections.slice(2).map(([title, key, empty]) => [title, d[key], empty, key])].map(([title, items, empty, key]) => (
-          <div className="panel" key={key}>
-            <header><h3>{title}</h3><span className="count">{items.length}</span></header>
-            <DocRows docs={items} empty={empty} />
-          </div>
-        ))}
+      <section className="panel art-lists">
+        <Tabs value={cur.key} onChange={setTab} tabs={lists.map((x) => ({ key: x.key, label: x.label, count: x.items.length }))} />
+        <ArtList key={cur.key} list={cur} search={cur.key === 'library'} />
       </section>
-      <Library docs={d.library || []} />
     </Layout>
   )
 }
 
-/** Every approved piece of artwork, from live and completed projects, so final files can always be found again. */
-function Library({ docs }) {
+/** One list of artwork, ten at a time; the library can be filtered by product or kind. */
+function ArtList({ list, search }) {
   const [q, setQ] = useState('')
-  const rows = docs.filter((d) => `${d.title} ${d.project_name} ${d.kind}`.toLowerCase().includes(q.toLowerCase()))
+  const rows = list.items.filter((d) => `${d.title} ${d.project_name} ${d.kind}`.toLowerCase().includes(q.toLowerCase()))
   const { items, pager } = usePaged(rows, 10, q)
   return (
-    <section className="panel">
-      <header>
-        <h3>Approved artwork library <span className="count">{docs.length}</span></h3>
-        <input className="search" placeholder="Filter by product or kind" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter approved artwork" />
-      </header>
-      <DocRows docs={items} empty={q ? 'Nothing matches.' : 'No approved artwork yet.'} />
+    <>
+      {search && <input className="search art-search" placeholder="Filter by product or kind" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter approved artwork" />}
+      <DocRows docs={items} empty={q ? 'Nothing matches.' : list.empty} />
       {pager}
-    </section>
+    </>
   )
 }

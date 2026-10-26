@@ -1730,3 +1730,21 @@ main.page > *:nth-child(n+5) { animation-delay: 160ms; }
 /* audit filters start on the left, where the eye begins */
 .toolbar.audit-tools { justify-content: flex-start; }
 .toolbar.audit-tools .tools { margin-left: 0; }
+
+/* Audit: each row is one clickable tile */
+.audit-row.row-link { transition: background-color var(--t-fast) ease; }
+.audit-row.row-link:hover { background: var(--tint-green); }
+.ev-go a { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--muted); font-size: 20px; line-height: 1; text-decoration: none; }
+.audit-row.row-link:hover .ev-go a { background: var(--neo-green); color: #fff; }
+/* Artwork portal: one panel, tabs on top */
+.art-lists { display: grid; gap: 8px; }
+.art-lists .tabs { margin-bottom: 4px; }
+.art-search { max-width: 320px; margin: 4px 0 2px; }
+/* Project details sit on a card like everything else on the page */
+.props { background: #fff; border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 18px 20px; }
+@media (max-width: 1100px) { .props { padding: 16px; } }
+.proj-grid { grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; }
+.p360 > div { grid-template-columns: 96px minmax(0, 1fr); }
+.p360 .person b { white-space: normal; }
+@media (max-width: 1200px) { .proj-grid { grid-template-columns: minmax(0, 1fr) 280px; } }
+@media (max-width: 900px) { .proj-grid { grid-template-columns: 1fr; } }

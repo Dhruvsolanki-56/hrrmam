@@ -184,8 +184,8 @@ export default function ProjectDetail() {
               <div><dt>Product</dt><dd>{project.product || '–'}</dd></div>
               <div><dt>Client</dt><dd>{project.potential_client || '–'}</dd></div>
               <div><dt>Manager</dt><dd>{project.project_manager ? <Person user={project.project_manager} /> : '–'}</dd></div>
-              <div><dt>Target submit</dt><dd className="num">{fmtDay(project.target_submission)}{lateSubmit && <small className="late-flag"> · date has passed</small>}</dd></div>
-              <div><dt>Target launch</dt><dd className="num">{fmtDay(project.target_launch)}</dd></div>
+              <div><dt>Submit by</dt><dd className="num">{fmtDay(project.target_submission)}{lateSubmit && <small className="late-flag"> · date has passed</small>}</dd></div>
+              <div><dt>Launch by</dt><dd className="num">{fmtDay(project.target_launch)}</dd></div>
             </dl>
             <details className="more props-more">
               <summary>More details</summary>
