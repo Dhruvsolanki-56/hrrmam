@@ -52,6 +52,8 @@ export const api = {
   adminLog: () => request('/admin-log'),
   notifications: () => request('/notifications'),
   markRead: (d) => post('/notifications/read', d),
+  tourSeen: (name) => post(`/me/tours/${name}`),
+  resetTours: () => request('/me/tours', { method: 'DELETE' }),
   // portals & registers
   director: (entity) => request(`/dashboard/director${qs({ entity })}`),
   regulatory: () => request('/dashboard/regulatory'),

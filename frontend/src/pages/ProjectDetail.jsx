@@ -2,20 +2,19 @@ import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import ActionPanel, { StepPanel } from '../components/ActionPanel'
-import StepBar from '../components/StepBar'
 import BriefTab from '../components/Brief'
 import ReopenPanel from '../components/Reopen'
 import DocList from '../components/DocCard'
 import FormModal from '../components/FormModal'
 import Icon from '../components/Icon'
-import Lanes from '../components/Lanes'
+import { FactsCard, HealthCard, Journey, TurnCard } from '../components/ProjectJourney'
+import { ProjectTour } from '../components/Tour'
 import Layout from '../components/Layout'
 import NewProjectModal from '../components/NewProjectModal'
-import StageList from '../components/StageList'
 import TasksTab from '../components/TasksTab'
 import Timeline from '../components/Timeline'
 import { LegalTab, ManufacturerTab, RegulatoryTab, RfiTab } from '../components/Workstreams'
-import { AgeChip, HealthPill, Person, StatusPill, Tabs, fmtDate, fmtDateTime, fmtDay, label, useDo, Skeleton } from '../components/bits'
+import { AgeChip, HealthPill, StatusPill, Tabs, label, useDo, Skeleton } from '../components/bits'
 import { FlowScope, useCan, useStages } from '../context'
 
 const AREAS = ['all', 'stage', 'task', 'clarification', 'legal', 'dossier', 'artwork', 'manufacturer', 'rfi', 'document', 'project']
@@ -34,7 +33,6 @@ export default function ProjectDetail() {
   const [blocker, setBlocker] = useState(false)
   const [area, setArea] = useState('all')
   const [confirmClear, setConfirmClear] = useState(false)
-  const [allSteps, setAllSteps] = useState(false)
   const clearing = useDo()
 
   useEffect(() => { api.project(id).then(setProject).catch((e) => setError(e.message)) }, [id])
@@ -77,14 +75,10 @@ export default function ProjectDetail() {
   const events = area === 'all' ? project.events : project.events.filter((e) => e.area === area)
   const manage = can('manage_project')
   const bEv = project.critical_blocker ? [...project.events].reverse().find((e) => e.area === 'project' && e.action === 'edit' && /Critical blocker:/.test(e.note)) : null
-  const pm = project.project_manager?.name
   const canClear = manage && !['rejected', 'completed'].includes(project.status)
   const clear = () => clearing.run(async () => { setProject(await api.updateProject(project.id, { critical_blocker: '' })); setConfirmClear(false) })
   const tabStage = tab === 'tasks' || tab === 'overview' ? null : project.flow.stages.find((s) => s.tab === tab) || project.flow.stages.find((s) => s.key === tab)
 
-  const done = Object.values(project.stage_states).filter((x) => x === 'approved' || x === 'bypassed').length
-  const activeNames = project.stages.filter((r) => ['in_progress', 'awaiting_approval'].includes(r.state)).map((r) => project.flow.stages.find((s) => s.key === r.key)?.name).filter(Boolean)
-  const lateSubmit = project.status === 'active' && !project.submissions.length && project.target_submission && new Date(project.target_submission) < new Date()
   const editable = manage && project.status !== 'rejected' && project.status !== 'completed'
 
   return (
@@ -100,18 +94,8 @@ export default function ProjectDetail() {
           {!['completed', 'rejected'].includes(project.status) && <HealthPill health={project.health} reasons={project.health_reasons} />}
           <AgeChip project={project} />
           <span className="code">{project.code || 'Code issued when the opportunity is approved'}</span>
-          {pm && <span className="meta-pm">Manager: {pm}</span>}
         </div>
         {project.summary && <p className="summary" title={project.summary}>{project.summary}</p>}
-        <div className="journey">
-          <div className="journey-top">
-            <span><b>{done} of {project.flow.stages.length} steps done</b>{activeNames.length ? <span className="journey-now" title={activeNames.join(', ')}> · {activeNames.length > 2 ? `${activeNames.length} in progress` : `in progress: ${activeNames.join(', ')}`}</span> : project.status === 'completed' ? ' · complete' : ''}</span>
-            <StepBar.Key compact />
-            <button className="link" aria-expanded={allSteps} onClick={() => setAllSteps(!allSteps)}>{allSteps ? 'Hide steps' : 'See all steps'}</button>
-          </div>
-          <StepBar project={project} selected={step} onPick={pick} slim />
-          {allSteps && <div className="steps-all"><StageList project={project} selected={step} onPick={(k) => { setAllSteps(false); pick(k) }} /></div>}
-        </div>
         <Tabs value={tab} onChange={goTab} tabs={[
           { key: 'overview', label: 'Overview' }, { key: 'brief', label: 'Brief', count: openClar || null }, { key: 'tasks', label: 'Tasks', count: openTasks || null },
           { sep: 'Workstreams' },
@@ -122,34 +106,17 @@ export default function ProjectDetail() {
         ]} />
       </section>
 
-      <div className="proj-grid">
+      <div className={`proj-grid ${tab === 'overview' ? '' : 'one-col'}`}>
         <div className="proj-main">
           {project.critical_blocker && tab !== 'overview' && (
             <p className="blocker-mini" role="note"><b>Critical blocker:</b> {project.critical_blocker} <button className="link" onClick={() => goTab('overview')}>Details</button></p>
           )}
-          {project.critical_blocker && tab === 'overview' && (
-            <div className="blocker-bar" role="alert">
-              <div>
-                <b>Critical blocker: {project.critical_blocker}</b>
-                <small>{bEv ? `Reported by ${bEv.actor} on ${fmtDateTime(bEv.created_at)}. ` : ''}It keeps the project red until it is cleared.</small>
-              </div>
-              {canClear && !confirmClear && <button className="btn line" onClick={() => setConfirmClear(true)}>Mark as resolved</button>}
-              {canClear && confirmClear && (
-                <span className="blocker-confirm">Is this fixed?
-                  <button className="btn primary" disabled={clearing.busy} onClick={clear}>Yes, clear it</button>
-                  <button className="btn line" onClick={() => setConfirmClear(false)}>Not yet</button></span>
-              )}
-              {!canClear && <small>Only a project manager{pm ? ` (${pm})` : ''} or a Director can clear it.</small>}
-              {clearing.error && <p className="error">{clearing.error}</p>}
-            </div>
-          )}
-
           {tabStage && <StepPanel project={project} stageKey={tabStage.key} onChange={setProject} goTab={goTab} inTab />}
           {tab === 'overview' && (
             <>
+              <Journey project={project} onPick={pick} />
               {step && <div id="step-panel"><StepPanel project={project} stageKey={step} onChange={setProject} goTab={goTab} onClose={unpick} /></div>}
-              <ActionPanel project={project} onChange={setProject} goTab={goTab} skip={step} onPick={pick} />
-              <Lanes project={project} goTab={goTab} />
+              <ActionPanel project={project} onChange={setProject} goTab={goTab} skip={step} onPick={pick} noTurn />
               <ReopenPanel project={project} onChange={setProject} />
             </>
           )}
@@ -177,41 +144,17 @@ export default function ProjectDetail() {
           )}
         </div>
 
-        <aside className={`props ${tab === 'overview' ? '' : 'props-off'}`} aria-label="Project details">
-          <div>
-            <h3>Details</h3>
-            <dl className="p360">
-              <div><dt>Product</dt><dd>{project.product || '–'}</dd></div>
-              <div><dt>Client</dt><dd>{project.potential_client || '–'}</dd></div>
-              <div><dt>Manager</dt><dd>{project.project_manager ? <Person user={project.project_manager} /> : '–'}</dd></div>
-              <div><dt>Submit by</dt><dd className="num">{fmtDay(project.target_submission)}{lateSubmit && <small className="late-flag"> · date has passed</small>}</dd></div>
-              <div><dt>Launch by</dt><dd className="num">{fmtDay(project.target_launch)}</dd></div>
-            </dl>
-            <details className="more props-more">
-              <summary>More details</summary>
-              <dl className="p360">
-                <div><dt>Product route</dt><dd>{project.project_type === 'In-Licence' ? 'In-licence' : 'New development'}{project.category && <small> · {project.category}</small>}</dd></div>
-                <div><dt>Opportunity</dt><dd className="num">{project.opportunity_value != null ? `AUD ${project.opportunity_value.toLocaleString('en-AU')}` : '–'}</dd></div>
-                <div><dt>Market</dt><dd>{project.market}</dd></div>
-                <div><dt>Submission</dt><dd>{project.submission_type || 'To be decided'}</dd></div>
-                <div><dt>Started</dt><dd className="num">{fmtDate(project.created_at)}{project.initiator && <small> · {project.initiator}</small>}</dd></div>
-              </dl>
-            </details>
-          </div>
-          <div className={`blocker ${project.critical_blocker ? 'on' : ''}`}>
-            <Icon name="alert" size={16} />
-            <div><b>Critical blocker</b><span>{project.critical_blocker || 'None reported'}</span></div>
-            {canClear && <button className="link" onClick={() => setBlocker(true)}>{project.critical_blocker ? 'Change the wording' : 'Report a blocker'}</button>}
-          </div>
-          {project.health_reasons.length > 0 && (
-            <div className="reasons-box">
-              <h3>Why it is {project.health === 'red' ? 'critical' : 'at risk'}</h3>
-              <ul className="reasons">{project.health_reasons.map((r) => <li key={r}>{r}</li>)}</ul>
-            </div>
-          )}
-        </aside>
+        {tab === 'overview' && (
+          <aside className="ov-side" aria-label="Your turn, health and key facts">
+            <TurnCard project={project} onPick={pick} goTab={goTab} />
+            <HealthCard project={project} blockerEvent={bEv} canClear={canClear} confirmClear={confirmClear} setConfirmClear={setConfirmClear}
+              clear={clear} clearing={clearing} onReport={() => setBlocker(true)} />
+            <FactsCard project={project} onBrief={() => goTab('brief')} />
+          </aside>
+        )}
       </div>
 
+      {tab === 'overview' && !step && <ProjectTour />}
       {editing && <NewProjectModal project={project} onClose={() => setEditing(false)} onCreated={(p) => { setProject(p); setEditing(false) }} />}
       {blocker && (
         <FormModal title="Critical blocker" intro="Anything that stops the project moving. It turns the project's health red and shows a banner on the Overview tab. When it is fixed, use Mark as resolved."

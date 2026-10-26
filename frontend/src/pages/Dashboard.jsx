@@ -4,6 +4,7 @@ import { api } from '../api'
 import Layout from '../components/Layout'
 import { HealthPill, Skeleton, Tabs, groupLabel, useCountUp } from '../components/bits'
 import StartHere from '../components/StartHere'
+import { AppTour } from '../components/Tour'
 import { useMe, useStages } from '../context'
 
 const parseDay = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d) }
@@ -78,7 +79,7 @@ export default function Dashboard() {
   useEffect(() => { load() }, [load])
 
   if (!d || (personal && !work)) return <Layout title="Overview" head={false}><StartHere work={work} />{error ? <p className="error">{error}</p> : <div className="skel-grid"><Skeleton rows={2} /><Skeleton rows={2} /><Skeleton rows={2} /></div>}</Layout>
-  if (personal) return <Layout title="Overview" head={false}><StartHere work={work} /><PersonalOverview work={work} projects={d.projects} /></Layout>
+  if (personal) return <Layout title="Overview" head={false}><StartHere work={work} /><PersonalOverview work={work} projects={d.projects} /><AppTour /></Layout>
 
   const c = d.counts
   // Stage and artwork approvals only: each task is approved by the person who assigned it (see My work)
@@ -107,6 +108,7 @@ export default function Dashboard() {
   return (
     <Layout title="Overview" head={false}>
       <StartHere work={work} />
+      <AppTour />
       <div className="ph">
         <div>
           <p className="ph-date">{today()}</p>

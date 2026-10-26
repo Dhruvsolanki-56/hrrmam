@@ -48,6 +48,7 @@ class User(Base):
     role_key: Mapped[str] = mapped_column(ForeignKey("roles.key"))
     country: Mapped[str] = mapped_column(String(20), default="AU")  # AU | IN | Partner
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    tours_seen: Mapped[str] = mapped_column(String(120), default="")  # comma list of first-time tours already shown
     created_at: Mapped[datetime] = _ts()
 
     role: Mapped[Role] = relationship(lazy="joined")

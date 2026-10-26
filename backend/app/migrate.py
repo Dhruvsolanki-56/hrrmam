@@ -27,6 +27,7 @@ NEW_COLUMNS = {
     "project_events": {"actor_id": "INTEGER", "ref_kind": "VARCHAR(16) DEFAULT ''", "ref_id": "INTEGER", "to_user": "VARCHAR(240) DEFAULT ''"},
     "project_stages": {"lead_id": "INTEGER", "approver_id": "INTEGER"},
     "notifications": {"link": "VARCHAR(200) DEFAULT ''"},
+    "users": {"tours_seen": "VARCHAR(120) DEFAULT ''"},
 }
 
 

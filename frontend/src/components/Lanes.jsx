@@ -5,7 +5,7 @@ const DOSSIER_DONE = ['reviewed', 'ready']
 const MFR_DONE = ['accepted']
 
 /** One line per lane: what it is, how far it has got, in plain words. Counts come from the project's own records. */
-function summarise(project, stage, row) {
+export function summarise(project, stage, row) {
   const f = stage.features || []
   if (f.includes('agreements')) {
     const core = project.agreements.filter((a) => a.core)
@@ -62,10 +62,10 @@ export default function Lanes({ project, goTab }) {
       <header>
         <div>
           <h3>Workstreams</h3>
-          <p className="muted">{lanes.length} workstreams run at the same time. Click one to open it.</p>
+          <p className="muted">{lanes.length} teams work at the same time. Click a card to open it.</p>
         </div>
       </header>
-      <ul className="lanes">
+      <ul className="tiles">
         {lanes.map((s) => {
           const r = rowOf(s.key)
           const sum = summarise(project, s, r)
@@ -75,13 +75,12 @@ export default function Lanes({ project, goTab }) {
           const pct = sum.total ? (sum.done / sum.total) * 100 : ['approved', 'bypassed'].includes(r.state) ? 100 : 0
           return (
             <li key={s.key}>
-              <button className={`lane lane-${r.state}`} onClick={() => goTab(s.tab || 'tasks')}>
-                <span className="lane-name"><b>{s.name}</b><small>{owner}</small></span>
-                <span className="lane-state">
-                  <span className="lane-top"><StateChip state={r.state} locked={r.locked} />{late > 0 && <span className="lane-late">{late} late</span>}{r.rework_count > 0 && <span className="lane-back">sent back {r.rework_count}×</span>}</span>
-                  <small>{sum.text}{sum.more && <> · {sum.more}</>}</small>
-                </span>
+              <button className={`tile lane-${r.state}`} onClick={() => goTab(s.tab || 'tasks')}>
+                <span className="tile-top"><b>{s.name}</b>{late > 0 && <span className="lane-late">{late} late</span>}</span>
+                <StateChip state={r.state} locked={r.locked} />
                 <span className="lane-meter" aria-hidden="true"><i style={{ width: `${pct}%` }} /></span>
+                <small className="tile-sum">{sum.text}</small>
+                <small className="tile-who">{owner}</small>
               </button>
             </li>
           )
@@ -91,7 +90,7 @@ export default function Lanes({ project, goTab }) {
         <p className={`lane-gate ${gateRow?.state === 'pending' ? 'blocked' : ''}`}>
           <b>{gate.name}</b>
           {gateRow?.state === 'pending'
-            ? <> opens when every lane is approved: {gate.requires.length - waitingOn.length} of {gate.requires.length} done.</>
+            ? <> starts when all {gate.requires.length} teams are approved. {gate.requires.length - waitingOn.length} of {gate.requires.length} done so far.</>
             : gateRow ? <> <StateChip state={gateRow.state} locked={gateRow.locked} /></> : null}
         </p>
       )}

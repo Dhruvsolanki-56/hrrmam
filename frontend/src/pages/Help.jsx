@@ -1,10 +1,14 @@
+import { useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout'
-import { useMe } from '../context'
+import { resetTours } from '../components/Tour'
+import { useApp, useMe } from '../context'
 import { GLOSSARY, LIFECYCLE, QA, ROLE_GUIDE, guideFor } from '../roleGuide'
 
 export default function Help() {
   const me = useMe()
   const mine = guideFor(me.role_key, me.role?.name)
+  const navigate = useNavigate()
+  const { refreshMe } = useApp()
   return (
     <Layout title="How this works">
       <div className="help">
@@ -13,6 +17,7 @@ export default function Help() {
             <h2>Your role: {mine.title}</h2>
             <p>{mine.does}</p>
             <p><b>First thing to do:</b> {mine.first}</p>
+            <button className="btn line" onClick={async () => { await resetTours(me.id); await refreshMe(); navigate('/') }}>Take the tour again</button>
           </section>
           <nav className="help-jump" aria-label="On this page">
             <span>On this page</span>

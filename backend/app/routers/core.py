@@ -52,7 +52,27 @@ def _admin_log(db: Session, user: User, action: str, note: str):
 @router.get("/me")
 def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
     unread = db.scalar(select(func.count()).select_from(Notification).where(Notification.user_id == user.id, ~Notification.read))
-    return {**S.user_full(user), "unread": unread}
+    return {**S.user_full(user), "unread": unread, "tours_seen": [t for t in (user.tours_seen or "").split(",") if t]}
+
+
+@router.post("/me/tours/{name}")
+def tour_seen(name: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """A first-time tour has been shown to this person; it is never shown again, on any device."""
+    if name not in ("app", "project"):
+        raise WorkflowError("Unknown tour.")
+    seen = [t for t in (user.tours_seen or "").split(",") if t]
+    if name not in seen:
+        user.tours_seen = ",".join(seen + [name])
+        db.commit()
+    return {"tours_seen": seen if name in seen else seen + [name]}
+
+
+@router.delete("/me/tours")
+def tours_reset(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Help page, "Take the tour again"."""
+    user.tours_seen = ""
+    db.commit()
+    return {"tours_seen": []}
 
 
 @router.get("/users")

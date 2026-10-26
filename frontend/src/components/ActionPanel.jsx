@@ -9,7 +9,7 @@ const tabOf = (st) => (st.tab && st.tab !== 'tasks' ? st.tab : null)
 
 
 /** Is it this person's move on this stage? One definition, used by the banner and by the cards. */
-function turnOf(project, row, me, st, can) {
+export function turnOf(project, row, me, st, can) {
   const sup = me.role_key === 'super_admin'
   const canSubmit = sup || st.owner_roles.includes(me.role_key)  // managers may step in, but it is not their turn
   const last = [...(project.events || [])].reverse().find((e) => e.stage_key === row.key && e.area === 'stage' && e.action === 'submit')
@@ -394,13 +394,13 @@ function ProjectControls({ project, onChange }) {
   )
 }
 
-export default function ActionPanel({ project, onChange, goTab, skip, onPick }) {
+export default function ActionPanel({ project, onChange, goTab, skip, onPick, noTurn }) {
   const live = project.status === 'active' || project.status === 'on_hold'
   const active = project.stages.filter((r) => ['in_progress', 'awaiting_approval'].includes(r.state))
   const shown = active.filter((r) => r.key !== skip)
   return (
     <>
-      {project.status === 'active' && active.length > 1 && <YourTurn project={project} active={active} onPick={onPick} />}
+      {project.status === 'active' && active.length > 1 && !noTurn && <YourTurn project={project} active={active} onPick={onPick} />}
       {live && shown.length === 1 && (
         <div className={`stagecards ${shown.length > 1 ? 'multi' : ''}`}>
           {shown.map((row) => <StageCard key={row.key} project={project} row={row} onChange={onChange} goTab={goTab} fold={shown.length > 1} locked={project.status === 'on_hold'} />)}
