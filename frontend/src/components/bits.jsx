@@ -180,7 +180,7 @@ export function Tabs({ tabs, value, onChange, variant }) {
   }, [value, variant, tabs.length])
   return (
     <div ref={box} className={`tabs ${variant === 'seg' ? 'seg-tabs' : ''} ${bar ? 'has-bar' : ''}`} role="tablist">
-      {tabs.map((t) => (
+      {tabs.map((t, i) => (t.sep ? <span key={`sep${i}`} className="tab-sep" title={t.sep} aria-hidden="true" /> :
         <button key={t.key} role="tab" aria-selected={value === t.key} className={value === t.key ? 'on' : ''} onClick={() => onChange(t.key)}>
           {t.label}{t.count != null && <b>{t.count}</b>}
         </button>

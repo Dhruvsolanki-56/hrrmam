@@ -1573,3 +1573,61 @@ main.page > *:nth-child(n+5) { animation-delay: 160ms; }
 }
 .table td.no-note .sub:first-child { margin-top: 0; }
 .table td .ev-open { display: block; margin-top: 2px; width: fit-content; }
+
+/* =====================================================================
+   Project page: one header card (who/what/how far) with the tabs as its footer
+   ===================================================================== */
+.proj-card { background: #fff; border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 22px 26px 0; display: grid; gap: 10px; margin-bottom: -10px; }
+.proj-card .proj-title h1 { font-size: 28px; max-width: none; }
+.proj-card .meta { gap: 6px 16px; font-size: 14px; color: var(--muted); }
+.proj-card .meta .code { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.proj-card .summary { color: var(--ink-2); font-size: 15px; max-width: 80ch; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.proj-card .journey { padding: 12px 0 4px; border-top: 1px solid var(--line); margin-top: 4px; gap: 10px; }
+.proj-card .journey-top { align-items: center; color: var(--muted); }
+.proj-card .journey-top b { color: var(--neo-dark); font-weight: 600; }
+.stepbar-key.compact { margin-left: auto; font-size: 13px; gap: 4px 14px; }
+.stepbar-key.compact i { width: 10px; height: 10px; border-radius: 50%; }
+.proj-card .stepbar { gap: 2px; }
+.proj-card .stepbar button { height: 8px; border-radius: 0; }
+.proj-card .stepbar button:first-child { border-radius: 4px 0 0 4px; }
+.proj-card .stepbar button:last-child { border-radius: 0 4px 4px 0; }
+.proj-card .stepbar button span { display: none; }
+.proj-card .stepbar button:hover { filter: none; transform: scaleY(1.6); }
+.proj-card .stepbar button { transition: transform var(--t-fast) var(--ease-out); }
+.proj-card .steps-all { padding: 6px 0 4px; }
+.proj-card > .tabs { margin: 6px -26px 0; padding: 0 26px; border-top: 1px solid var(--line); border-bottom: 0; }
+.proj-card > .tabs button { height: 48px; font-size: 15px; }
+.tab-sep { flex: none; width: 1px; height: 18px; background: var(--line-2); align-self: center; }
+.proj-main > .panel:first-child, .proj-main > section:first-child { margin-top: 0; }
+
+/* tasks: one header line with the step filter, column labels above the rows */
+.tasks-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.tasks-head h3 { font-size: 18px; }
+.tasks-head .muted { margin-top: 2px; }
+.tasks-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.tasks-tools .select { min-width: 230px; height: 38px; }
+.tasks-tools .btn { height: 38px; }
+.task-cols { display: grid; grid-template-columns: minmax(0, 1fr) 190px 300px; gap: 16px; padding: 14px 4px 8px; border-bottom: 1px solid var(--line); font-size: 12.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.task-cols span:last-child { text-align: right; padding-right: 4px; }
+@media (max-width: 1100px) { .task-cols { display: none; } }
+@media (max-width: 760px) {
+  .proj-card { padding: 16px 16px 0; }
+  .proj-card .proj-title h1 { font-size: 23px; }
+  .proj-card > .tabs { margin: 4px -16px 0; padding: 0 16px; }
+  .stepbar-key.compact { display: none; }
+  .tasks-tools, .tasks-tools .select { width: 100%; }
+}
+.tasks-sum { color: var(--muted); font-size: 14px; margin-top: 2px; }
+
+/* people in tables show their full name */
+@media (min-width: 761px) {
+  .table td[data-label="Responsible"], .table td[data-label="Owner"], .table td[data-label="Manager"] { min-width: 160px; }
+  .table td[data-label="Responsible"] .person b, .table td[data-label="Owner"] .person b, .table td[data-label="Manager"] .person b { overflow: visible; text-overflow: clip; }
+  .table td[data-label="Counterparty"] { min-width: 130px; }
+}
+@media (max-width: 760px) {
+  .tasks-head { flex-direction: column; align-items: stretch; }
+  .tasks-tools { flex-direction: column; align-items: stretch; }
+  .tasks-tools .select { min-width: 0; width: 100%; }
+}
+.tasks-head > div:first-child { align-self: flex-start; text-align: left; }

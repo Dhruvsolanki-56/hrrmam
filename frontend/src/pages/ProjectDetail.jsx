@@ -89,27 +89,37 @@ export default function ProjectDetail() {
   return (
     <FlowScope stages={project.flow.stages}>
     <Layout title={project.name} back="/projects" head={false}>
-      <div className="proj-head">
-        <div className="meta">
-          <span className="code">{project.code || 'Code issued when the opportunity is approved'}</span>
-          <StatusPill status={project.status} />
-          <HealthPill health={project.health} reasons={project.health_reasons} />
-          <AgeChip project={project} />
-        </div>
+      <section className="proj-card">
         <div className="proj-title">
           <h1>{project.name}</h1>
           {editable && <button className="btn line" onClick={() => setEditing(true)}><Icon name="edit" size={15} /><span className="hide-m">Edit details</span></button>}
         </div>
-        {project.summary && <p className="summary">{project.summary}</p>}
+        <div className="meta">
+          <StatusPill status={project.status} />
+          <HealthPill health={project.health} reasons={project.health_reasons} />
+          <AgeChip project={project} />
+          <span className="code">{project.code || 'Code issued when the opportunity is approved'}</span>
+          {pm && <span className="meta-pm">Manager: {pm}</span>}
+        </div>
+        {project.summary && <p className="summary" title={project.summary}>{project.summary}</p>}
         <div className="journey">
           <div className="journey-top">
-            <span><b>{done} of {project.flow.stages.length}</b> steps done{activeNames.length ? <> · <span className="journey-now" title={activeNames.join(', ')}>{activeNames.length > 2 ? `${activeNames.length} steps in progress` : `Now: ${activeNames.join(', ')}`}</span></> : project.status === 'completed' ? ' · Complete' : ''}</span>
+            <span><b>{done} of {project.flow.stages.length} steps done</b>{activeNames.length ? <span className="journey-now" title={activeNames.join(', ')}> · {activeNames.length > 2 ? `${activeNames.length} in progress` : `now: ${activeNames.join(', ')}`}</span> : project.status === 'completed' ? ' · complete' : ''}</span>
+            <StepBar.Key compact />
             <button className="link" aria-expanded={allSteps} onClick={() => setAllSteps(!allSteps)}>{allSteps ? 'Hide steps' : 'See all steps'}</button>
           </div>
           <StepBar project={project} selected={step} onPick={pick} slim />
-          {allSteps && <div className="panel steps-all"><StepBar.Key /><StageList project={project} selected={step} onPick={(k) => { setAllSteps(false); pick(k) }} /></div>}
+          {allSteps && <div className="steps-all"><StageList project={project} selected={step} onPick={(k) => { setAllSteps(false); pick(k) }} /></div>}
         </div>
-      </div>
+        <Tabs value={tab} onChange={goTab} tabs={[
+          { key: 'overview', label: 'Overview' }, { key: 'brief', label: 'Brief', count: openClar || null }, { key: 'tasks', label: 'Tasks', count: openTasks || null },
+          { sep: 'Workstreams' },
+          { key: 'legal', label: 'Legal' }, { key: 'regulatory', label: 'Regulatory' }, { key: 'artwork', label: 'Artwork' },
+          { key: 'manufacturer', label: 'Manufacturer' }, ...(hasQuality ? [{ key: 'quality', label: 'Quality / PV' }] : []), { key: 'rfi', label: 'RFI', count: openRfi || null },
+          { sep: 'Records' },
+          { key: 'documents', label: 'Documents', count: nonArt || null }, { key: 'activity', label: 'History' },
+        ]} />
+      </section>
 
       <div className="proj-grid">
         <div className="proj-main">
@@ -129,12 +139,6 @@ export default function ProjectDetail() {
               {clearing.error && <p className="error">{clearing.error}</p>}
             </div>
           )}
-          <Tabs value={tab} onChange={goTab} tabs={[
-            { key: 'overview', label: 'Overview' }, { key: 'brief', label: 'Brief', count: openClar || null }, { key: 'tasks', label: 'Tasks', count: openTasks || null },
-            { key: 'legal', label: 'Legal' }, { key: 'regulatory', label: 'Regulatory' }, { key: 'artwork', label: 'Artwork' },
-            { key: 'manufacturer', label: 'Manufacturer' }, ...(hasQuality ? [{ key: 'quality', label: 'Quality / PV' }] : []), { key: 'rfi', label: 'RFI', count: openRfi || null },
-            { key: 'documents', label: 'Documents', count: nonArt || null }, { key: 'activity', label: 'History' },
-          ]} />
 
           {tabStage && <StepPanel project={project} stageKey={tabStage.key} onChange={setProject} goTab={goTab} inTab />}
           {tab === 'overview' && (
@@ -156,8 +160,14 @@ export default function ProjectDetail() {
           {tab === 'documents' && <DocList project={project} onChange={setProject} />}
           {tab === 'activity' && (
             <section className="panel">
-              <header><h3>History</h3><span className="muted">{project.events.length} entries · nothing is overwritten</span></header>
-              <Tabs value={area} onChange={setArea} tabs={AREAS.map((a) => ({ key: a, label: a === 'all' ? 'All' : label(a) }))} />
+              <header className="tasks-head">
+                <div><h3>History</h3><p className="tasks-sum">{events.length} of {project.events.length} entries · nothing is ever overwritten</p></div>
+                <div className="tasks-tools">
+                  <select className="select" value={area} onChange={(e) => setArea(e.target.value)} aria-label="Show history for one area">
+                    {AREAS.map((a) => <option key={a} value={a}>{a === 'all' ? 'Everything' : label(a)}</option>)}
+                  </select>
+                </div>
+              </header>
               <Timeline events={events} />
             </section>
           )}
@@ -167,7 +177,6 @@ export default function ProjectDetail() {
           <div>
             <h3>Details</h3>
             <dl className="p360">
-              <div><dt>Project code</dt><dd>{project.code ? <span className="code">{project.code}</span> : 'Pending'}</dd></div>
               <div><dt>Product</dt><dd>{project.product || '–'}</dd></div>
               <div><dt>Client</dt><dd>{project.potential_client || '–'}</dd></div>
               <div><dt>Manager</dt><dd>{project.project_manager ? <Person user={project.project_manager} /> : '–'}</dd></div>

@@ -2,10 +2,10 @@ import { STATE } from './bits'
 import { withText } from './ActionPanel'
 
 /** The progress bar, one clickable segment per step. Clicking a step opens its details (who has it, why, what next). */
-function Key() {
+function Key({ compact }) {
   return (
-    <ul className="stepbar-key" aria-hidden="true">
-      <li><i className="done" />Done</li><li><i className="awaiting" />Waiting for approval</li><li><i className="current" />Work in progress</li><li><i className="todo" />Not started</li>
+    <ul className={`stepbar-key ${compact ? 'compact' : ''}`} aria-hidden="true">
+      <li><i className="done" />Done</li><li><i className="awaiting" />{compact ? 'Awaiting approval' : 'Waiting for approval'}</li><li><i className="current" />In progress</li><li><i className="todo" />Not started</li>
     </ul>
   )
 }

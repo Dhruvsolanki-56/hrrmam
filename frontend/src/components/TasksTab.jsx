@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useCan, useStages } from '../context'
-import { Empty, Tabs, toast, useFocus } from './bits'
+import { Empty, toast, useFocus } from './bits'
 import Icon from './Icon'
 import NewTaskModal from './NewTaskModal'
 import TaskCard from './TaskCard'
@@ -19,15 +19,22 @@ export default function TasksTab({ project, onChange }) {
 
   return (
     <section className="panel">
-      <header>
-        <h3>Tasks</h3>
-        {can('assign') && !closed && <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} />Assign a task</button>}
+      <header className="tasks-head">
+        <div>
+          <h3>Tasks</h3>
+          <p className="tasks-sum">{open.length} open · {done.length} finished{stage !== 'all' ? ` in ${stages.find((s) => s.key === stage)?.name}` : ''}</p>
+        </div>
+        <div className="tasks-tools">
+          {withTasks.length > 1 && (
+            <select className="select" value={stage} onChange={(e) => setStage(e.target.value)} aria-label="Show tasks for one step">
+              <option value="all">All steps ({project.tasks.length})</option>
+              {withTasks.map((s) => <option key={s.key} value={s.key}>{s.name} ({project.tasks.filter((t) => t.stage_key === s.key).length})</option>)}
+            </select>
+          )}
+          {can('assign') && !closed && <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} />Assign a task</button>}
+        </div>
       </header>
-      <p className="muted tasks-intro">Tasks are the jobs inside each step. A step cannot be submitted until its required tasks are approved.</p>
-      {withTasks.length > 1 && (
-        <Tabs value={stage} onChange={setStage}
-          tabs={[{ key: 'all', label: 'All', count: project.tasks.length }, ...withTasks.map((s) => ({ key: s.key, label: s.name, count: project.tasks.filter((t) => t.stage_key === s.key).length }))]} />
-      )}
+      {open.length > 0 && <div className="task-cols" aria-hidden="true"><span>Task</span><span>Owner</span><span>Due · status</span></div>}
       {!project.tasks.length && <Empty>No tasks yet. Assign work to people in the relevant workstream; each task is accepted, done, submitted and approved here.</Empty>}
       <div className="tasklist">
         {open.map((t) => <TaskCard key={t.id} task={t} project={project} onChanged={onChange} />)}
