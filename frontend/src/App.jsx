@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard'
 import Legal from './pages/Legal'
 import Login from './pages/Login'
 import MyWork from './pages/MyWork'
+import Help from './pages/Help'
 import ProjectDetail from './pages/ProjectDetail'
 import Projects from './pages/Projects'
 import Regulatory from './pages/Regulatory'
@@ -84,6 +85,7 @@ export default function App() {
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id" element={<ProjectDetail />} />
         <Route path="/my-work" element={<MyWork />} />
+        <Route path="/help" element={<Help />} />
         <Route path="/regulatory" element={<Regulatory />} />
         <Route path="/artwork" element={<Artwork />} />
         <Route path="/legal" element={<Legal />} />

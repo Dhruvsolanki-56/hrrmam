@@ -14,6 +14,10 @@ from .common import Forbidden, WorkflowError
 SAT = workflow.SATISFIED
 
 
+
+def _pl(n: int, one: str, many: str) -> str:
+    return one if n == 1 else many
+
 def list_projects(db: Session) -> list[Project]:
     q = (select(Project).options(selectinload(Project.stages), selectinload(Project.tasks))
          .order_by(Project.updated_at.desc(), Project.id.desc()))
@@ -99,7 +103,7 @@ def health(p: Project) -> tuple[str, list[str]]:
         amber.append("1 task overdue")
     soon = [t for t in p.tasks if t.open and t.due_at and not t.overdue and (aware(t.due_at).date() - today).days <= 3]
     if soon:
-        amber.append(f"{len(soon)} task(s) due within 3 days")
+        amber.append(f"{len(soon)} {_pl(len(soon), 'task is', 'tasks are')} due within 3 days")
     sub = p.feature_row("submission")
     if p.target_submission and p.target_submission < today and not (sub and sub.state in SAT):
         red.append("Target submission date has passed")
@@ -107,7 +111,7 @@ def health(p: Project) -> tuple[str, list[str]]:
         red.append("Target launch date has passed")
     over = [r for r in p.active_rows if r.overdue]
     if over:
-        amber.append(f"{len(over)} stage(s) over target time")
+        amber.append(f"{len(over)} {_pl(len(over), 'step is', 'steps are')} over target time")
     if any(t.state == "changes_requested" for t in p.tasks):
         amber.append("Changes requested on a task")
     back = (sum(1 for d in p.documents if d.status == "returned") + sum(1 for a in p.agreements if a.status == "changes_requested")
@@ -228,14 +232,14 @@ def blockers(p: Project, key: str) -> list[str]:
         out += [f"{c['label']}: {c['detail']}" for c in readiness(p) if not c["ok"] and "stage" not in c]
     open_tasks = [t for t in p.tasks if t.stage_key == key and t.required and not t.bypassed and t.state not in workflow.TASK_DONE]
     if open_tasks:
-        out.append(f"{len(open_tasks)} required task(s) are not approved yet")
+        out.append(f"{len(open_tasks)} required {_pl(len(open_tasks), 'task is', 'tasks are')} not approved yet")
     docs = [d for d in p.documents if d.stage_key == key and d.required and d.status not in ("approved", "locked")]
     if docs:
-        out.append(f"{len(docs)} required document(s) are not approved yet")
+        out.append(f"{len(docs)} required {_pl(len(docs), 'document is', 'documents are')} not approved yet")
     if "clarifications" in feats:
         n = [c for c in p.clarifications if c.status != "accepted"]
         if n:
-            out.append(f"{len(n)} clarification(s) are not accepted yet")
+            out.append(f"{len(n)} {_pl(len(n), 'clarification is', 'clarifications are')} not accepted yet")
     if "agreements" in feats:
         for a in p.agreements:
             if a.core and a.status != "signed":
@@ -245,17 +249,17 @@ def blockers(p: Project, key: str) -> list[str]:
             out.append("Choose the submission type first")
         todo = [i for i in p.dossier_items if i.required and i.status not in workflow.DOSSIER_DONE]
         if todo:
-            out.append(f"{len(todo)} required dossier item(s) are not ready")
+            out.append(f"{len(todo)} required dossier {_pl(len(todo), 'item is', 'items are')} not ready")
     if "mfr" in feats:
         todo = [m for m in p.mfr_requests if m.required and m.status not in workflow.MFR_DONE]
         if todo:
-            out.append(f"{len(todo)} required manufacturer data item(s) are not accepted yet")
+            out.append(f"{len(todo)} required manufacturer data {_pl(len(todo), 'item is', 'items are')} not accepted yet")
     if "submission" in feats and not p.submissions:
         out.append("Record the external submission first")
     if "rfi" in feats:
         n = [r for r in p.rfis if r.status != "closed"]
         if n:
-            out.append(f"{len(n)} RFI case(s) are still open")
+            out.append(f"{len(n)} RFI {_pl(len(n), 'case is', 'cases are')} still open")
     return out
 
 

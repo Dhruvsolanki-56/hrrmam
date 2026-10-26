@@ -2,31 +2,19 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import Layout from '../components/Layout'
-import { HealthPill, Tabs } from '../components/bits'
+import { HealthPill, Skeleton, Tabs, useCountUp } from '../components/bits'
+import StartHere from '../components/StartHere'
 import { useStages } from '../context'
 
 const parseDay = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d) }
 const shortDay = (s) => parseDay(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 // phase order, light to dark, in Neo palette shades
 const RAMP = ['#8fcab9', '#3fa39a', '#00817e', '#00626a', '#004248', '#231f20']
-const KIND = { 'due date': 'Decide on a new date', stage: 'Approve this step', task: 'Approve a task', artwork: 'Approve artwork' }
+const KIND = { 'due date': 'New date to decide', stage: 'Step awaiting approval', task: 'Task awaiting approval', artwork: 'Artwork awaiting review' }
 const today = () => new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
-function Hint() {
-  const [show, setShow] = useState(() => { try { return localStorage.getItem('nh-hint') !== 'off' } catch { return true } })
-  if (!show) return null
-  const close = () => { try { localStorage.setItem('nh-hint', 'off') } catch { /* private window */ } setShow(false) }
-  return (
-    <aside className="hint" role="note">
-      <div><b>New here? Three things to know</b>
-        <ul>
-          <li><b>My work</b> lists what is waiting for you, most urgent first.</li>
-          <li>Open a <b>project</b> to see who has each step and whether it is your turn.</li>
-          <li>If a button is missing, your role does not do that step. The screen says who does.</li>
-        </ul></div>
-      <button className="btn line" onClick={close}>Got it</button>
-    </aside>
-  )
+function Num({ n }) {
+  return <b>{useCountUp(n)}</b>
 }
 
 export default function Dashboard() {
@@ -37,7 +25,7 @@ export default function Dashboard() {
   const load = useCallback(() => api.director(entity).then(setD).catch((e) => setError(e.message)), [entity])
   useEffect(() => { load() }, [load])
 
-  if (!d) return <Layout title="Overview" head={false}><p className="muted">{error || 'Loading…'}</p></Layout>
+  if (!d) return <Layout title="Overview" head={false}><StartHere />{error ? <p className="error">{error}</p> : <div className="skel-grid"><Skeleton rows={2} /><Skeleton rows={2} /><Skeleton rows={2} /></div>}</Layout>
 
   const c = d.counts
   // Stage and artwork approvals only: each task is approved by the person who assigned it (see My work)
@@ -65,7 +53,7 @@ export default function Dashboard() {
 
   return (
     <Layout title="Overview" head={false}>
-      <Hint />
+      <StartHere />
       <div className="ph">
         <div>
           <p className="ph-date">{today()}</p>
@@ -77,7 +65,7 @@ export default function Dashboard() {
       <section className="metrics" aria-label="Key figures">
         <Link to="/projects" className="metric">
           <span>Live projects</span>
-          <b>{c.live}</b>
+          <Num n={c.live} />
           <div className="hbar" aria-hidden="true">
             {c.green > 0 && <i className="g" style={{ width: pct(c.green) }} />}
             {c.amber > 0 && <i className="a" style={{ width: pct(c.amber) }} />}
@@ -89,22 +77,22 @@ export default function Dashboard() {
             <span><i style={{ background: 'var(--danger-dot)' }} />Critical <b>{c.red}</b></span>
           </div>
         </Link>
-        <a href="#approvals" className="metric"><span>Awaiting approval</span><b>{decisions.length}</b></a>
-        <Link to="/projects" className={`metric ${d.delayed.length ? 'alert' : ''}`}><span>Delayed</span><b>{d.delayed.length}</b></Link>
-        <Link to="/regulatory" className="metric"><span>Open RFIs</span><b>{d.rfi_deadlines.length}</b></Link>
-        <Link to="/legal" className="metric"><span>Unsigned agreements</span><b>{d.unsigned_agreements.length}</b></Link>
+        <a href="#approvals" className="metric"><span>Awaiting approval</span><Num n={decisions.length} /></a>
+        <Link to="/projects" className={`metric ${d.delayed.length ? 'alert' : ''}`}><span>Delayed</span><Num n={d.delayed.length} /></Link>
+        <Link to="/regulatory" className="metric"><span>Open RFIs</span><Num n={d.rfi_deadlines.length} /></Link>
+        <Link to="/legal" className="metric"><span>Unsigned agreements</span><Num n={d.unsigned_agreements.length} /></Link>
       </section>
 
       <div className="dgrid">
         <section className="dcard" id="approvals">
-          <header><h2>Approvals <span className="count">{decisions.length}</span></h2><Link to="/my-work" className="link">My work</Link></header>
-          {!decisions.length && <p className="empty-note">Nothing is waiting for you.</p>}
+          <header><h2>Waiting for approval, all projects <span className="count">{decisions.length}</span></h2><Link to="/my-work" className="link">What is waiting for me</Link></header>
+          {!decisions.length && <p className="empty-note">Nothing is waiting for approval.</p>}
           <ul className="drows">
             {decisions.slice(0, 4).map((x) => (
               <li key={x.key}>
                 <Link to={x.to}>
                   <span className="dmain"><strong>{x.title}</strong><small>{KIND[x.k]} · {x.sub}</small></span>
-                  <span className="dside">{x.r || 'Approve'}</span>
+                  <span className="dside">Open</span>
                 </Link>
               </li>
             ))}

@@ -15,7 +15,7 @@ import StageList from '../components/StageList'
 import TasksTab from '../components/TasksTab'
 import Timeline from '../components/Timeline'
 import { LegalTab, ManufacturerTab, RegulatoryTab, RfiTab } from '../components/Workstreams'
-import { AgeChip, HealthPill, Person, StatusPill, Tabs, fmtDate, fmtDateTime, fmtDay, label, useDo } from '../components/bits'
+import { AgeChip, HealthPill, Person, StatusPill, Tabs, fmtDate, fmtDateTime, fmtDay, label, useDo, Skeleton } from '../components/bits'
 import { FlowScope, useCan, useStages } from '../context'
 
 const AREAS = ['all', 'stage', 'task', 'clarification', 'legal', 'dossier', 'artwork', 'manufacturer', 'rfi', 'document', 'project']
@@ -24,7 +24,10 @@ export default function ProjectDetail() {
   const { id } = useParams()
   const can = useCan()
   const [params, setParams] = useSearchParams()
-  const tab = params.get('tab') || 'overview'
+  // unknown or old tab names in a link fall back to a real tab instead of an empty page
+  const TAB_KEYS = ['overview', 'brief', 'tasks', 'legal', 'regulatory', 'artwork', 'manufacturer', 'quality', 'rfi', 'documents', 'activity']
+  const asked = params.get('tab') === 'history' ? 'activity' : params.get('tab')
+  const tab = TAB_KEYS.includes(asked) ? asked : 'overview'
   const [project, setProject] = useState(null)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(false)
@@ -64,7 +67,7 @@ export default function ProjectDetail() {
   const goTab = (t) => { const n = new URLSearchParams(params); n.set('tab', t); n.delete('step'); setParams(n, { replace: true }); window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
   if (error) return <Layout title="Project" back="/projects"><p className="error">{error}</p></Layout>
-  if (!project) return <Layout title="Project" back="/projects" />
+  if (!project) return <Layout title="Project" back="/projects"><Skeleton rows={3} /><Skeleton rows={5} /></Layout>
 
   const openTasks = project.tasks.filter((t) => t.open).length
   const openRfi = project.rfis.filter((r) => r.status !== 'closed').length

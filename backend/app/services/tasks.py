@@ -24,7 +24,7 @@ def get_task(db: Session, task_id: int) -> Task:
 
 
 def _fmt(dt: datetime | None) -> str:
-    return aware(dt).strftime("%d %b %Y %H:%M UTC") if dt else "none"
+    return aware(dt).strftime("%d %b %Y").lstrip("0") if dt else "none"  # a date reads the same in every time zone
 
 
 def create_task(db: Session, user: User, p: Project, stage_key: str, title: str, description: str, assignee_id: int,

@@ -28,13 +28,16 @@ function YourTurn({ project, active, onPick }) {
   const mine = active.map((r) => ({ r, t: turnOf(project, r, me, stageOf(stages, r.key), can) })).filter((x) => x.t)
   if (!active.length) return null
   if (!mine.length) return <p className="yourturn quiet" role="status"><b>Nothing needs you on this project right now.</b></p>
-  const verb = { submit: 'submit', finish: 'finish and submit', decide: 'approve or send back' }
+  const verb = { submit: 'The work is done. Submit it for approval.', finish: 'Finish the work, then submit it for approval.', decide: 'Review it, then approve it or send it back with a reason.' }
   return (
     <div className="yourturn" role="status">
-      <b>Your turn</b>
+      <h3>What you need to do on this project</h3>
       <ul>
         {mine.map(({ r, t }) => (
-          <li key={r.key}><button className="link" onClick={() => onPick?.(r.key)}>{stageOf(stages, r.key).name}</button><span> · {verb[t]}</span></li>
+          <li key={r.key}>
+            <div><strong>{stageOf(stages, r.key).name}</strong><span>{t === 'finish' && !(stageOf(stages, r.key).owner_roles || []).includes(me.role_key) ? 'You oversee this step. Open it to check progress or step in.' : verb[t]}</span></div>
+            <button className="btn line" onClick={() => onPick?.(r.key)}>Open</button>
+          </li>
         ))}
       </ul>
     </div>

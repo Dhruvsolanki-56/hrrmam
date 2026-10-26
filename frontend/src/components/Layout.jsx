@@ -150,6 +150,7 @@ export default function Layout({ title, subtitle, back, backLabel = 'All project
     ...(who('artwork', 'regulatory', 'quality') ? [{ to: '/artwork', icon: 'image', label: 'Artwork', on: pathname === '/artwork' }] : []),
     ...(who('legal') ? [{ to: '/legal', icon: 'scale', label: 'Legal', on: pathname === '/legal' }] : []),
     ...(who('regulatory', 'legal') ? [{ h: 'Governance' }, { to: '/audit', icon: 'history', label: 'Audit trail', on: pathname === '/audit' }] : []),
+    { h: 'Support' }, { to: '/help', icon: 'help', label: 'How this works', on: pathname === '/help' },
     ...(can('manage_users') ? [{ to: '/admin', icon: 'settings', label: 'Admin', on: pathname === '/admin' }] : []),
   ]
   const links = NAV.filter((n) => n.to)

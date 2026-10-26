@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useStages } from '../context'
-import { fmtDateTime, label, projectUrl, usePaged } from './bits'
+import { Avatar, fmtDateTime, label, projectUrl, usePaged } from './bits'
 
 const VERB = {
   created: 'Created', submit: 'Submitted for approval', approve: 'Approved', send_back: 'Sent back for rework', reject: 'Rejected, project closed',
@@ -43,6 +43,15 @@ export function MiniHistory({ rows, empty = 'Nothing has happened yet.' }) {
   )
 }
 
+const dayOf = (iso) => {
+  const d = new Date(iso), t = new Date()
+  const y = new Date(t); y.setDate(t.getDate() - 1)
+  if (d.toDateString() === t.toDateString()) return 'Today'
+  if (d.toDateString() === y.toDateString()) return 'Yesterday'
+  return d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+}
+const timeOf = (iso) => new Date(iso).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
+
 export default function Timeline({ events }) {
   const stages = useStages()
   const name = (k) => stages.find((s) => s.key === k)?.name
@@ -57,17 +66,22 @@ export default function Timeline({ events }) {
   return (
     <>
     <ul className="timeline">
-      {items.map((e) => (
-        <li key={e.id} className={`ev-${e.action} ar-${e.area}`}>
-          <span className="dot" />
-          <div>
-            <strong>{title(e)}</strong>
-            {e.note && <p>{e.note}</p>}
-            <small>{[label(e.area), e.actor, e.to ? `to ${e.to}` : '', fmtDateTime(e.created_at)].filter(Boolean).join(' · ')}</small>
-            {e.link && e.project_id && <Link className="ev-open" to={projectUrl(e.project_id, e.link)}>Open</Link>}
-          </div>
-        </li>
-      ))}
+      {items.map((e, i) => {
+        const day = dayOf(e.created_at)
+        const head = i === 0 || dayOf(items[i - 1].created_at) !== day
+        return [
+          head && <li key={`d${e.id}`} className="tl-day" aria-hidden="false"><span>{day}</span></li>,
+          <li key={e.id} className={`ev-${e.action} ar-${e.area}`}>
+            <span className="dot" />
+            <div>
+              <strong>{title(e)}</strong>
+              {e.note && <p>{e.note}</p>}
+              <small className="tl-by">{e.actor && <Avatar name={e.actor} />}{[e.actor, e.to ? `to ${e.to}` : '', label(e.area), timeOf(e.created_at)].filter(Boolean).join(' · ')}</small>
+              {e.link && e.project_id && <Link className="ev-open" to={projectUrl(e.project_id, e.link)}>Open</Link>}
+            </div>
+          </li>,
+        ]
+      })}
     </ul>
     {pager}
     </>

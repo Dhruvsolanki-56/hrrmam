@@ -1,5 +1,6 @@
 import logo from '../assets/neohealth-logo.svg?raw'
 import { Avatar } from '../components/bits'
+import { guideFor } from '../roleGuide'
 
 const GROUPS = [['AU', 'Neo Health Australia'], ['IN', 'Neo India'], ['Partner', 'Partners & reviewers']]
 // the 15-phase journey, drawn as the brand motif: approved, in progress, still to come
@@ -22,7 +23,7 @@ export default function Login({ users, onPick }) {
       <main className="login-in">
         <div>
           <h2>Sign in</h2>
-          <p>Choose who you are. What each person can see and do comes from their role.</p>
+          <p>Choose who you are. Each person sees and does only what their role allows, and each card says what that role does.</p>
         </div>
         {GROUPS.map(([code, name]) => {
           const list = users.filter((u) => (code === 'Partner' ? !['AU', 'IN'].includes(u.country) : u.country === code))
@@ -35,7 +36,7 @@ export default function Login({ users, onPick }) {
                   <li key={u.id}>
                     <button onClick={() => onPick(u.id)}>
                       <Avatar name={u.name} />
-                      <span><b>{u.name}</b><small>{u.role}</small></span>
+                      <span><b>{u.name}</b><small>{u.role}</small><em>{guideFor(u.role_key).does}</em></span>
                     </button>
                   </li>
                 ))}

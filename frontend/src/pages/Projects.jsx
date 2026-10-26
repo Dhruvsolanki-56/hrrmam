@@ -9,6 +9,9 @@ import { useStages } from '../context'
 const FILTERS = [['all', 'All'], ['active', 'In progress'], ['on_hold', 'On hold'], ['rejected', 'Rejected'], ['completed', 'Completed']]
 const doneCount = (p) => Object.values(p.stage_states || {}).filter((s) => s === 'approved' || s === 'bypassed').length
 
+const RANK_STATUS = { active: 0, on_hold: 1, completed: 2, rejected: 3 }
+const RANK_HEALTH = { red: 0, amber: 1, green: 2 }
+
 export default function Projects() {
   const stages = useStages()
   // Board columns follow the stage groups of the live workflow.
@@ -41,6 +44,8 @@ export default function Projects() {
     (!health || p.health === health) &&
     (!stageKey || p.active_stages.includes(stageKey)) &&
     `${p.name} ${p.code || ''} ${p.category} ${p.product}`.toLowerCase().includes(query.toLowerCase()))
+    // live work first, the most urgent on top; finished projects sink to the bottom
+    .sort((a, b) => (RANK_STATUS[a.status] ?? 9) - (RANK_STATUS[b.status] ?? 9) || (RANK_HEALTH[a.health] ?? 9) - (RANK_HEALTH[b.health] ?? 9))
 
   const extra = (p) => p.active_stages.length - 1
   const { items: pageRows, pager } = usePaged(visible, 20, `${filter}|${health}|${stageKey}|${query}`)

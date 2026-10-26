@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import Icon from '../components/Icon'
 import Layout from '../components/Layout'
 import TaskCard from '../components/TaskCard'
-import { Empty, fmtDateTime, orList, projectUrl, usePaged } from '../components/bits'
+import { Empty, Skeleton, fmtDateTime, orList, projectUrl, usePaged } from '../components/bits'
 
 const BUCKETS = [
-  ['needs_decision', 'Needs my decision'], ['overdue', 'Overdue'], ['due_today', 'Due today'], ['due_this_week', 'Due this week'],
-  ['returned_for_changes', 'Returned to me'], ['waiting_for_someone', 'Waiting on others (no action)'], ['submitted_for_approval', 'Submitted'],
-  ['upcoming', 'Upcoming'], ['completed', 'Completed'],
+  ['needs_decision', 'Needs my decision'], ['returned_for_changes', 'Returned to me'], ['overdue', 'Overdue'], ['due_today', 'Due today'],
+  ['due_this_week', 'Due this week'], ['upcoming', 'Upcoming'],
+  ['waiting_for_someone', 'Waiting on others'], ['submitted_for_approval', 'Submitted by me'], ['completed', 'Completed'],
 ]
+const GROUP = { needs_decision: 'Do now', due_this_week: 'Coming up', waiting_for_someone: 'Nothing for you to do' }
 const HELP = {
   needs_decision: 'Everything sent to you to approve, review or decide: steps, tasks, agreements, dossier items, artwork, documents and reopen requests.',
   overdue: 'Past the due date. Submit it, or ask for a new date.',
@@ -65,7 +66,7 @@ export default function MyWork() {
   }
   const { items, pager } = usePaged(listFor(tab), 10, tab)
 
-  if (!data) return <Layout title="My work"><p className="muted">{error || 'Loading…'}</p></Layout>
+  if (!data) return <Layout title="My work">{error ? <p className="error">{error}</p> : <Skeleton rows={5} />}</Layout>
   const count = (k) => (k === 'needs_decision' ? data.needs_decision.length : data.counts[k])
   const current = BUCKETS.find(([k]) => k === tab)
 
@@ -93,9 +94,12 @@ export default function MyWork() {
           {BUCKETS.map(([k, l]) => {
             const n = count(k)
             return (
-              <button key={k} className={`${tab === k ? 'on' : ''} ${n ? '' : 'zero'} ${k === 'overdue' && n ? 'hot' : ''} ${['waiting_for_someone', 'completed'].includes(k) ? 'quiet' : ''}`} onClick={() => setTab(k)} aria-current={tab === k ? 'true' : undefined}>
+              <Fragment key={k}>
+              {GROUP[k] && <span className="mw-group">{GROUP[k]}</span>}
+              <button className={`${tab === k ? 'on' : ''} ${n ? '' : 'zero'} ${k === 'overdue' && n ? 'hot' : ''} ${['waiting_for_someone', 'completed'].includes(k) ? 'quiet' : ''}`} onClick={() => setTab(k)} aria-current={tab === k ? 'true' : undefined}>
                 <span>{l}</span><b>{n}</b>
               </button>
+              </Fragment>
             )
           })}
         </nav>

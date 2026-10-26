@@ -167,15 +167,57 @@ export function Modal({ title, intro, onClose, onSubmit, submitLabel = 'Save', b
 export const Empty = ({ children }) => <p className="empty-note">{children}</p>
 
 export function Tabs({ tabs, value, onChange, variant }) {
+  const box = useRef(null)
+  const [bar, setBar] = useState(null)
+  // one underline that glides to the chosen tab, so the eye follows the change
+  useEffect(() => {
+    const el = box.current?.querySelector('button.on')
+    if (!el || variant === 'seg') return setBar(null)
+    const place = () => setBar({ left: el.offsetLeft, width: el.offsetWidth, top: el.offsetTop + el.offsetHeight - 2 })
+    place()
+    window.addEventListener('resize', place)
+    return () => window.removeEventListener('resize', place)
+  }, [value, variant, tabs.length])
   return (
-    <div className={`tabs ${variant === 'seg' ? 'seg-tabs' : ''}`} role="tablist">
+    <div ref={box} className={`tabs ${variant === 'seg' ? 'seg-tabs' : ''} ${bar ? 'has-bar' : ''}`} role="tablist">
       {tabs.map((t) => (
         <button key={t.key} role="tab" aria-selected={value === t.key} className={value === t.key ? 'on' : ''} onClick={() => onChange(t.key)}>
           {t.label}{t.count != null && <b>{t.count}</b>}
         </button>
       ))}
+      {bar && <i className="tab-bar" aria-hidden="true" style={{ transform: `translate(${bar.left}px, ${bar.top}px)`, width: bar.width }} />}
     </div>
   )
+}
+
+/** Grey placeholder lines while a page loads, in the shape of what is coming. */
+export function Skeleton({ rows = 4, card = true }) {
+  return (
+    <div className={`skel ${card ? 'skel-card' : ''}`} aria-busy="true" aria-label="Loading">
+      <i className="skel-h" />
+      {[...Array(rows)].map((_, i) => <i key={i} style={{ width: `${92 - (i % 3) * 14}%` }} />)}
+    </div>
+  )
+}
+
+/** Counts up to a number once, quickly, the first time it is shown. */
+export function useCountUp(target, ms = 650) {
+  const [n, setN] = useState(target)
+  const done = useRef(false)
+  useEffect(() => {
+    if (done.current || typeof target !== 'number' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { setN(target); return }
+    done.current = true
+    const t0 = performance.now()
+    let raf
+    const tick = (t) => {
+      const k = Math.min(1, (t - t0) / ms)
+      setN(Math.round(target * (1 - (1 - k) ** 3)))
+      if (k < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, ms])
+  return n
 }
 
 // ---------------------------------------------------------------- paging
@@ -229,18 +271,29 @@ export const toast = (message) => window.dispatchEvent(new CustomEvent('neo-toas
 export function Toasts() {
   const [items, setItems] = useState([])
   useEffect(() => {
+    const drop = (id) => {
+      setItems((x) => x.map((i) => (i.id === id ? { ...i, out: true } : i)))
+      setTimeout(() => setItems((x) => x.filter((i) => i.id !== id)), 220)
+    }
     const on = (e) => {
       const id = Math.random()
       setItems((x) => [...x.slice(-2), { id, text: e.detail }])
-      setTimeout(() => setItems((x) => x.filter((i) => i.id !== id)), 7000)
+      setTimeout(() => drop(id), 7000)
     }
+    window.__neoDropToast = drop
     window.addEventListener('neo-toast', on)
     return () => window.removeEventListener('neo-toast', on)
   }, [])
   if (!items.length) return null
   return (
     <div className="toasts" role="status" aria-live="polite">
-      {items.map((t) => <p key={t.id} className="toast">{t.text}<button type="button" aria-label="Dismiss" onClick={() => setItems((x) => x.filter((i) => i.id !== t.id))}>×</button></p>)}
+      {items.map((t, i) => (
+        <p key={t.id} className={`toast ${t.out ? 'out' : ''}`} style={{ '--depth': items.length - 1 - i }}>
+          <span className="toast-tick" aria-hidden="true">✓</span>
+          <span>{t.text}</span>
+          <button type="button" aria-label="Dismiss" onClick={() => window.__neoDropToast?.(t.id)}>×</button>
+        </p>
+      ))}
     </div>
   )
 }
