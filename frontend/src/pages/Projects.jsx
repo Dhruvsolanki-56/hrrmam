@@ -94,15 +94,14 @@ export default function Projects() {
                       <td className="proj-cell">
                         <Link to={`/projects/${p.id}`} className="cell-main">
                           <strong>{p.name}</strong>
-                          <small>{p.code && <span className="code">{p.code}</span>}{p.code && '· '}{p.project_type === 'In-Licence' ? 'In-licence' : 'New development'}{p.category ? ` · ${p.category}` : ''}</small>
+                          <small>{[p.code, p.category].filter(Boolean).join(' · ') || 'Code given when the opportunity is approved'}</small>
                         </Link>
                       </td>
                       <td data-label="Phase">
-                        <span className="stage-name">{s.name}</span>
-                        <span className="sub">
+                        <span className="stage-name">{s.name}{extra(p) > 0 && <span className="more-chip" title={`${extra(p)} more steps are running at the same time`}>+{extra(p)}</span>}</span>
+                        <span className="sub step-sub">
                           {p.status !== 'active' ? <StatusPill status={p.status} /> : <AgeChip project={p} />}
-                          {extra(p) > 0 && ` · and ${extra(p)} more at the same time`}
-                          {p.awaiting_approval.length > 0 && ' · awaiting approval'}
+                          {p.awaiting_approval.length > 0 && <span className="wait-chip">waiting for approval</span>}
                         </span>
                       </td>
                       {!finished && <td data-label="Health"><HealthPill health={p.health} reasons={p.health_reasons} /></td>}

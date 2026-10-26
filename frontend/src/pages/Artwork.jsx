@@ -7,6 +7,9 @@ import TaskCard from '../components/TaskCard'
 import { Empty, Person, Skeleton, usePaged } from '../components/bits'
 import { useMe } from '../context'
 
+/** Who has the item now, said only when it is someone other than its owner (the owner is already shown on the right). */
+const holder = (d) => (d.review?.with?.people || []).map((x) => x.split(' (')[0]).filter((n) => n !== d.owner?.name).join(' or ')
+
 function DocRows({ docs, empty }) {
   const me = useMe()
   if (!docs.length) return <Empty>{empty}</Empty>
@@ -15,8 +18,8 @@ function DocRows({ docs, empty }) {
       {docs.map((d) => (
         <li key={d.id}>
           <Link to={`/projects/${d.project_id}?tab=artwork&focus=doc-${d.id}`}>
-            <div><strong>{d.title}</strong><small>{d.project_name} · {d.kind} · version {d.current_version}{d.review?.with?.people?.length ? ` · with ${d.review.with.people.join(' or ')}` : ''}</small></div>
-            <span className="row-end">{d.owner?.id !== me.id && <Person user={d.owner} />}<Icon name="arrow" size={14} /></span>
+            <div><strong>{d.title}</strong><small>{d.project_name} · {d.kind} · v{d.current_version}{holder(d) ? ` · now with ${holder(d)}` : ''}</small></div>
+            <span className="row-end">{d.owner?.id !== me.id && <Person user={d.owner} short />}<Icon name="arrow" size={14} /></span>
           </Link>
         </li>
       ))}

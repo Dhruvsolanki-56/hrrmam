@@ -25,7 +25,7 @@ export default function Audit() {
 
   return (
     <Layout title="Audit trail" subtitle="Every change, deadline update, reassignment, return, approval, lock and reopen: who did it, when, and why">
-      <div className="toolbar panel">
+      <div className="toolbar panel audit-tools">
         <div className="tools">
           <select className="select" value={area} onChange={(e) => setArea(e.target.value)} aria-label="Filter by area">
             {AREAS.map((a) => <option key={a} value={a}>{a ? label(a) : 'Every area'}</option>)}
@@ -40,7 +40,7 @@ export default function Audit() {
       <div className="panel table-panel">
         <div className="table-scroll">
           <table className="table">
-            <thead><tr><th>When</th><th>Project</th><th>Area</th><th>Action</th><th>Detail</th><th>By</th></tr></thead>
+            <thead><tr><th>When</th><th>Project</th><th>Area</th><th>Action</th><th>Detail</th><th>By</th><th><span className="sr-only">Open</span></th></tr></thead>
             <tbody>
               {items.map((e) => (
                 <tr key={e.id} className="audit-row">
@@ -48,8 +48,9 @@ export default function Audit() {
                   <td data-label="Project" className="audit-proj"><Link to={`/projects/${e.project_id}?tab=activity`}><strong>{e.project_name}</strong></Link><small className="sub">{stageName(e.stage_key)}</small></td>
                   <td data-label="Area"><span className="chip plain">{label(e.area)}</span></td>
                   <td data-label="Action" className="nowrap">{actionLabel(e)}</td>
-                  <td data-label="Detail" className={`wrap ${e.note ? '' : 'no-note'}`}>{e.note}{e.to && <small className="sub">To {e.to}</small>}{e.link && <Link className="ev-open" to={`/projects/${e.project_id}?${e.link}`}>Open</Link>}</td>
+                  <td data-label="Detail" className={`wrap ${e.note ? '' : 'no-note'}`}>{e.note}{e.to && <small className="sub">Sent to {e.to}</small>}</td>
                   <td data-label="By" className="nowrap">{e.actor}</td>
+                  <td className="ev-go">{e.link && <Link className="btn line sm" to={`/projects/${e.project_id}?${e.link}`}>Open</Link>}</td>
                 </tr>
               ))}
             </tbody>

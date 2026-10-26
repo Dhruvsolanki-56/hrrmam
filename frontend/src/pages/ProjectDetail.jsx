@@ -97,7 +97,7 @@ export default function ProjectDetail() {
         </div>
         <div className="meta">
           <StatusPill status={project.status} />
-          <HealthPill health={project.health} reasons={project.health_reasons} />
+          {!['completed', 'rejected'].includes(project.status) && <HealthPill health={project.health} reasons={project.health_reasons} />}
           <AgeChip project={project} />
           <span className="code">{project.code || 'Code issued when the opportunity is approved'}</span>
           {pm && <span className="meta-pm">Manager: {pm}</span>}

@@ -314,7 +314,7 @@ export function StepPanel({ project, stageKey, onChange, goTab, onClose, inTab }
   const active = live && ['in_progress', 'awaiting_approval'].includes(row.state)
   return (
     <div className="steppanel">
-      {onClose && <div className="steppanel-bar"><button className="link" onClick={onClose}>Close this step ×</button></div>}
+      {onClose && <div className="steppanel-bar"><button className="link" onClick={onClose}>← Back to the project overview</button></div>}
       {active
         ? <StageCard project={project} row={row} onChange={onChange} goTab={goTab} locked={project.status === 'on_hold'} inTab={inTab} />
         : <StepSummary project={project} stageKey={stageKey} goTab={goTab} inTab={inTab} />}

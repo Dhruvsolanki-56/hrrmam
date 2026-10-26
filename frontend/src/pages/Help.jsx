@@ -8,15 +8,18 @@ export default function Help() {
   return (
     <Layout title="How this works">
       <div className="help">
-        <nav className="help-jump" aria-label="On this page">
-          {[['life', 'The life of a project'], ['steps', 'How a step works'], ['qa', 'Common questions'], ['words', 'Words used'], ['roles', 'Who does what']].map(([id, t]) => <a key={id} href={`#${id}`}>{t}</a>)}
-        </nav>
-
-        <section className="help-card help-you">
-          <h2>Your role: {mine.title}</h2>
-          <p>{mine.does}</p>
-          <p><b>First thing to do:</b> {mine.first}</p>
-        </section>
+        <aside className="help-side">
+          <section className="help-card help-you">
+            <h2>Your role: {mine.title}</h2>
+            <p>{mine.does}</p>
+            <p><b>First thing to do:</b> {mine.first}</p>
+          </section>
+          <nav className="help-jump" aria-label="On this page">
+            <span>On this page</span>
+            {[['life', 'The life of a project'], ['steps', 'How a step works'], ['qa', 'Common questions'], ['words', 'Words used'], ['roles', 'Who does what']].map(([id, t]) => <a key={id} href={`#${id}`}>{t}</a>)}
+          </nav>
+        </aside>
+        <div className="help-main">
 
         <section className="help-card" id="life">
           <h2>The life of a project</h2>
@@ -49,6 +52,7 @@ export default function Help() {
           <h2>Who does what</h2>
           <dl className="help-qa">{Object.entries(ROLE_GUIDE).map(([k, r]) => <div key={k}><dt>{r.title}</dt><dd>{r.does}</dd></div>)}</dl>
         </section>
+        </div>
       </div>
     </Layout>
   )
